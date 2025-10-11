@@ -45,7 +45,7 @@ abstract class BaseSeeder extends Seeder
     /**
      * Guard name for Spatie roles/permissions
      */
-    protected string $guardName = 'web';
+    protected string $guardName = "web";
 
     /**
      * Entity definitions
@@ -90,7 +90,7 @@ abstract class BaseSeeder extends Seeder
     /**
      * Seed the module
      */
-    protected function seedModule(): void
+    final protected function seedModule(): void
     {
         DB::table('modules')->updateOrInsert(
             ['name' => $this->moduleName],
@@ -107,7 +107,7 @@ abstract class BaseSeeder extends Seeder
     /**
      * Seed module metadata
      */
-    protected function seedModuleMetadata(int $moduleId): void
+    final protected function seedModuleMetadata(int $moduleId): void
     {
         foreach ($this->metas as $key => $value) {
             if (is_array($value) || is_object($value)) {
@@ -129,7 +129,7 @@ abstract class BaseSeeder extends Seeder
     /**
      * Seed permissions
      */
-    protected function seedPermissions(): void
+    final protected function seedPermissions(): void
     {
         foreach ($this->permissions as $permissionName) {
             Permission::firstOrCreate([
@@ -142,7 +142,7 @@ abstract class BaseSeeder extends Seeder
     /**
      * Seed super-admin role
      */
-    protected function seedSuperAdminRole(): void
+    final protected function seedSuperAdminRole(): void
     {
         if (empty($this->permissions)) {
             return;
@@ -166,7 +166,7 @@ abstract class BaseSeeder extends Seeder
     /**
      * Seed entities for this module
      */
-    protected function seedEntities(int $moduleId): void
+    final protected function seedEntities(int $moduleId): void
     {
         foreach ($this->entities as $entityName => $entityConfig) {
             $fields = $entityConfig['fields'] ?? [];
@@ -223,8 +223,5 @@ abstract class BaseSeeder extends Seeder
      * Hook for child seeders to add custom logic
      * Override this method in child seeders if needed
      */
-    protected function seedCustom(): void
-    {
-        // Override in child classes
-    }
+    abstract protected function seedCustom(): void;
 }
