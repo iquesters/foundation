@@ -10,15 +10,6 @@ use Illuminate\Support\Facades\Log;
 
 class ModuleController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        $modules = Module::with('metas')->get();
-        $roles = Role::all();
-        return view('foundation::modules.index', compact('modules', 'roles'));
-    }
 
     /**
      * Show form to assign modules to roles

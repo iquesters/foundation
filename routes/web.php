@@ -9,8 +9,6 @@ Route::middleware('web')->group(function () {
         Route::prefix('entity')->name('entities.')->group(function () {
             Route::get('/', [EntityController::class, 'index'])->name('index');
         });
-
-        Route::get('/modules', [ModuleController::class, 'index'])->name('modules.index');
         
         // Module-Role assignment routes
         Route::get('/modules/assign-to-role', [ModuleController::class, 'assignToRole'])->name('modules.assign-to-role');

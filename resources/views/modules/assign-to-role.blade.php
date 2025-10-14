@@ -60,9 +60,6 @@
 
                     @if($modules->count() > 0)
                     <div class="d-flex align-items-center justify-content-start gap-2">
-                        <a href="{{ route('modules.index') }}" class="btn btn-sm btn-outline-dark">
-                            Cancel
-                        </a>
                         <button type="submit" class="btn btn-sm btn-outline-primary">
                             Save Assignments
                         </button>
