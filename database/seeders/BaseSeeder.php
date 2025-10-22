@@ -6,6 +6,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Permission;
 
 /**
@@ -82,6 +83,9 @@ abstract class BaseSeeder extends Seeder
 
         // 6️⃣ Seed entities for this module
         $this->seedEntities($moduleId);
+        
+        // Seed Config for this module
+        $this->seedConfig($moduleId);
 
         // 7️⃣ Hook for child seeders to add custom logic
         $this->seedCustom();
@@ -219,6 +223,101 @@ abstract class BaseSeeder extends Seeder
         }
     }
 
+    final protected function seedConfig(int $moduleId): void
+    {
+        
+        /**
+         * Ensure the 'config' root entry exists
+        */
+        $configRoot = DB::table('master_data')->where('key', 'config')->first();
+
+        if (!$configRoot) {
+            $configRootId = DB::table('master_data')->insertGetId([
+                'key' => 'config',
+                'value' => 'Application Configuration',
+                'parent_id' => 0,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } else {
+            $configRootId = $configRoot->id;
+        }
+
+        /**
+         * Insert module entry into master_data
+         */
+        $moduleMasterdataId = DB::table('master_data')->updateOrInsert(
+            [
+                'key' => "{$this->moduleName}-conf", // e.g., "UserManagement-conf"
+            ],
+            [
+                'value' => $moduleId,
+                'parent_id' => $configRootId,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+        
+        $moduleMasterdata = DB::table('master_data')
+        ->where('key', "{$this->moduleName}-conf")
+        ->first();
+        
+        $moduleMasterdataId = $moduleMasterdata->id;
+    
+        $moduleNamespacePart = str_replace(' ', '', ucwords(str_replace('-', ' ', $this->moduleName))); // PascalCase
+        
+        /**
+         * Construct the main config class dynamically
+         */
+        $moduleConfClass = "Iquesters\\{$moduleNamespacePart}\\Config\\{$moduleNamespacePart}Conf";
+
+        if (
+            !class_exists($moduleConfClass) || 
+            !is_subclass_of($moduleConfClass, \Iquesters\Foundation\Support\BaseConf::class)
+        ) {
+            throw new \RuntimeException("Main config class not found for module {$this->moduleName}");
+        }
+
+        /** @var \Iquesters\Foundation\Support\BaseConf $confInstance */
+        $confInstance = new $moduleConfClass();
+
+        $defaultConfig = $confInstance->getFlattenConfig(null, true, true);
+        Log::debug($defaultConfig);
+
+        /**
+         * Insert each key into master_data_metas
+         */
+        foreach ($defaultConfig as $configItem) {
+            $key = $configItem['key'];
+            $value = $configItem['value'];
+                        
+            // Convert booleans to 'true'/'false' strings
+            if (is_bool($value)) {
+                $value = $value ? 'true' : 'false';
+            }
+            
+            // Handle arrays by converting to JSON
+            if (is_array($value)) {
+                $value = json_encode($value);
+            }
+
+            DB::table('master_data_metas')->updateOrInsert(
+                [
+                    'ref_parent' => $moduleMasterdataId,
+                    'meta_key' => $key,
+                ],
+                [
+                    'meta_value' => $value,
+                    'status' => 'active',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+        }
+    }
+    
     /**
      * Hook for child seeders to add custom logic
      * Override this method in child seeders if needed
