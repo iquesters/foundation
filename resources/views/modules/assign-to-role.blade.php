@@ -37,22 +37,30 @@
                     <div class="row mt-2">
                         @foreach($modules as $module)
                             <div class="col-md-4 mb-3">
-                                <div class="form-check">
+                                <div class="form-check border rounded p-3 shadow-sm">
                                     <input type="checkbox" 
                                             name="modules[]" 
                                             value="{{ $module->id }}" 
                                             id="module_{{ $module->id }}"
                                             class="form-check-input"
                                             {{ $module->isAssignedToRole($selectedRole) ? 'checked' : '' }}>
-                                    <label class="form-check-label" for="module_{{ $module->id }}">
+                                    <label class="form-check-label fw-semibold" for="module_{{ $module->id }}">
                                         <i class="{{ $module->getMeta('module_icon') ?? 'fas fa-cube' }} me-2"></i>
                                         {{ $module->name }}
                                     </label>
+
                                     @if($module->description)
                                         <small class="form-text text-muted d-block">
                                             {{ $module->description }}
                                         </small>
                                     @endif
+
+                                    <div class="mt-2">
+                                        <a href="{{ route('modules.config.show', ['module' => $module->id]) }}" 
+                                        class="btn btn-sm btn-outline-secondary">
+                                        <i class="fas fa-cog me-1"></i> Settings
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         @endforeach
