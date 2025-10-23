@@ -9,10 +9,16 @@ use Illuminate\Support\Facades\Log;
 abstract class BaseConf
 {
     /**
+     * Internal flag to ensure DB config is loaded only once.
+     * Private: only used internally by BaseConf.
+     */
+    private bool $isLoaded = false;
+    
+    /**
      * Identifier for the module this config belongs to, 
      * must be initialized in child implementation classes
      */
-    protected string $identifier;
+    protected ?string $identifier;
     
     /**
      * Default values of config
@@ -27,27 +33,15 @@ abstract class BaseConf
         $this->initializeNestedConfigs();
         $this->default_values = clone $this;
         $this->prepareDefault($this->default_values);
+        
+        // 🚀 Load config from DB automatically (once)
+        $flattened = $this->loadConfigFromDB($this->identifier);
+        if (!empty($flattened)) {
+            $this->decipherConf($flattened);
+        }
     }
     
     abstract protected function prepareDefault(BaseConf $default_values);
-
-    // /**
-    //  * @return array<array{key: string, value: string}> $pairs
-    //  */
-    // protected function getflattenConfig(array $values = $this->default_values, boolean $useDefault = false)pairs
-    // {
-    //     // [
-    //     //     ['key' => '$RECAPTCHA~ENABLED', 'value' => true],
-    //     //     ['key' => '$RECAPTCHA~SITE_KEY', 'value' => 'new_site_key'],
-    //     //     ['key' => '$SOCIAL_LOGIN~@O_AUTH_PROVIDERS~$GOOGLE~CLIENT_ID', 'value' => 'new_client_id'],
-    //     //     ['key' => 'AUTH_LAYOUT', 'value' => 'hola']
-    //     // ]
-
-    //     // call generateKeys();
-    //     // loop over generated keys
-    //     // for each key, pass the key in decyphir() it return object, get value from $values object
-//          ignore null
-    // }
 
     /**
      * Flatten the configuration into key-value pairs
@@ -239,7 +233,7 @@ abstract class BaseConf
      * @param string $prefix Current key prefix (optional)
      * @return string[]
      */
-    public function generateKeys(string $prefix = ''): array
+    private function generateKeys(string $prefix = ''): array
     {
         $keys = [];
 
@@ -379,13 +373,54 @@ abstract class BaseConf
         $snake = preg_replace('/(?<!^)[A-Z]/', '_$0', $name);
         return strtoupper(str_replace('-', '_', $snake));
     }
+    
+    
+    private function loadConfigFromDB(string $moduleKey): array
+    {
+        $cacheKey = "conf_{$moduleKey}_flattened";
 
+        // Check cache first
+        return Cache::rememberForever($cacheKey, function () use ($moduleKey) {
+            Log::info("Loading config for module: {$moduleKey}");
+
+            $moduleEntry = DB::table('master_data')
+                ->where('key', "{$moduleKey}-conf")
+                ->first();
+
+            if (!$moduleEntry) {
+                Log::warning("No master_data entry found for {$moduleKey}-conf");
+                return [];
+            }
+
+            $metas = DB::table('master_data_metas')
+                ->where('ref_parent', $moduleEntry->id)
+                ->get(['meta_key', 'meta_value']);
+
+            $flattened = [];
+            foreach ($metas as $meta) {
+                $value = $meta->meta_value;
+
+                // Decode JSON / boolean
+                $decoded = json_decode($value, true);
+                if (json_last_error() === JSON_ERROR_NONE) $value = $decoded;
+                if ($value === 'true') $value = true;
+                if ($value === 'false') $value = false;
+
+                $flattened[] = [
+                    'key' => $meta->meta_key,
+                    'value' => $value,
+                ];
+            }
+
+            return $flattened;
+        });
+    }
     
     /**
      * @param array<array{key: string, value: string}> $pairs
      * @return BaseConf
      */
-    public function decipherConf(array $pairs): BaseConf
+    private function decipherConf(array $pairs): BaseConf
     {
         Log::debug("Input pairs: " . json_encode($pairs));
 
@@ -395,7 +430,7 @@ abstract class BaseConf
                 continue;
             }
 
-            Log::debug("Deciphering key '{$pair['key']}' with value '{$pair['value']}'");
+            // Log::debug("Deciphering key '{$pair['key']}' with value '{$pair['value']}'");
             $this->processKey($pair['key'], $pair['value']);
         }
 
@@ -412,8 +447,11 @@ abstract class BaseConf
         $normalize = function (string $p): string {
             return strtolower(ltrim($p, '$@'));
         };
-        $parts = array_map($normalize, $parts);
-        $root = array_shift($parts);
+        
+        $normalizedParts = array_map($normalize, $parts);
+        $root = array_shift($normalizedParts);
+        $rootOriginal = array_shift($parts); // Also shift original
+        
         $trace = $trace === '' ? $root : $trace . " → {$root}";
 
         $reflection = new \ReflectionObject($current);
@@ -427,14 +465,15 @@ abstract class BaseConf
         $currentValue = $prop->isInitialized($current) ? $prop->getValue($current) : null;
 
         // 🎯 Leaf assignment
-        if (empty($parts)) {
+        if (empty($normalizedParts)) {
             Log::debug("✅ [{$trace}] Assigning value → " . json_encode($value));
             $prop->setValue($current, $value);
             return;
         }
 
         // 🧱 Nested object (BaseConf)
-        if (str_starts_with($key, '$') || $currentValue instanceof BaseConf || is_subclass_of($prop->getType()?->getName() ?? '', BaseConf::class)) {
+        // Check ORIGINAL key for $ prefix, not the normalized root
+        if (str_starts_with($rootOriginal, '$') || $currentValue instanceof BaseConf || is_subclass_of($prop->getType()?->getName() ?? '', BaseConf::class)) {
             if (!is_object($currentValue)) {
                 $className = ucfirst($root) . 'Conf';
                 $baseNamespace = (new \ReflectionClass($this))->getNamespaceName();
@@ -449,19 +488,22 @@ abstract class BaseConf
                 }
             }
 
+            // Pass remaining ORIGINAL parts (not normalized)
             $this->processKey(implode('~', $parts), $value, $currentValue, $trace);
             return;
         }
 
+        // Array handling
         if ($prop->getType()?->getName() === 'array') {
             $arrayValue = $currentValue ?? [];
 
-            // Handle array with @ prefix
-            if (!empty($parts)) {
-                $nextPart = array_shift($parts);
+            if (!empty($normalizedParts)) {
+                $nextPartOriginal = array_shift($parts); // Get original
+                $nextPartNormalized = array_shift($normalizedParts); // Get normalized
 
-                if (str_starts_with($nextPart, '$')) {
-                    $elementKey = strtolower(ltrim($nextPart, '$'));
+                // Check ORIGINAL part for $ prefix
+                if (str_starts_with($nextPartOriginal, '$')) {
+                    $elementKey = $nextPartNormalized; // Use normalized for array key
                     $trace .= " → \${$elementKey}";
 
                     // Get element class from docblock
@@ -469,30 +511,103 @@ abstract class BaseConf
                     $elementClass = null;
                     if (preg_match('/@var\s+([a-zA-Z0-9_\\\\]+)\[\]/', $doc, $m)) {
                         $elementClass = $m[1];
+                        
+                        // If class is not fully qualified, try to resolve it
+                        if (!class_exists($elementClass)) {
+                            // Try in the same namespace as current class
+                            $currentNamespace = (new \ReflectionClass($current))->getNamespaceName();
+                            $fqcn = $currentNamespace . '\\' . $elementClass;
+                            if (class_exists($fqcn)) {
+                                $elementClass = $fqcn;
+                                Log::debug("Resolved element class to: {$elementClass}");
+                            } else {
+                                Log::warning("Could not resolve element class: {$elementClass} (tried {$fqcn})");
+                                $elementClass = null;
+                            }
+                        }
                     }
 
                     if ($elementClass && class_exists($elementClass)) {
                         if (!isset($arrayValue[$elementKey]) || !($arrayValue[$elementKey] instanceof $elementClass)) {
-                            Log::debug("🧩 [{$trace}] Instantiating new {$elementClass}");
-                            $arrayValue[$elementKey] = new $elementClass();
+                            // Check if the class is abstract
+                            $reflection = new \ReflectionClass($elementClass);
+                            if ($reflection->isAbstract()) {
+                                // Try to find concrete class based on element key
+                                $concreteClass = $this->resolveConcreteClass($elementClass, $elementKey);
+                                if ($concreteClass) {
+                                    Log::debug("🧩 [{$trace}] Instantiating concrete class {$concreteClass} for abstract {$elementClass}");
+                                    $arrayValue[$elementKey] = new $concreteClass();
+                                } else {
+                                    Log::warning("⚠️  [{$trace}] Cannot instantiate abstract class {$elementClass} and no concrete class found for '{$elementKey}'");
+                                    return;
+                                }
+                            } else {
+                                Log::debug("🧩 [{$trace}] Instantiating new {$elementClass}");
+                                $arrayValue[$elementKey] = new $elementClass();
+                            }
                         }
 
                         $prop->setValue($current, $arrayValue);
-                        $this->processKey(implode('~', $parts), $value, $arrayValue[$elementKey], $trace);
+                        
+                        // Pass remaining ORIGINAL parts
+                        if (!empty($parts)) {
+                            $this->processKey(implode('~', $parts), $value, $arrayValue[$elementKey], $trace);
+                        } else {
+                            // No more parts, this was just the array element identifier
+                            Log::debug("✅ [{$trace}] Array element created/accessed");
+                        }
                         return;
                     } else {
                         Log::warning("⚠️  [{$trace}] Cannot resolve array element class");
                         return;
                     }
                 } else {
-                    Log::warning("⚠️  [{$trace}] Unexpected array key part: {$nextPart}");
+                    Log::warning("⚠️  [{$trace}] Unexpected array key part: {$nextPartNormalized} (original: {$nextPartOriginal})");
                     return;
                 }
             }
         }
 
-
         Log::warning("⚠️  [{$trace}] Unsupported path: " . implode('~', $parts));
+    }
+
+    /**
+     * Resolve concrete class from abstract base class using identifier
+     * Tries to find a class named {Identifier}Conf that extends the base class
+     */
+    private function resolveConcreteClass(string $abstractClass, string $identifier): ?string
+    {
+        // Convert identifier to class name (e.g., 'google' -> 'GoogleConf')
+        $className = ucfirst($identifier) . 'Conf';
+        
+        // Try in the same namespace as the abstract class
+        $reflection = new \ReflectionClass($abstractClass);
+        $namespace = $reflection->getNamespaceName();
+        $fqcn = $namespace . '\\' . $className;
+        
+        if (class_exists($fqcn)) {
+            $concreteReflection = new \ReflectionClass($fqcn);
+            if ($concreteReflection->isSubclassOf($abstractClass) && !$concreteReflection->isAbstract()) {
+                return $fqcn;
+            }
+        }
+        
+        return null;
+    }
+
+    private function loadConfigOnce(): void
+    {
+        try {
+            $flattened = $this->loadConfigFromDB($this->identifier);
+            if (!empty($flattened)) {
+                $this->decipherConf($flattened);
+            }
+
+            $this->isLoaded = true; // mark as loaded
+            Log::debug("✅ Config for {$this->identifier} loaded lazily");
+        } catch (\Throwable $e) {
+            Log::error("❌ Failed to lazy-load config for {$this->identifier}: " . $e->getMessage());
+        }
     }
 
     /**
@@ -501,6 +616,11 @@ abstract class BaseConf
      */
     public function __get($property)
     {
+        // Lazy load config only once
+        if (!$this->isLoaded && property_exists($this, 'identifier') && isset($this->identifier)) {
+            $this->loadConfigOnce();
+        }
+        
         if (property_exists($this, $property)) {
             return $this->$property;
         }
