@@ -1,12 +1,12 @@
 @extends('userinterface::layouts.app')
 
 @section('content')
-<div class="container mt-4">
-    <a href="{{ route('modules.assign-to-role') }}" class="btn btn-outline-secondary btn-sm mb-3">
-        ← Back to Role Assignment
+<div>
+    <a href="{{ route('modules.assign-to-role') }}" class="btn btn-sm btn-outline-secondary mb-3">
+        ← Back
     </a>
 
-    <h5 class="text-muted mb-3">Module Configuration</h5>
+    <h5 class="fs-6 text-muted mb-3">Module Configuration</h5>
 
     {{-- Module Selection --}}
     <form id="module-select-form" class="mb-4">
@@ -25,7 +25,7 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <button type="button" class="btn btn-primary w-100" id="show-module-btn"
+                <button type="button" class="btn btn-sm btn-outline-primary" id="show-module-btn"
                         {{ isset($selectedModule) ? 'disabled' : '' }}>
                     Show
                 </button>
@@ -39,15 +39,15 @@
         @csrf
         @method('PUT')
 
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-light">
-                <h6 class="mb-0">Configuration for <strong>{{ $selectedModule->name }}</strong></h6>
+        <div class="border-0 shadow-sm">
+            <div>
+                <h5 class="fs-6 text-muted mb-2">Configuration for <strong>{{ $selectedModule->name }}</strong></h5>
             </div>
-            <div class="card-body">
+            <div>
                 @if($configData->isEmpty())
                     <div class="alert alert-warning mb-0">No configuration found for this module.</div>
                 @else
-                    <table class="table table-sm table-bordered align-middle">
+                    <table class="table table-sm table-bordered">
                         <thead>
                             <tr>
                                 <th>Key</th>
@@ -58,14 +58,15 @@
                             @foreach($configData as $index => $conf)
                                 <tr>
                                     <td>
-                                        <input type="text" name="config_keys[]" 
-                                               class="form-control form-control-sm" 
-                                               value="{{ $conf->meta_key }}" readonly>
+                                        {{-- Show key as plain text, but still include hidden input for form submission --}}
+                                        <span>{{ $conf->meta_key }}</span>
+                                        <input type="hidden" name="config_keys[]" value="{{ $conf->meta_key }}">
                                     </td>
                                     <td>
-                                        <input type="text" name="config_values[]" 
-                                               class="form-control form-control-sm" 
-                                               value="{{ $conf->meta_value }}">
+                                        <input type="text" 
+                                            name="config_values[]" 
+                                            class="form-control form-control-sm" 
+                                            value="{{ $conf->meta_value }}">
                                     </td>
                                 </tr>
                             @endforeach
