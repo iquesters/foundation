@@ -5,6 +5,7 @@ namespace Iquesters\Foundation\Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Permission;
@@ -64,30 +65,33 @@ abstract class BaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1️⃣ Insert or update the module
+        // 1️⃣ Auto-populate dynamic fields before any seeding
+        $this->populateDynamicFields();
+
+        // 2️⃣ Insert or update the module
         $this->seedModule();
 
-        // 2️⃣ Get module ID for entity references
+        // 3️⃣ Get module ID for entity references
         $moduleId = DB::table('modules')
             ->where('name', $this->moduleName)
             ->value('id');
 
-        // 3️⃣ Insert module metadata
+        // 4️⃣ Insert module metadata
         $this->seedModuleMetadata($moduleId);
 
-        // 4️⃣ Create module-specific permissions
+        // 5️⃣ Create module-specific permissions
         $this->seedPermissions();
 
-        // 5️⃣ Create super-admin role and assign permissions
+        // 6️⃣ Create super-admin role and assign permissions
         $this->seedSuperAdminRole();
 
-        // 6️⃣ Seed entities for this module
+        // 7️⃣ Seed entities for this module
         $this->seedEntities($moduleId);
-        
-        // Seed Config for this module
+
+        // 8️⃣ Seed Config for this module
         $this->seedConfig($moduleId);
 
-        // 7️⃣ Hook for child seeders to add custom logic
+        // 9️⃣ Hook for child seeders to add custom logic
         $this->seedCustom();
     }
 
@@ -272,7 +276,6 @@ abstract class BaseSeeder extends Seeder
          * Construct the main config class dynamically
          */
         $moduleConfClass = "Iquesters\\{$moduleNamespacePart}\\Config\\{$moduleNamespacePart}Conf";
-
         if (
             !class_exists($moduleConfClass) || 
             !is_subclass_of($moduleConfClass, \Iquesters\Foundation\Support\BaseConf::class)
@@ -316,6 +319,84 @@ abstract class BaseSeeder extends Seeder
                 ]
             );
         }
+    }
+    
+    /**
+     * Auto-populate dynamic fields in entities
+     */
+    final protected function populateDynamicFields(): void
+    {
+        foreach ($this->entities as $entityName => &$entityConfig) {
+            if (isset($entityConfig['fields']) && empty($entityConfig['fields'])) {
+                // If fields array exists but is empty, populate it dynamically
+                $tableName = $entityConfig['table_name'] ?? $entityName;
+                $entityConfig['fields'] = $this->getTableFields($tableName);
+            }
+        }
+    }
+
+    /**
+     * Get table fields dynamically from database schema
+     */
+    protected function getTableFields(string $tableName): array
+    {
+        if (!Schema::hasTable($tableName)) {
+            return [];
+        }
+
+        $fields = [];
+        $columns = Schema::getColumns($tableName);
+
+        foreach ($columns as $column) {
+            $fields[$column['name']] = [
+                'name' => $column['name'],
+                'type' => $column['type_name'],
+                'label' => ucwords(str_replace('_', ' ', $column['name'])),
+                'required' => !$column['nullable'],
+                'nullable' => $column['nullable'],
+                'input_type' => $this->getInputType($column['name'], $column['type_name']),
+                'maxlength' => $column['length'] ?? null,
+                'default' => $column['default'] ?? null,
+            ];
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Determine input type based on column name and type
+     */
+    protected function getInputType(string $columnName, string $columnType): string
+    {
+        // Map column names to input types
+        $nameMap = [
+            'email' => 'email',
+            'password' => 'password',
+            'phone' => 'tel',
+            'url' => 'url',
+            'image' => 'file',
+            'file' => 'file',
+            'color' => 'color',
+        ];
+
+        if (isset($nameMap[$columnName])) {
+            return $nameMap[$columnName];
+        }
+
+        // Map by type
+        $typeMap = [
+            'text' => 'textarea',
+            'boolean' => 'checkbox',
+            'timestamp' => 'datetime-local',
+            'datetime' => 'datetime-local',
+            'date' => 'date',
+            'integer' => 'number',
+            'bigint' => 'number',
+            'decimal' => 'number',
+            'float' => 'number',
+        ];
+
+        return $typeMap[$columnType] ?? 'text';
     }
     
     /**
