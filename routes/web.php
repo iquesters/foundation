@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Iquesters\Foundation\Http\Controllers\ConfigController;
 use Iquesters\Foundation\Http\Controllers\EntityController;
+use Iquesters\Foundation\Http\Controllers\MasterDataController;
 use Iquesters\Foundation\Http\Controllers\ModuleController;
 
 Route::middleware('web')->group(function () {
@@ -21,5 +22,9 @@ Route::middleware('web')->group(function () {
             Route::get('/{module?}', [ConfigController::class, 'index'])->name('modules.config.show');
             Route::put('/{module}', [ConfigController::class, 'update'])->name('modules.config.update');
         });
+        
+        Route::resource('master-data', MasterDataController::class)->parameters([
+            'master-data' => 'master_datum'
+        ]);
     });
 });
