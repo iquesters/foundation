@@ -609,6 +609,14 @@ abstract class BaseConf
             Log::error("❌ Failed to lazy-load config for {$this->identifier}: " . $e->getMessage());
         }
     }
+    
+    public function ensureLoaded(): void
+    {
+        if (!$this->isLoaded && method_exists($this, 'prepareDefault')) {
+            $this->prepareDefault($this);
+            $this->isLoaded = true;
+        }
+    }
 
     /**
      * Magic getter
