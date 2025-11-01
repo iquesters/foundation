@@ -5,9 +5,8 @@ namespace Iquesters\Foundation\Http\Controllers;
 use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
 use Iquesters\Foundation\Models\Module;
-use Iquesters\Masterdata\Models\MasterData;
-use Iquesters\Masterdata\Models\MasterDataMeta;
 use Illuminate\Support\Facades\Log;
+use Iquesters\Foundation\Models\MasterData;
 
 class ConfigController extends Controller
 {
