@@ -5,6 +5,7 @@ namespace Iquesters\Foundation\Support;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 abstract class BaseConf
 {
@@ -34,10 +35,17 @@ abstract class BaseConf
         $this->default_values = clone $this;
         $this->prepareDefault($this->default_values);
         
-        // 🚀 Load config from DB automatically (once)
-        $flattened = $this->loadConfigFromDB($this->identifier);
-        if (!empty($flattened)) {
-            $this->decipherConf($flattened);
+        try {
+            if (Schema::hasTable('master_data')) {
+                $flattened = $this->loadConfigFromDB($this->identifier);
+                if (!empty($flattened)) {
+                    $this->decipherConf($flattened);
+                }
+            } else {
+                Log::info("Skipping DB load for {$this->identifier}: master_data table not ready yet.");
+            }
+        } catch (\Throwable $e) {
+            Log::error("Failed to load DB config for {$this->identifier}: " . $e->getMessage());
         }
     }
     
