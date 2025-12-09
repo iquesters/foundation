@@ -3,7 +3,7 @@
 namespace Iquesters\Foundation\Traits;
 
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
-use Iquesters\Organisation\Models\Organisation;
+use Iquesters\Foundation\Models\Organisation;
 
 trait HasOrganisations
 {
