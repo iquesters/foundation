@@ -5,6 +5,7 @@ use Iquesters\Foundation\Http\Controllers\ConfigController;
 use Iquesters\Foundation\Http\Controllers\EntityController;
 use Iquesters\Foundation\Http\Controllers\MasterDataController;
 use Iquesters\Foundation\Http\Controllers\ModuleController;
+use Iquesters\Foundation\Http\Controllers\OrganisationController;
 
 Route::middleware('web')->group(function () {
     Route::middleware(['auth'])->group(function () {
