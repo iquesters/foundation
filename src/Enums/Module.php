@@ -9,4 +9,5 @@ class Module
     public const USER_INFE = 'user-interface';
     public const MASTER_DATA = 'masterdata';
     public const ORGANISATION = 'organisation';
+    public const SMART_MESSENGER = 'smart-messenger';
 }
