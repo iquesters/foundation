@@ -32,6 +32,10 @@ abstract class BaseConf
      */
     public function __construct() {
         $this->initializeNestedConfigs();
+        
+        // ✅ Initialize all typed properties with defaults BEFORE cloning
+        $this->initializeScalarProperties();
+        
         $this->default_values = clone $this;
         $this->prepareDefault($this->default_values);
         
@@ -40,16 +44,99 @@ abstract class BaseConf
                 $flattened = $this->loadConfigFromDB($this->identifier);
                 if (!empty($flattened)) {
                     $this->decipherConf($flattened);
+                } else {
+                    // No DB config, copy defaults to current instance
+                    $this->applyDefaultsToSelf();
                 }
             } else {
                 Log::info("Skipping DB load for {$this->identifier}: master_data table not ready yet.");
+                // Apply defaults when table doesn't exist
+                $this->applyDefaultsToSelf();
             }
-            
-            $this->isLoaded = true;
-            
         } catch (\Throwable $e) {
             Log::error("Failed to load DB config for {$this->identifier}: " . $e->getMessage());
-            $this->isLoaded = true; // ✅ Mark as loaded even on error to prevent retry
+            // Apply defaults on error
+            $this->applyDefaultsToSelf();
+        }
+        
+        $this->isLoaded = true;
+    }
+
+    /**
+     * Initialize scalar typed properties with default values
+     * This prevents "must not be accessed before initialization" errors
+     */
+    private function initializeScalarProperties(): void
+    {
+        $reflection = new \ReflectionObject($this);
+        
+        foreach ($reflection->getProperties(\ReflectionProperty::IS_PUBLIC | \ReflectionProperty::IS_PROTECTED) as $prop) {
+            $prop->setAccessible(true);
+            
+            // Skip if already initialized
+            if ($prop->isInitialized($this)) {
+                continue;
+            }
+            
+            // Skip special properties
+            if (in_array($prop->getName(), ['default_values', 'isLoaded', 'identifier'])) {
+                continue;
+            }
+            
+            $type = $prop->getType();
+            
+            if ($type && $type->isBuiltin()) {
+                // Initialize with appropriate default based on type
+                $typeName = $type->getName();
+                $defaultValue = match($typeName) {
+                    'string' => '',
+                    'int' => 0,
+                    'float' => 0.0,
+                    'bool' => false,
+                    'array' => [],
+                    default => null
+                };
+                
+                // Only set if type allows null or we have a non-null default
+                if (!$type->allowsNull() || $defaultValue !== null) {
+                    $prop->setValue($this, $defaultValue);
+                    Log::debug("Initialized scalar property '{$prop->getName()}' with default: " . json_encode($defaultValue));
+                }
+            }
+        }
+    }
+
+    /**
+     * Apply default values from default_values to current instance
+     */
+    private function applyDefaultsToSelf(): void
+    {
+        if (!isset($this->default_values)) {
+            return;
+        }
+        
+        $reflection = new \ReflectionObject($this->default_values);
+        
+        foreach ($reflection->getProperties(\ReflectionProperty::IS_PUBLIC | \ReflectionProperty::IS_PROTECTED) as $prop) {
+            $prop->setAccessible(true);
+            $propName = $prop->getName();
+            
+            // Skip special properties
+            if (in_array($propName, ['default_values', 'isLoaded'])) {
+                continue;
+            }
+            
+            // Only copy if default is initialized
+            if ($prop->isInitialized($this->default_values)) {
+                $defaultValue = $prop->getValue($this->default_values);
+                
+                // Set on current instance
+                $currentProp = new \ReflectionProperty($this, $propName);
+                $currentProp->setAccessible(true);
+                $currentProp->setValue($this, $defaultValue);
+                
+                Log::debug("Applied default value for '{$propName}': " . json_encode($defaultValue));
+            }
         }
     }
     
@@ -610,20 +697,23 @@ abstract class BaseConf
     private function loadConfigOnce(): void
     {
         if ($this->isLoaded) {
-            return; // ✅ Already loaded, don't reload
+            return;
         }
         
         try {
             $flattened = $this->loadConfigFromDB($this->identifier);
             if (!empty($flattened)) {
                 $this->decipherConf($flattened);
+            } else {
+                $this->applyDefaultsToSelf();
             }
 
             $this->isLoaded = true;
             Log::debug("✅ Config for {$this->identifier} loaded lazily");
         } catch (\Throwable $e) {
             Log::error("❌ Failed to lazy-load config for {$this->identifier}: " . $e->getMessage());
-            $this->isLoaded = true; // Prevent retry
+            $this->applyDefaultsToSelf();
+            $this->isLoaded = true;
         }
     }
     
@@ -647,12 +737,38 @@ abstract class BaseConf
         }
         
         if (property_exists($this, $property)) {
-            return $this->$property;
+            // ✅ Check if typed property is initialized
+            $reflection = new \ReflectionProperty($this, $property);
+            $reflection->setAccessible(true);
+            
+            if ($reflection->hasType() && !$reflection->isInitialized($this)) {
+                // Try to get from defaults
+                if (isset($this->default_values)) {
+                    try {
+                        $defaultProp = new \ReflectionProperty($this->default_values, $property);
+                        $defaultProp->setAccessible(true);
+                        
+                        if ($defaultProp->isInitialized($this->default_values)) {
+                            $defaultValue = $defaultProp->getValue($this->default_values);
+                            $reflection->setValue($this, $defaultValue);
+                            Log::warning("Property '{$property}' was uninitialized, applied default: " . json_encode($defaultValue));
+                            return $defaultValue;
+                        }
+                    } catch (\Exception $e) {
+                        Log::error("Could not access default for '{$property}': " . $e->getMessage());
+                    }
+                }
+                
+                Log::error("Property '{$property}' is not initialized and no default available in " . get_class($this));
+                return null;
+            }
+            
+            return $reflection->getValue($this);
         }
-        trigger_error("Undefined property: " . __CLASS__ . "::$" . $property, E_USER_NOTICE);
+        
+        trigger_error("Undefined property: " . get_class($this) . "::$" . $property, E_USER_NOTICE);
         return null;
     }
-
     /**
      * Magic setter
      * Set a config value by key
