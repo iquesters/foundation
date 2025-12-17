@@ -44,8 +44,12 @@ abstract class BaseConf
             } else {
                 Log::info("Skipping DB load for {$this->identifier}: master_data table not ready yet.");
             }
+            
+            $this->isLoaded = true;
+            
         } catch (\Throwable $e) {
             Log::error("Failed to load DB config for {$this->identifier}: " . $e->getMessage());
+            $this->isLoaded = true; // ✅ Mark as loaded even on error to prevent retry
         }
     }
     
@@ -605,16 +609,21 @@ abstract class BaseConf
 
     private function loadConfigOnce(): void
     {
+        if ($this->isLoaded) {
+            return; // ✅ Already loaded, don't reload
+        }
+        
         try {
             $flattened = $this->loadConfigFromDB($this->identifier);
             if (!empty($flattened)) {
                 $this->decipherConf($flattened);
             }
 
-            $this->isLoaded = true; // mark as loaded
+            $this->isLoaded = true;
             Log::debug("✅ Config for {$this->identifier} loaded lazily");
         } catch (\Throwable $e) {
             Log::error("❌ Failed to lazy-load config for {$this->identifier}: " . $e->getMessage());
+            $this->isLoaded = true; // Prevent retry
         }
     }
     
