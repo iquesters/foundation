@@ -1,19 +1,18 @@
 @extends('userinterface::layouts.app')
 
 @section('content')
-<form method="POST" action="{{ route('navigation.save-order') }}" id="navigationForm">
+<form method="POST" id="navigationForm" action="{{ route('navigation.save-order') }}">
     @csrf
 
-    {{-- Hidden input to store final order --}}
+    {{-- PRIMARY NAV --}}
     <input type="hidden" name="order" id="navigationOrderInput">
 
-    <div class="row">
-        <div class="col-md-4">
-
+    <div class="row d-flex align-items-start justify-content-between">
+        <div class="col-md-5">
             <div class="d-flex justify-content-between align-items-center mb-1">
                 <h5 class="fs-6 text-muted mb-0">Primary Navigation Order</h5>
-                <button type="submit" class="btn btn-sm btn-outline-primary">
-                    Update
+                <button type="button" id="savePrimaryNav" class="btn btn-sm btn-outline-primary">
+                    Update Primary
                 </button>
             </div>
 
@@ -21,16 +20,15 @@
                 Drag and drop modules to reorder navigation
             </small>
 
-            {{-- Unsaved changes warning --}}
-            <div id="unsavedWarning" class="alert alert-warning py-2 px-3 small mt-2 d-none">
+            <div id="unsavedPrimary" class="alert alert-warning py-2 px-3 small mt-2 d-none">
                 <i class="fas fa-exclamation-triangle me-1"></i>
-                You have unsaved changes. Please update to apply the new navigation order.
+                You have unsaved changes.
             </div>
 
             <div class="p-2">
                 <ul id="navigationOrder" class="list-group">
                     @foreach($orderedModules as $module)
-                        <li class="list-group-item list-group-item-action d-flex justify-content-between align-items-center rounded shadow-sm"
+                        <li class="list-group-item d-flex justify-content-between align-items-center"
                             draggable="true"
                             data-id="{{ $module->id }}">
                             {{ $module->name }}
@@ -39,7 +37,40 @@
                     @endforeach
                 </ul>
             </div>
+        </div>
 
+        {{-- SUB MENU --}}
+        <div class="col-md-5 offset-md-1">
+            <h5 class="fs-6 text-muted">Module Sub Menu Ordering</h5>
+
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-4">
+                <select id="moduleSelect" class="form-select form-select-sm">
+                    <option value="">-- Select Module --</option>
+                    @foreach($orderedModules as $module)
+                        <option value="{{ $module->uid }}">{{ $module->name }}</option>
+                    @endforeach
+                </select>
+
+                <button type="button" id="loadSubMenu" class="btn btn-sm btn-outline-secondary">
+                    Display
+                </button>
+            </div>
+            <div class="d-flex align-items-center justify-content-between gap-2">
+                <p>Sub menu of {{ $orderedModules->first()->name ?? '' }}</p>
+                <button type="button" id="saveSubMenu" class="btn btn-sm btn-outline-primary text-nowrap">
+                    Update SubMenu
+                </button>
+            </div>
+
+            <input type="hidden" name="submenu_order" id="submenuOrderInput">
+            <input type="hidden" name="submenu_module_id" id="submenuModuleId">
+
+            <div id="unsavedSubmenu" class="alert alert-warning py-2 px-3 small d-none">
+                <i class="fas fa-exclamation-triangle me-1"></i>
+                Sub menu order changed. Click Update to save.
+            </div>
+
+            <ul id="submenuList" class="list-group mt-2"></ul>
         </div>
     </div>
 </form>
@@ -47,23 +78,12 @@
 
 @push('styles')
 <style>
-/* Cursor */
-#navigationOrder li {
+.list-group li {
     cursor: grab;
-    transition: background-color 0.2s, box-shadow 0.2s;
 }
-
-/* Dragging row style */
-#navigationOrder li.dragging {
-    border: 1px solid var(--bs-primary) !important;
-    color: var(--bs-primary) !important;
-    cursor: grabbing;
-    box-shadow: 0 .25rem .5rem rgba(0,0,0,.1);
-}
-
-/* Hover highlight */
-#navigationOrder li:hover {
-    background-color: var(--bs-light);
+.list-group li.dragging {
+    border: 1px solid var(--bs-primary);
+    color: var(--bs-primary);
 }
 </style>
 @endpush
@@ -71,63 +91,92 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const list = document.getElementById('navigationOrder');
-    const orderInput = document.getElementById('navigationOrderInput');
-    const form = document.getElementById('navigationForm');
-    const warning = document.getElementById('unsavedWarning');
 
-    let draggedItem = null;
+    const navigationForm = document.getElementById('navigationForm');
+    const moduleSelect = document.getElementById('moduleSelect');
 
-    // Store initial order
-    const initialOrder = Array.from(list.querySelectorAll('li'))
-        .map(li => li.dataset.id)
-        .join(',');
+    /**
+     * Reusable Drag-and-Drop Function
+     * @param {HTMLElement} listEl
+     * @param {HTMLElement} warningEl
+     * @param {string} dataAttr
+     * @returns {Function} getCurrentOrder
+     */
+    function makeDraggable(listEl, warningEl, dataAttr = 'id') {
+        let dragged;
+        const initialOrder = Array.from(listEl.children).map(li => li.dataset[dataAttr]).join(',');
 
-    function hasChanges() {
-        const currentOrder = Array.from(list.querySelectorAll('li'))
-            .map(li => li.dataset.id)
-            .join(',');
+        listEl.addEventListener('dragstart', e => {
+            dragged = e.target;
+            dragged.classList.add('dragging');
+        });
 
-        return currentOrder !== initialOrder;
+        listEl.addEventListener('dragover', e => {
+            e.preventDefault();
+            const target = e.target.closest('li');
+            if (!target || target === dragged) return;
+            listEl.insertBefore(dragged, target.nextSibling);
+        });
+
+        listEl.addEventListener('dragend', () => {
+            dragged.classList.remove('dragging');
+            const current = Array.from(listEl.children).map(li => li.dataset[dataAttr]).join(',');
+            warningEl.classList.toggle('d-none', current === initialOrder);
+        });
+
+        return () => Array.from(listEl.children).map(li => li.dataset[dataAttr]);
     }
 
-    function updateWarning() {
-        if (hasChanges()) {
-            warning.classList.remove('d-none');
-        } else {
-            warning.classList.add('d-none');
-        }
-    }
+    /* ---------------- PRIMARY NAV ---------------- */
+    const navList = document.getElementById('navigationOrder');
+    const navInput = document.getElementById('navigationOrderInput');
+    const navWarning = document.getElementById('unsavedPrimary');
+    const getNavOrder = makeDraggable(navList, navWarning, 'id');
 
-    list.addEventListener('dragstart', function (e) {
-        draggedItem = e.target;
-        draggedItem.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
+    document.getElementById('savePrimaryNav').addEventListener('click', () => {
+        navInput.value = JSON.stringify(getNavOrder());
+        navigationForm.submit();
     });
 
-    list.addEventListener('dragover', function (e) {
-        e.preventDefault();
-        const target = e.target.closest('li');
-        if (!target || target === draggedItem) return;
+    /* ---------------- SUB MENU ---------------- */
+    const submenuList = document.getElementById('submenuList');
+    const submenuInput = document.getElementById('submenuOrderInput');
+    const submenuModuleId = document.getElementById('submenuModuleId');
+    const submenuWarning = document.getElementById('unsavedSubmenu');
+    let getSubmenuOrder;
 
-        const rect = target.getBoundingClientRect();
-        const next = (e.clientY - rect.top) / rect.height > 0.5;
-        list.insertBefore(draggedItem, next ? target.nextSibling : target);
+    document.getElementById('loadSubMenu').addEventListener('click', function () {
+        if (!moduleSelect.value) return;
+
+        fetch(`/navigations/module/${moduleSelect.value}/sub-menu`)
+            .then(res => res.json())
+            .then(res => {
+                submenuList.innerHTML = '';
+                submenuModuleId.value = moduleSelect.value;
+
+                res.submenu.forEach(item => {
+                    submenuList.insertAdjacentHTML('beforeend', `
+                        <li class="list-group-item d-flex justify-content-between"
+                            draggable="true"
+                            data-route="${item.route}">
+                            <span><i class="${item.icon} me-2"></i>${item.label}</span>
+                            <i class="fas fa-grip-lines"></i>
+                        </li>
+                    `);
+                });
+
+                getSubmenuOrder = makeDraggable(submenuList, submenuWarning, 'route');
+                submenuWarning.classList.add('d-none');
+            });
     });
 
-    list.addEventListener('dragend', function () {
-        if (draggedItem) draggedItem.classList.remove('dragging');
-        draggedItem = null;
-        updateWarning();
+    document.getElementById('saveSubMenu').addEventListener('click', () => {
+        if (!getSubmenuOrder) return;
+
+        submenuInput.value = JSON.stringify(getSubmenuOrder());
+        navigationForm.submit();
     });
 
-    // On submit → save order
-    form.addEventListener('submit', function () {
-        const order = Array.from(list.querySelectorAll('li'))
-            .map(li => parseInt(li.dataset.id, 10));
-
-        orderInput.value = JSON.stringify(order);
-    });
 });
 </script>
 @endpush
