@@ -5,6 +5,7 @@ use Iquesters\Foundation\Http\Controllers\ConfigController;
 use Iquesters\Foundation\Http\Controllers\EntityController;
 use Iquesters\Foundation\Http\Controllers\MasterDataController;
 use Iquesters\Foundation\Http\Controllers\ModuleController;
+use Iquesters\Foundation\Http\Controllers\NavigationController;
 
 Route::middleware('web')->group(function () {
     Route::middleware(['auth'])->group(function () {
@@ -27,5 +28,11 @@ Route::middleware('web')->group(function () {
         Route::resource('master-data', MasterDataController::class)->parameters([
             'master-data' => 'master_datum'
         ]);
+        
+        Route::prefix('navigations')->group(function () {
+            Route::get('/', [NavigationController::class, 'index'])->name('navigation.index');
+            Route::post('/save-order', [NavigationController::class, 'saveOrder'])->name('navigation.save-order');
+        });
+        
     });
 });
