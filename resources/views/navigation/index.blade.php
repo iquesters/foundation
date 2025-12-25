@@ -128,14 +128,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         orderInput.value = JSON.stringify(order);
     });
-
-    // Warn if leaving without saving
-    window.addEventListener('beforeunload', function (e) {
-        if (hasChanges()) {
-            e.preventDefault();
-            e.returnValue = '';
-        }
-    });
 });
 </script>
 @endpush
