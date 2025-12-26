@@ -78,7 +78,7 @@ abstract class BaseSeeder extends Seeder
 
         // 4️⃣ Insert module metadata
         $this->seedModuleMetadata($moduleId);
-
+        $this->seedTableSchemasFromSidebar($moduleId);
         // 5️⃣ Create module-specific permissions
         $this->seedPermissions();
 
@@ -398,6 +398,81 @@ abstract class BaseSeeder extends Seeder
 
         return $typeMap[$columnType] ?? 'text';
     }
+    
+    /**
+     * Seed table schemas declared inside sidebar menu items
+     */
+    final protected function seedTableSchemasFromSidebar(int $moduleId): void
+    {
+        // Get the current sidebar menu meta
+        $sidebarMeta = DB::table('module_metas')
+            ->where('ref_parent', $moduleId)
+            ->where('meta_key', 'module_sidebar_menu')
+            ->first();
+
+        $sidebarMenu = $sidebarMeta
+            ? json_decode($sidebarMeta->meta_value, true)
+            : ($this->metas['module_sidebar_menu'] ?? []);
+
+        foreach ($sidebarMenu as &$menuItem) {
+
+            // Check if this menu item declares a table schema
+            if (empty($menuItem['table_schema'])) {
+                continue;
+            }
+
+            $schemaDef = $menuItem['table_schema'];
+
+            // Check if schema already exists
+            $existing = DB::table('table_schemas')
+                ->where('slug', $schemaDef['slug'])
+                ->first();
+
+            if (!$existing) {
+                // Insert new table schema
+                DB::table('table_schemas')->insert([
+                    'uid' => (string) Str::ulid(),
+                    'slug' => $schemaDef['slug'],
+                    'name' => $schemaDef['name'],
+                    'description' => $schemaDef['description'] ?? null,
+                    'schema' => json_encode($schemaDef['schema'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'status' => 'active',
+                    'created_by' => 0,
+                    'updated_by' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                $schemaUid = DB::table('table_schemas')
+                    ->where('slug', $schemaDef['slug'])
+                    ->value('uid');
+            } else {
+                // Use existing UID
+                $schemaUid = $existing->uid;
+            }
+
+            // Bind UID to sidebar menu item
+            $menuItem['default-table-schema-uid'] = $schemaUid;
+
+            // Optional: remove schema payload to keep sidebar clean
+            unset($menuItem['table_schema']);
+        }
+
+        // Save updated sidebar menu back to module_meta
+        DB::table('module_metas')->updateOrInsert(
+            [
+                'ref_parent' => $moduleId,
+                'meta_key' => 'module_sidebar_menu',
+            ],
+            [
+                'meta_value' => json_encode($sidebarMenu, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'status' => 'active',
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+    }
+
     
     /**
      * Hook for child seeders to add custom logic

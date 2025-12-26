@@ -30,7 +30,11 @@ Route::middleware('web')->group(function () {
         ]);
         
         Route::prefix('navigations')->group(function () {
-            Route::get('/', [NavigationController::class, 'index'])->name('navigation.index');
+            Route::get('/', function () {
+                return redirect()->route('ui.list', 'navigations-table');
+            })->name('navigations.index');
+            // Route::get('/', [NavigationController::class, 'index'])->name('navigations.index');
+            Route::get('/details', [NavigationController::class, 'details'])->name('navigation.details');
             Route::get('/module/{moduleUid}/sub-menu', [NavigationController::class, 'loadModuleSubMenu'])->name('navigation.module.submenu');
             Route::post('/save-order', [NavigationController::class, 'saveOrder'])->name('navigation.save-order');
             Route::post('/save-submenu-order', [NavigationController::class, 'saveSubmenuOrder'])->name('navigation.save-submenu-order');

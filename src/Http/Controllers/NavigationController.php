@@ -8,14 +8,53 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\Models\Navigation;
 use Iquesters\Foundation\Models\Module;
+use Iquesters\UserInterface\Models\TableSchema;
 
 class NavigationController extends Controller
 {
+    public function index()
+{
+    try {
+        Log::info('Fetching all navigation');
+
+        $navigations = Navigation::with('metas')->get();
+
+        Log::info('Displaying navigations', [
+            'count' => $navigations->count()
+        ]);
+
+        // $tableSchema = TableSchema::where('slug', 'navigations-table')->first();
+        Log::debug('Table Schema details', [$tableSchema]);
+        if (!$tableSchema) {
+            return redirect()
+                ->back()
+                ->with('error', 'Table schema not found.');
+        }
+
+        return redirect()->route('ui.list', [
+            'table_schema_id' => 'navigations-table'
+        ]);
+
+        // OR if ui.list expects a view:
+        // return view('ui.list', compact('tableSchema', 'navigations'));
+
+    } catch (\Throwable $e) {
+        Log::error('Error fetching navigation', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return redirect()
+            ->back()
+            ->with('error', 'An error occurred while fetching navigations.');
+    }
+}
+    
     /**
      * Show navigation ordering UI
      * Auto-syncs primary navigation_order with modules
      */
-    public function index()
+    public function details()
     {
         try {
             $userId = auth()->id() ?? 0;
@@ -119,7 +158,7 @@ class NavigationController extends Controller
                 }
             }
 
-            return view('foundation::navigation.index', compact(
+            return view('foundation::navigation.details', compact(
                 'orderedModules'
             ));
 
