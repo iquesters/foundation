@@ -4,10 +4,13 @@ namespace Iquesters\Foundation\Enums;
 
 class Module
 {
-    public const PRODUCT   = 'product';
-    public const USER_MGMT = 'user-management';
-    public const USER_INFE = 'user-interface';
-    public const MASTER_DATA = 'masterdata';
-    public const ORGANISATION = 'organisation';
-    public const SMART_MESSENGER = 'smart-messenger';
+    public const VENDOR    = 'iquesters/';
+    
+    public const FOUNDATION = self::VENDOR . 'foundation';
+    public const MASTER_DATA = self::VENDOR . 'masterdata';
+    public const USER_INFE = self::VENDOR . 'user-interface';
+    public const USER_MGMT = self::VENDOR . 'user-management';
+    public const ORGANISATION = self::VENDOR . 'organisation';
+    public const PRODUCT   = self::VENDOR . 'product';
+    public const SMART_MESSENGER = self::VENDOR . 'smart-messenger';
 }
