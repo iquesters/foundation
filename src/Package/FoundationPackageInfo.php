@@ -8,14 +8,16 @@ use Iquesters\Foundation\Console\OpenApiGenerateCommand;
 
 class FoundationPackageInfo extends PackageInfo
 {
-    protected string $module_name = 'foundation';
+    protected function definePackageInfo(): void
+    {
+        $this->laravel_config_name = 'foundation';
 
-    protected bool $load_laravel_native_config = true;
+        $this->specific_providers = [
+            FoundationServiceProvider::class,
+        ];
 
-    protected string $seeder_class = 'FoundationSeeder';
-    
-    protected ?array $console_commands = [
-        ApiRouteDoctorCommand::class,
-        OpenApiGenerateCommand::class,
-    ];
+        $this->specific_commands = [
+            SeederCommand::class,
+        ];
+    }
 }

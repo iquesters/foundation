@@ -2,8 +2,8 @@
 
 namespace Iquesters\Foundation\System\Package;
 
+use Iquesters\Foundation\System\Package\NamespaceResolver;
 use Illuminate\Support\Str;
-use ReflectionClass;
 
 abstract class PackageInfo
 {
@@ -12,203 +12,194 @@ abstract class PackageInfo
      |--------------------------------------------------*/
     private const VENDOR_NAME = 'iquesters';
 
-    protected const ROUTES_WEB_PATH      = 'routes/web.php';
-    protected const MIGRATIONS_PATH      = 'database/migrations';
-    protected const VIEWS_PATH           = 'resources/views';
-    protected const CONFIG_DIR           = 'config';
-    protected const DIRECTORY_SEPARATOR  = '/';
+    protected const ROUTES_WEB_PATH       = 'routes/web.php';
+    protected const MIGRATIONS_PATH       = 'database/migrations';
+    protected const VIEWS_PATH            = 'resources/views';
+    protected const CONFIG_DIR            = 'config';
+    protected const DIRECTORY_SEPARATOR   = '/';
 
     /* -------------------------------------------------
      | Properties
      |--------------------------------------------------*/
     protected string $module_name = '';
 
+    // Default paths
+    protected string $default_migrations_path;
+    protected string $default_views_path;
+    protected string $default_config_path;
+    protected string $default_routes_path;
+
+    // Custom paths (optional overrides)
+    protected ?string $custom_migrations_path = null;
+    protected ?string $custom_views_path = null;
+    protected ?string $custom_config_path = null;
+    protected ?string $custom_routes_path = null;
+
+    // Specific classes only
+    protected ?array $specific_providers = null;
+    protected ?array $specific_commands = null;
+    protected ?array $specific_middlewares = null;
+    protected ?array $specific_models = null;
+
+    // Common properties
     protected ?string $package_name = null;
     protected ?string $conf_name = null;
-
     protected bool $load_laravel_native_config = false;
-    
-    protected string $seeder_class;
-
-    protected ?array $console_commands = null;
-
+    protected ?string $seeder_class = null;
     protected ?string $laravel_config_name = null;
-    protected ?string $laravel_config_path = null;
-
-    protected ?array  $routes = null;
-    protected ?string $migrations_path = null;
-    protected ?string $views_path = null;
     protected ?string $view_namespace = null;
-    protected ?array $middlewares = null;
-
-    protected ?string $base_path = null;
 
     /* -------------------------------------------------
-     | Package
+     | Magic Methods
      |--------------------------------------------------*/
-    public function getPackageName(): string
+    public function __construct(string $moduleName)
     {
-        return $this->package_name
-            ??= self::VENDOR_NAME . self::DIRECTORY_SEPARATOR . $this->module_name;
-    }
-
-    public function moduleName(): string
-    {
-        return $this->module_name;
+        $this->module_name = $moduleName;
+        $this->initialize();
     }
 
     /* -------------------------------------------------
-     | Base path
+     | Abstract Methods
      |--------------------------------------------------*/
-    // public function basePath(string $path = ''): string
-    // {
-    //     if ($this->base_path === null) {
-    //         $reflection = new ReflectionClass(static::class);
-    //         // src/PackageInfo.php -> src -> package root
-    //         $this->base_path = dirname(dirname($reflection->getFileName()));
-    //     }
+    /**
+     * Define module-specific paths and classes
+     */
+    abstract protected function definePackageInfo(): void;
 
-    //     return $path
-    //         ? $this->base_path . self::DIRECTORY_SEPARATOR . ltrim($path, self::DIRECTORY_SEPARATOR)
-    //         : $this->base_path;
-    // }
-    public function basePath(string $path = ''): string
+    /* -------------------------------------------------
+     | Path Methods (ALL existing paths)
+     |--------------------------------------------------*/
+    /**
+     * Get ALL migrations paths: custom + default (if exist)
+     */
+    public function getMigrationsPaths(): array
     {
-        if ($this->base_path === null) {
-            $reflection = new \ReflectionClass(static::class);
-            $dir = dirname($reflection->getFileName());
-
-            // Walk up until we find composer.json (package root)
-            while (!is_file($dir . '/composer.json')) {
-                $parent = dirname($dir);
-
-                if ($parent === $dir) {
-                    throw new \RuntimeException(
-                        'Unable to locate package root (composer.json not found)'
-                    );
-                }
-
-                $dir = $parent;
-            }
-
-            $this->base_path = $dir;
+        $paths = [];
+        if ($this->custom_migrations_path && is_dir($this->custom_migrations_path)) {
+            $paths[] = $this->custom_migrations_path;
         }
-
-        return $path
-            ? $this->base_path . '/' . ltrim($path, '/')
-            : $this->base_path;
-    }
-
-    /* -------------------------------------------------
-     | Routes
-     |--------------------------------------------------*/
-    public function routes(): array
-    {
-        $routes = $this->routes ?? [$this->basePath(self::ROUTES_WEB_PATH)];
-        return array_filter($routes, 'is_file'); // Only return existing files
-    }
-
-    /* -------------------------------------------------
-     | Migrations
-     |--------------------------------------------------*/
-    public function migrationsPath(): string
-    {
-        return $this->migrations_path
-            ?? $this->basePath(self::MIGRATIONS_PATH);
-    }
-
-    /* -------------------------------------------------
-     | Views
-     |--------------------------------------------------*/
-    public function viewsPath(): string
-    {
-        return $this->views_path
-            ?? $this->basePath(self::VIEWS_PATH);
-    }
-
-    public function viewNamespace(): string
-    {
-        return $this->view_namespace
-            ?? $this->module_name;
-    }
-
-    /* -------------------------------------------------
-     | Middlewares
-     |--------------------------------------------------*/
-    public function middlewares(): array
-    {
-        return $this->middlewares ?? [];
-    }
-
-    /* -------------------------------------------------
-     | Seeder
-     |--------------------------------------------------*/
-    public function seederClass(): string
-    {
-        if (empty($this->seeder_class)) {
-            throw new \RuntimeException('Seeder class must be defined in PackageInfo');
+        if (is_dir($this->default_migrations_path)) {
+            $paths[] = $this->default_migrations_path;
         }
+        return $paths;
+    }
 
-        // Automatically resolve the namespace based on VENDOR_NAME and module_name
-        $vendorNamespace = Str::studly(self::VENDOR_NAME);
-        $moduleNamespace = Str::studly($this->module_name);
+    /**
+     * Get ALL views paths: custom + default (if exist)
+     */
+    public function getViewsPaths(): array
+    {
+        $paths = [];
+        if ($this->custom_views_path && is_dir($this->custom_views_path)) {
+            $paths[] = $this->custom_views_path;
+        }
+        if (is_dir($this->default_views_path)) {
+            $paths[] = $this->default_views_path;
+        }
+        return $paths;
+    }
 
-        return $vendorNamespace . '\\' . $moduleNamespace . '\\Database\\Seeders\\' . $this->seeder_class;
+    /**
+     * Get ALL config paths: custom + default (if exist)
+     */
+    public function getConfigPaths(): array
+    {
+        $paths = [];
+        if ($this->custom_config_path && file_exists($this->custom_config_path)) {
+            $paths[] = $this->custom_config_path;
+        }
+        if (file_exists($this->default_config_path)) {
+            $paths[] = $this->default_config_path;
+        }
+        return $paths;
+    }
+
+    /**
+     * Get ALL routes paths: custom + default (if exist)
+     */
+    public function getRoutesPaths(): array
+    {
+        $paths = [];
+        if ($this->custom_routes_path && file_exists($this->custom_routes_path)) {
+            $paths[] = $this->custom_routes_path;
+        }
+        if (file_exists($this->default_routes_path)) {
+            $paths[] = $this->default_routes_path;
+        }
+        return $paths;
     }
 
     /* -------------------------------------------------
-     | Console Command
+     | Class Methods (specific only)
      |--------------------------------------------------*/
-    public function consoleCommands(): array
+    /**
+     * Get specific providers only
+     */
+    public function getProviders(): ?array
     {
-        return $this->console_commands ?? [];
-    }
-    
-    /* -------------------------------------------------
-     | Custom Conf
-     |--------------------------------------------------*/
-    public function confName(): string
-    {
-        return $this->conf_name
-            ??= Str::studly($this->module_name) . 'Conf';
+        return $this->specific_providers;
     }
 
-    public function configClass(): string
+    /**
+     * Get specific console commands only
+     */
+    public function getConsoleCommands(): ?array
     {
-        return static::classNamespace() . '\\' . $this->confName();
+        return $this->specific_commands;
     }
 
-    /* -------------------------------------------------
-     | Laravel Native Config
-     |--------------------------------------------------*/
-    public function shouldLoadLaravelNativeConfig(): bool
+    /**
+     * Get specific middlewares only
+     */
+    public function getMiddlewares(): ?array
     {
-        return $this->load_laravel_native_config;
+        return $this->specific_middlewares;
     }
 
-    public function laravelConfigName(): string
+    /**
+     * Get specific models only
+     */
+    public function getModels(): ?array
     {
-        return $this->laravel_config_name
-            ?? $this->module_name;
-    }
-
-    public function laravelConfigPath(): string
-    {
-        return $this->laravel_config_path
-            ?? $this->basePath(
-                self::CONFIG_DIR
-                . self::DIRECTORY_SEPARATOR
-                . $this->module_name
-                . '.php'
-            );
+        return $this->specific_models;
     }
 
     /* -------------------------------------------------
-     | Helpers
+     | Protected Methods
      |--------------------------------------------------*/
-    protected static function classNamespace(): string
+    /**
+     * Initialize package properties
+     */
+    protected function initialize(): void
     {
-        return substr(static::class, 0, strrpos(static::class, '\\'));
+        $resolver = $this->getNamespaceResolver();
+
+        $this->package_name = Str::studly($this->module_name);
+        $this->conf_name = strtolower($this->module_name);
+        $this->view_namespace = $this->package_name;
+
+        $packageRoot = $this->getPackagePath();
+        $this->default_migrations_path = $packageRoot . '/' . static::MIGRATIONS_PATH;
+        $this->default_views_path = $packageRoot . '/' . static::VIEWS_PATH;
+        $this->default_config_path = $packageRoot . '/' . static::CONFIG_DIR . '/' . $this->conf_name . '.php';
+        $this->default_routes_path = $packageRoot . '/' . static::ROUTES_WEB_PATH;
+
+        $this->definePackageInfo();
     }
 
+    /**
+     * Get namespace resolver instance
+     */
+    protected function getNamespaceResolver(): NamespaceResolver
+    {
+        return new NamespaceResolver($this->module_name);
+    }
+
+    /**
+     * Get package root path
+     */
+    protected function getPackagePath(): string
+    {
+        return base_path("modules/{$this->module_name}");
+    }
 }

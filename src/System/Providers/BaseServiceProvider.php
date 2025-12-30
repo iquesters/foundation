@@ -3,135 +3,227 @@
 namespace Iquesters\Foundation\System\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use Iquesters\Foundation\Support\ConfProvider;
-use Iquesters\Foundation\Console\SeederCommand;
-use Iquesters\Foundation\System\Package\PackageInfo;
+use Iquesters\Foundation\System\Package\NamespaceResolver;
+use Illuminate\Support\Str;
 
 abstract class BaseServiceProvider extends ServiceProvider
 {
-    abstract protected function packageInfo(): PackageInfo;
-    
+    /* -------------------------------------------------
+     | Abstract Methods (Optional Override)
+     |--------------------------------------------------*/
+
+    /**
+     * Get package info instance (auto-detected if not overridden)
+     */
+    /**
+     * Get package info instance (auto-detected)
+     */
+    protected function packageInfo(): PackageInfo
+    {
+        $moduleName = $this->detectModuleName();
+        $packageInfoClass = $this->detectPackageInfoClass($moduleName);
+
+        \Log::info('Instantiating PackageInfo', [
+            'module_name' => $moduleName,
+            'package_info_class' => $packageInfoClass,
+            'service_provider_class' => static::class,
+        ]);
+
+        if (!class_exists($packageInfoClass)) {
+            throw new \RuntimeException("PackageInfo class not found: {$packageInfoClass}");
+        }
+
+        $packageInfo = new $packageInfoClass($moduleName);
+
+        \Log::info('PackageInfo instantiated successfully', [
+            'module_name' => $moduleName,
+            'package_info_class' => $packageInfoClass,
+            'package_namespace' => $packageInfo->getNamespace(),
+        ]);
+
+        return $packageInfo;
+    }
+
+    /* -------------------------------------------------
+     | Register Method
+     |--------------------------------------------------*/
+
+    public function register(): void
+    {
+        $this->registerPackageProviders();
+        $this->registerPackageCommands();
+        $this->loadPackageConfigs();
+    }
+
+    /* -------------------------------------------------
+     | Boot Method
+     |--------------------------------------------------*/
 
     public function boot(): void
     {
-        // Routes
-        $this->loadPackageRoutes();
-        
-        // Migrations
-        $this->loadPackageMigrations();
-
-        // Views
         $this->loadPackageViews();
-
-        // Middlewares
-        $this->loadPackageMiddlewares();
-        
-        // Seeder
-        $this->loadPackageSeeder();
-        
-        // Console Command
-        $this->loadPackageConsoleCommands();
-
-        // // Optional service provider
-        // foreach ($this->serviceProviders() as $serviceProvider) {
-        //      $this->app->register($serviceProvider);
-        // }
-
+        $this->loadPackageMigrations();
+        $this->loadPackageRoutes();
     }
-    
-    public function register(): void
-    {
-        $this->registerConf();
-    }
-    
-    private function registerConf(): void
+
+    /* -------------------------------------------------
+     | Package Registration Methods
+     |--------------------------------------------------*/
+
+    /**
+     * Register specific providers from package info
+     */
+    protected function registerPackageProviders(): void
     {
         $info = $this->packageInfo();
+        $providers = $info->getProviders();
 
-        // Custom config system
-        ConfProvider::register(
-            $info->moduleName(),
-            $info->configClass()
-        );
-        
-        // Laravel native config
-        if ($info->shouldLoadLaravelNativeConfig()) {
-            $this->mergeConfigFrom(
-                $info->laravelConfigPath(),
-                $info->laravelConfigName()
-            );
-        }
-    }
-    
-    protected function loadPackageRoutes(): void
-    {
-        foreach ($this->packageInfo()->routes() as $routeFile) {
-            if (is_file($routeFile)) {
-                $this->loadRoutesFrom($routeFile);
+        if ($providers) {
+            foreach ($providers as $provider) {
+                $this->app->register($provider);
             }
         }
     }
 
-    protected function loadPackageMigrations(): void
-    {
-        $path = $this->packageInfo()->migrationsPath();
-
-        if (is_dir($path)) {
-            $this->loadMigrationsFrom($path);
-        }
-    }
-
-    protected function loadPackageViews(): void
+    /**
+     * Register specific console commands from package info
+     */
+    protected function registerPackageCommands(): void
     {
         $info = $this->packageInfo();
+        $commands = $info->getConsoleCommands();
 
-        $path = $info->viewsPath();
-
-        if (is_dir($path)) {
-            $this->loadViewsFrom(
-                $path,
-                $info->viewNamespace()
-            );
-        }
-    }
-    
-    protected function loadPackageMiddlewares(): void
-    {
-        $middlewares = $this->packageInfo()->middlewares();
-
-        if (empty($middlewares)) {
-            return;
-        }
-
-        $router = $this->app['router'];
-
-        foreach ($middlewares as $alias => $class) {
-            $router->aliasMiddleware($alias, $class);
-        }
-    }
-
-    protected function loadPackageSeeder(): void
-    {
-        $seederClass = $this->packageInfo()->seederClass();
-
-        if ($seederClass && $this->app->runningInConsole()) {
-            $this->commands([
-                new SeederCommand($seederClass),
-            ]);
-        }
-    }
-    
-    protected function loadPackageConsoleCommands(): void
-    {
-        if (!$this->app->runningInConsole()) {
-            return;
-        }
-
-        $commands = $this->packageInfo()->consoleCommands();
-
-        if (!empty($commands)) {
+        if ($commands) {
             $this->commands($commands);
         }
     }
 
+    /* -------------------------------------------------
+     | Package Loading Methods
+     |--------------------------------------------------*/
+
+    /**
+     * Load ALL views from default + custom paths
+     */
+    protected function loadPackageViews(): void
+    {
+        $info = $this->packageInfo();
+        $paths = $info->getViewsPaths();
+        $namespace = $info->view_namespace;
+
+        foreach ($paths as $path) {
+            if (is_dir($path)) {
+                $this->loadViewsFrom($path, $namespace);
+            }
+        }
+    }
+
+    /**
+     * Load ALL migrations from default + custom paths
+     */
+    protected function loadPackageMigrations(): void
+    {
+        $info = $this->packageInfo();
+        $paths = $info->getMigrationsPaths();
+
+        foreach ($paths as $path) {
+            if (is_dir($path)) {
+                $this->loadMigrationsFrom($path);
+            }
+        }
+    }
+
+    /**
+     * Load ALL routes from default + custom paths
+     */
+    protected function loadPackageRoutes(): void
+    {
+        $info = $this->packageInfo();
+        $paths = $info->getRoutesPaths();
+
+        foreach ($paths as $path) {
+            if (file_exists($path)) {
+                $this->loadRoutesFrom($path);
+            }
+        }
+    }
+
+    /**
+     * Merge ALL configs from default + custom paths
+     */
+    protected function loadPackageConfigs(): void
+    {
+        $info = $this->packageInfo();
+        $paths = $info->getConfigPaths();
+
+        foreach ($paths as $path) {
+            if (file_exists($path)) {
+                $this->mergeConfigFrom($path, $info->conf_name);
+            }
+        }
+    }
+
+    /* -------------------------------------------------
+     | Auto-Detection Helpers
+     |--------------------------------------------------*/
+
+    /**
+     * Extract module name from current namespace
+     * Iquesters\Foundation\Providers → 'foundation'
+     */
+    private function detectModuleName(): string
+    {
+        $namespaceParts = explode('\\', static::class);
+        $providerClassName = end($namespaceParts); // Last part: FoundationServiceProvider
+
+        \Log::debug('BaseServiceProvider::detectModuleName', [
+            'service_provider_class' => static::class,
+            'provider_class_name' => $providerClassName,
+            'namespace_parts' => $namespaceParts,
+        ]);
+
+        // Extract module name from provider class name
+        // FoundationServiceProvider → foundation
+        // UserInterfaceServiceProvider → user-interface
+        $moduleName = Str::kebab(Str::beforeLast($providerClassName, 'ServiceProvider'));
+
+        \Log::info('Module name detected successfully', [
+            'service_provider_class' => static::class,
+            'provider_class_name' => $providerClassName,
+            'module_name' => $moduleName,
+            'namespace_parts' => $namespaceParts,
+        ]);
+
+        return $moduleName;
+    }
+
+    /**
+     * Generate PackageInfo class name using NamespaceResolver
+     * foundation → Iquesters\Foundation\System\Package\FoundationPackageInfo
+     */
+    private function detectPackageInfoClass(string $moduleName): string
+    {
+        $resolver = new NamespaceResolver($moduleName);
+        $packageInfoNamespace = $resolver->getPackageNamespace();
+
+        $studlyModule = $resolver->getModuleNamespace(); // Foundation
+        $packageInfoClass = "{$packageInfoNamespace}\\{$studlyModule}PackageInfo";
+
+        \Log::debug('PackageInfo class generated via NamespaceResolver', [
+            'module_name' => $moduleName,
+            'base_namespace' => $resolver->getNamespace(),
+            'package_namespace' => $packageInfoNamespace,
+            'studly_module' => $studlyModule,
+            'package_info_class' => $packageInfoClass,
+        ]);
+
+        if (!class_exists($packageInfoClass)) {
+            \Log::warning('PackageInfo class not found', [
+                'expected_class' => $packageInfoClass,
+                'module_name' => $moduleName,
+            ]);
+        }
+
+        return $packageInfoClass;
+    }
 }
