@@ -8,15 +8,22 @@ use Illuminate\Support\ServiceProvider;
 use Iquesters\Foundation\Routing\PackageDiscovery;
 use Iquesters\Foundation\Support\ConfProvider;
 use Illuminate\Support\Str;
+use Iquesters\Foundation\System\Http\Middleware\RequestMiddleware;
+use Iquesters\Foundation\System\Http\Middleware\ResponseMiddleware;
+use Iquesters\Foundation\System\Traits\AutoLogger;
+
 
 class ApiRouteServiceProvider extends ServiceProvider
 {
+    use AutoLogger;
+
     public function boot(): void
     {
-        Log::debug('[ApiRouteServiceProvider] Boot started');
+        $this->logMethodStart();
 
+        $this->logInfo("Creating API Route...");
         Route::prefix('api')
-            ->middleware(['api'])
+            ->middleware(['api', RequestMiddleware::class, ResponseMiddleware::class])
             ->group(function (): void {
 
                 /**
@@ -32,10 +39,9 @@ class ApiRouteServiceProvider extends ServiceProvider
                 });
 
                 foreach (config('foundation.platform_versions', []) as $platformVersion) {
-                    $platformRouteFile = 
-                        __DIR__ . "/../../routes/platform.api.{$platformVersion}.php"
-                    ;
-                    
+                    $platformRouteFile =
+                        __DIR__ . "/../../routes/platform.api.{$platformVersion}.php";
+
                     Log::debug(
                         '[ApiRouteServiceProvider] Loading platform file name',
                         ['platform_filename' => $platformRouteFile]
@@ -57,7 +63,7 @@ class ApiRouteServiceProvider extends ServiceProvider
                     Route::prefix($platformVersion)
                         // ->middleware('validate.platform.version')
                         ->group(function () use ($platformRouteFile, $platformVersion): void {
-                            
+
                             /**
                              * ----------------------------------------------------------------------
                              * /api/{platform_version}
@@ -117,13 +123,12 @@ class ApiRouteServiceProvider extends ServiceProvider
                                             $package = Str::after($packageName, '/');
 
                                             $routeFile =
-                                                __DIR__ . "/../../../{$package}/{$apiVersion->file_name}"
-                                            ;
-                                            
+                                                __DIR__ . "/../../../{$package}/{$apiVersion->file_name}";
+
                                             Log::debug(
-                        '[ApiRouteServiceProvider] Loading package file name',
-                        ['package_filename' => $routeFile]
-                    );
+                                                '[ApiRouteServiceProvider] Loading package file name',
+                                                ['package_filename' => $routeFile]
+                                            );
 
                                             if (! file_exists($routeFile)) {
                                                 Log::warning(
@@ -182,6 +187,6 @@ class ApiRouteServiceProvider extends ServiceProvider
                 }
             });
 
-        Log::debug('[ApiRouteServiceProvider] Boot finished');
+        $this->logMethodEnd();
     }
 }
