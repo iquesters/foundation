@@ -1,23 +1,26 @@
 <?php
 
+// =============================================================================
+// FILE 1: FoundationPackageInfo.php (EMPTY - Everything Auto-Discovered!)
+// =============================================================================
+
 namespace Iquesters\Foundation\Package;
 
 use Iquesters\Foundation\System\Package\PackageInfo;
-use Iquesters\Foundation\Console\ApiRouteDoctorCommand;
-use Iquesters\Foundation\Console\OpenApiGenerateCommand;
 
 class FoundationPackageInfo extends PackageInfo
 {
     protected function definePackageInfo(): void
     {
-        $this->laravel_config_name = 'foundation';
-
-        $this->specific_providers = [
-            FoundationServiceProvider::class,
-        ];
-
-        $this->specific_commands = [
-            SeederCommand::class,
-        ];
+        // Everything is auto-discovered using NamespaceResolver!
+        // 
+        // Auto-discovers:
+        // ✅ Providers: Iquesters\Foundation\Providers\*
+        // ✅ Commands: Iquesters\Foundation\Console\*Command
+        // ✅ Seeder: Iquesters\Foundation\Database\Seeders\FoundationSeeder
+        // ✅ Middleware: Iquesters\Foundation\Http\Middleware\*
+        // ✅ Config: Iquesters\Foundation\Config\FoundationConf
+        // ✅ Module: Module::FOUNDATION enum
+        // ✅ Publishing: config/foundation.php, views
     }
 }

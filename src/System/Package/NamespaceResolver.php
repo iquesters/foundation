@@ -17,6 +17,8 @@ class NamespaceResolver
     protected const CONFIG_FOLDER_NAME         = 'Config';
     protected const CONSOLE_FOLDER_NAME        = 'Console';
     protected const CONSTANTS_FOLDER_NAME      = 'Constants';
+    protected const DATABASE_FOLDER_NAME       = 'Database';
+    protected const DATABASE_SEEDERS_FOLDER_NAME = 'Seeders';
     protected const ENUMS_FOLDER_NAME          = 'Enums';
     protected const HTTP_FOLDER_NAME           = 'Http';
     protected const HTTP_CONTROLLERS_FOLDER_NAME = 'Controllers';
@@ -75,6 +77,22 @@ class NamespaceResolver
     public function getConstantsNamespace(): string
     {
         return $this->append(self::CONSTANTS_FOLDER_NAME);
+    }
+
+    /**
+     * Get Database namespace: Vendor\Module\Database
+     */
+    public function getDatabaseNamespace(): string
+    {
+        return $this->append(self::DATABASE_FOLDER_NAME);
+    }
+
+    /**
+     * Get Database Seeders namespace: Vendor\Module\Database\Seeders
+     */
+    public function getSeedersNamespace(): string
+    {
+        return $this->append(self::DATABASE_FOLDER_NAME) . '\\' . self::DATABASE_SEEDERS_FOLDER_NAME;
     }
 
     /**
