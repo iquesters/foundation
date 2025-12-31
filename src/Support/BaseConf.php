@@ -474,26 +474,125 @@ abstract class BaseConf
     }
     
     
-    private function loadConfigFromDB(string $moduleKey): array
+    /**
+     * Get database key from identifier
+     * Converts 'iquesters/foundation' → 'foundation'
+     * Converts 'iquesters/user-interface' → 'user-interface'
+     */
+    private function getDatabaseKey(string $identifier): string
     {
-        $cacheKey = "conf_{$moduleKey}_flattened";
+        // If identifier contains vendor prefix (e.g., 'iquesters/foundation'), extract module name
+        if (strpos($identifier, '/') !== false) {
+            $parts = explode('/', $identifier);
+            $dbKey = end($parts);
+        } else {
+            $dbKey = $identifier;
+        }
+        
+        Log::debug("Resolved database key", [
+            'identifier' => $identifier,
+            'database_key' => $dbKey
+        ]);
+        
+        return $dbKey;
+    }
 
-        // Check cache first
-        return Cache::rememberForever($cacheKey, function () use ($moduleKey) {
-            Log::info("Loading config for module: {$moduleKey}");
+    /**
+     * Generate a safe cache key from identifier
+     */
+    private function getCacheKey(string $identifier): string
+    {
+        $safeIdentifier = str_replace(['/', '\\', ':', ' '], '_', $identifier);
+        return "conf_{$safeIdentifier}_flattened";
+    }
 
+    /**
+     * Clear cache for this config
+     */
+    public function clearCache(): void
+    {
+        $cacheKey = $this->getCacheKey($this->identifier);
+        $cleared = Cache::forget($cacheKey);
+        
+        Log::info("Cache clear attempted", [
+            'identifier' => $this->identifier,
+            'cache_key' => $cacheKey,
+            'cleared' => $cleared
+        ]);
+    }
+
+    /**
+     * Reload config from database (clears cache first)
+     */
+    public function reload(): void
+    {
+        $this->clearCache();
+        
+        try {
+            $flattened = $this->loadConfigFromDB($this->identifier);
+            
+            if (!empty($flattened)) {
+                Log::info("Reloaded config from DB", [
+                    'identifier' => $this->identifier,
+                    'keys_count' => count($flattened)
+                ]);
+                $this->decipherConf($flattened);
+            } else {
+                Log::warning("No DB config found on reload", [
+                    'identifier' => $this->identifier
+                ]);
+                $this->applyDefaultsToSelf();
+            }
+        } catch (\Throwable $e) {
+            Log::error("Failed to reload config", [
+                'identifier' => $this->identifier,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Load configuration from database
+     */
+    private function loadConfigFromDB(string $identifier): array
+    {
+        $cacheKey = $this->getCacheKey($identifier);
+        $dbKey = $this->getDatabaseKey($identifier);
+
+        Log::debug("Loading config", [
+            'identifier' => $identifier,
+            'database_key' => $dbKey,
+            'cache_key' => $cacheKey
+        ]);
+
+        return Cache::rememberForever($cacheKey, function () use ($dbKey, $identifier) {
+            Log::info("Cache miss - querying database", [
+                'identifier' => $identifier,
+                'database_key' => $dbKey
+            ]);
+
+            // Try with database key (e.g., 'foundation-conf')
             $moduleEntry = DB::table('master_data')
-                ->where('key', "{$moduleKey}-conf")
+                ->where('key', "{$dbKey}-conf")
                 ->first();
 
             if (!$moduleEntry) {
-                Log::warning("No master_data entry found for {$moduleKey}-conf");
+                Log::warning("No master_data entry found", [
+                    'tried_key' => "{$dbKey}-conf",
+                    'identifier' => $identifier
+                ]);
                 return [];
             }
 
             $metas = DB::table('master_data_metas')
                 ->where('ref_parent', $moduleEntry->id)
                 ->get(['meta_key', 'meta_value']);
+
+            Log::info("Loaded metas from DB", [
+                'identifier' => $identifier,
+                'master_data_id' => $moduleEntry->id,
+                'meta_count' => $metas->count()
+            ]);
 
             $flattened = [];
             foreach ($metas as $meta) {
@@ -509,6 +608,11 @@ abstract class BaseConf
                     'key' => $meta->meta_key,
                     'value' => $value,
                 ];
+                
+                Log::debug("Loaded meta", [
+                    'key' => $meta->meta_key,
+                    'value' => $value
+                ]);
             }
 
             return $flattened;
