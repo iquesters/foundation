@@ -5,11 +5,11 @@ namespace Iquesters\Foundation\System\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Iquesters\Foundation\System\Traits\AutoLogger;
+use Iquesters\Foundation\System\Traits\Loggable;
 
 class RequestMiddleware
 {
-    use AutoLogger;
+    use Loggable;
 
     /**
      * Handle an incoming request.

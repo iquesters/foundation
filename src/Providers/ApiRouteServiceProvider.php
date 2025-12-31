@@ -10,12 +10,12 @@ use Iquesters\Foundation\Support\ConfProvider;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\System\Http\Middleware\RequestMiddleware;
 use Iquesters\Foundation\System\Http\Middleware\ResponseMiddleware;
-use Iquesters\Foundation\System\Traits\AutoLogger;
+use Iquesters\Foundation\System\Traits\Loggable;
 
 
 class ApiRouteServiceProvider extends ServiceProvider
 {
-    use AutoLogger;
+    use Loggable;
 
     public function boot(): void
     {

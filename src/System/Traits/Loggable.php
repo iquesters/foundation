@@ -4,7 +4,7 @@ namespace Iquesters\Foundation\System\Traits;
 
 use Illuminate\Support\Facades\Log;
 
-trait AutoLogger
+trait Loggable
 {
     private static array $methodStartTimes = [];
 
