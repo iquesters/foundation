@@ -2,10 +2,10 @@
 
 @section('content')
 <div>
-    <h5 class="mb-2 fs-6 text-muted">Entities</h5>
+    {{-- <h5 class="mb-2 fs-6 text-muted">Entities</h5> --}}
 
     {{-- Dropdown & button --}}
-    <div class="d-flex align-items-center gap-2 mb-3">
+    {{-- <div class="d-flex align-items-center gap-2 mb-3">
         <select id="entitySelect" class="form-select" style="width: 250px;">
             <option value="">-- Select Entity --</option>
             @foreach ($entities as $entity)
@@ -14,10 +14,10 @@
         </select>
 
         <button id="showEntityBtn" class="btn btn-sm btn-primary">Show</button>
-    </div>
+    </div> --}}
 
     {{-- Display area --}}
-    <div id="entityDetails" style="display:none;">
+    {{-- <div id="entityDetails" style="display:none;">
         <h4 id="entityTitle" class="mb-3"></h4>
 
         <div class="mb-3">
@@ -45,10 +45,10 @@
                 <tbody id="metaFieldsTable"></tbody>
             </table>
         </div>
-    </div>
+    </div> --}}
 </div>
 
-<script>
+{{-- <script>
     const entities = @json($entities);
 
     document.getElementById('showEntityBtn').addEventListener('click', () => {
@@ -84,5 +84,85 @@
 
         document.getElementById('entityDetails').style.display = 'block';
     });
-</script>
+</script> --}}
+
+<div>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="fs-6 text-muted">Total {{ $entities->count() }} Entities</h5>
+        <a href="{{ route('entities.create') }}" class="btn btn-sm btn-outline-primary">
+            <i class="fa-regular fa-fw fa-plus"></i><span class="d-none d-md-inline-block ms-1">Entitity</span>
+        </a>
+    </div>
+    <div class="">
+        <div class="table-responsive">
+            <table id="entities-table" class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        {{-- <th>UID</th> --}}
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Created At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($entities as $entity)
+                    <tr>
+                        {{-- <td>{{ $organisation->id }}</td> --}}
+                        <td>
+                            <a href="{{ route('entities.show', $entity->uid) }}" 
+                                class="text-decoration-none">
+                                {{ $entity->entity_name }}
+                            </a>
+                            <br>
+                            <small><small class="text-muted">{{ $entity->uid }}</small></small>
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ strtolower($entity->status) }}">
+                                {{ ucfirst($entity->status) }}
+                            </span>
+                        </td>
+                        <td>{{ $entity->created_at->format('d M Y') }}</td>
+                        <td>
+                            <div class="d-flex align-content-center justify-content-center gap-2">
+                                {{-- <li>
+                                    <a class="dropdown-item text-info" href="{{ route('organisations.show', $organisation->uid) }}">
+                                        <i class="fas fa-fw fa-eye me-1"></i> View
+                                    </a>
+                                </li> --}}
+                                    
+                                    <a class="btn btn-sm btn-outline-dark" href="{{ route('entities.edit', $entity->uid) }}">
+                                        <i class="fas fa-fw fa-edit"></i>
+                                    </a>
+                                
+                                
+                                    <form action="{{ route('entities.destroy', $entity->uid) }}" method="POST" onsubmit="return confirm('Are you sure?')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="fas fa-fw fa-trash"></i>
+                                        </button>
+                                    </form>
+                                
+                            </div>
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 @endsection
+
+
+@push('scripts')
+<script>
+    $(document).ready(function() {
+        $('#entities-table').DataTable({
+            responsive: true,
+            order: [[2, 'desc']]
+        });
+    });
+</script>
+@endpush

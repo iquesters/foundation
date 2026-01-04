@@ -17,6 +17,8 @@ return new class extends Migration
             $table->ulid('uid')->unique();
             $table->unsignedBigInteger('ref_module')->nullable();
             $table->string('entity_name');
+            $table->string('slug')->nullable();
+            $table->string('desc')->nullable();
             $table->longText('fields')->nullable();
             $table->longText('meta_fields')->nullable();
             $table->string('status')->default('unknown');

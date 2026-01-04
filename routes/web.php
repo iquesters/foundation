@@ -12,6 +12,12 @@ Route::middleware('web')->group(function () {
         
         Route::prefix('entity')->name('entities.')->group(function () {
             Route::get('/', [EntityController::class, 'index'])->name('index');
+            Route::get('/create', [EntityController::class, 'create'])->name('create');
+            Route::post('/', [EntityController::class, 'store'])->name('store');
+            Route::get('/{entityUid}/edit', [EntityController::class, 'edit'])->name('edit');
+            Route::put('/entities/{entityUid}', [EntityController::class, 'update'])->name('update');
+            Route::delete('/{entityUid}', [EntityController::class, 'destroy'])->name('destroy');
+            Route::get('/{entityUid}', [EntityController::class, 'show'])->name('show');
         });
         
         // Module-Role assignment routes
@@ -30,10 +36,10 @@ Route::middleware('web')->group(function () {
         ]);
         
         Route::prefix('navigations')->group(function () {
-            Route::get('/', function () {
-                return redirect()->route('ui.list', 'navigations-table');
-            })->name('navigations.index');
-            // Route::get('/', [NavigationController::class, 'index'])->name('navigations.index');
+            // Route::get('/', function () {
+            //     return redirect()->route('ui.list', 'navigations-table');
+            // })->name('navigations.index');
+            Route::get('/', [NavigationController::class, 'index'])->name('navigations.index');
             Route::get('/details', [NavigationController::class, 'details'])->name('navigation.details');
             Route::get('/module/{moduleUid}/sub-menu', [NavigationController::class, 'loadModuleSubMenu'])->name('navigation.module.submenu');
             Route::post('/save-order', [NavigationController::class, 'saveOrder'])->name('navigation.save-order');
