@@ -17,6 +17,7 @@ Route::middleware('web')->group(function () {
             Route::get('/{entityUid}/edit', [EntityController::class, 'edit'])->name('edit');
             Route::put('/entities/{entityUid}', [EntityController::class, 'update'])->name('update');
             Route::delete('/{entityUid}', [EntityController::class, 'destroy'])->name('destroy');
+            Route::post('/{entityUid}/publish', [EntityController::class, 'publish'])->name('publish');
             Route::get('/{entityUid}', [EntityController::class, 'show'])->name('show');
         });
         

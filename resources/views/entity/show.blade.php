@@ -70,18 +70,26 @@
                     </h5>
                     <span class="badge badge-{{ $entity->status }}">{{ ucfirst($entity->status) }}</span>
                 </div>
-                <div class="d-flex align-items-center justify-content-end gap-2">
+                <div class="d-flex align-items-center justify-content-end gap-2 pt-1">
                     <a href="{{ route('entities.edit', $entity->uid) }}" class="btn btn-sm btn-outline-dark d-flex align-items-center justify-content-center gap-2">
                         <i class="fas fa-fw fa-edit"></i> Edit
                     </a>
-
-                    <form action="{{ route('entities.destroy', $entity->uid) }}" method="POST" onsubmit="return confirm('Are you sure?')">
-                        @csrf
-                        @method('DELETE')
-                            <button class="btn btn-sm btn-outline-danger d-flex align-items-center justify-content-center gap-2">
-                                <i class="fas fa-fw fa-trash"></i> Delete
+                    @if ($entity->status !== 'published')
+                        <form action="{{ route('entities.publish', $entity->uid) }}" method="POST" onsubmit="return confirm('Are you sure?')">
+                            @csrf
+                            <button class="btn btn-sm btn-outline-success d-flex align-items-center justify-content-center gap-2">
+                                <i class="fas fa-fw fa-upload"></i> Publish
                             </button>
-                    </form>
+                        </form>
+                    @elseif ($entity->status !== 'deleted')
+                        <form action="{{ route('entities.destroy', $entity->uid) }}" method="POST" onsubmit="return confirm('Are you sure?')">
+                            @csrf
+                            @method('DELETE')
+                                <button class="btn btn-sm btn-outline-danger d-flex align-items-center justify-content-center gap-2">
+                                    <i class="fas fa-fw fa-trash"></i> Delete
+                                </button>
+                        </form>
+                    @endif
                 </div>
             </div>
             <code>{{ $entity->uid }}</code>
