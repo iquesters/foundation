@@ -68,17 +68,17 @@
                         @enderror
                     </div>
 
-                    <div class="col-md-4">
+                    {{-- <div class="col-md-4">
                         <label for="slug" class="form-label">Slug</label>
                         <input type="text" 
                             class="form-control @error('slug') is-invalid @enderror" 
                             id="slug" 
                             name="slug" 
-                            value="{{ old('slug', $entity->slug ?? '') }}">
+                            value=" old('slug', $entity->slug ?? '') }}">
                         @error('slug')
-                            <div class="invalid-feedback">{{ $message }}</div>
+                            <div class="invalid-feedback">$message }}</div>
                         @enderror
-                    </div>
+                    </div> --}}
 
                     <div class="col-md-4">
                         <label for="desc" class="form-label">Description</label>

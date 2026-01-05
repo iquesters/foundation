@@ -86,34 +86,34 @@ class EntityController extends Controller
         try {
             $validated = $request->validate([
                 'entity_name' => 'required|string|max:255|unique:entities,entity_name',
-                'slug' => 'required|string|max:255|unique:entities,slug',
                 'desc' => 'nullable|string',
                 'fields' => 'required|json',
                 'meta_fields' => 'nullable|json',
             ]);
 
             $tableName = $this->generateTableName($validated['entity_name']);
+            $slug = $this->generateUniqueSlug($validated['entity_name']);
             $processedCustomFields = $this->processCustomFields($validated['fields']);
             $allFields = $this->mergeSystemAndCustomFields($processedCustomFields);
             $metaFieldsData = $this->decodeMetaFields($validated['meta_fields'] ?? null);
 
             // Create entity
-            $entity = Entity::create([
-                'uid' => Str::ulid(),
-                'entity_name' => $validated['entity_name'],
-                'slug' => $validated['slug'],
-                'desc' => $validated['desc'] ?? null,
-                'fields' => $allFields,
-                'meta_fields' => $metaFieldsData,
-                'status' => 'active',
-                'created_by' => auth()->id(),
-            ]);
+            $entity = new Entity();
+            $entity->uid = Str::ulid();
+            $entity->entity_name = $validated['entity_name'];
+            $entity->slug = $slug; // ✅ explicitly assigned
+            $entity->desc = $validated['desc'] ?? null;
+            $entity->fields = $allFields;
+            $entity->meta_fields = $metaFieldsData;
+            $entity->status = 'active';
+            $entity->created_by = auth()->id() ?? 0;
+            $entity->save();
 
             // Save metadata and generate schemas
             $this->saveEntityMeta($entity, 'table_name', $tableName);
-            $formSchemaUid = $this->createFormSchema($entity, $validated['slug'], $processedCustomFields);
+            $formSchemaUid = $this->createFormSchema($entity, $slug, $processedCustomFields);
             $this->saveEntityMeta($entity, 'form_schema_uid', $formSchemaUid);
-            $tableSchemaUid = $this->createTableSchema($entity, $validated['slug'], $processedCustomFields, $formSchemaUid);
+            $tableSchemaUid = $this->createTableSchema($entity, $slug, $processedCustomFields, $formSchemaUid);
             $this->saveEntityMeta($entity, 'table_schema_uid', $tableSchemaUid);
 
             Log::info('Entity created with schemas', [
@@ -146,7 +146,6 @@ class EntityController extends Controller
 
             $validated = $request->validate([
                 'entity_name' => 'required|string|max:255|unique:entities,entity_name,' . $entity->id,
-                'slug' => 'required|string|max:255|unique:entities,slug,' . $entity->id,
                 'desc' => 'nullable|string',
                 'fields' => 'required|json',
                 'meta_fields' => 'nullable|json',
@@ -160,7 +159,6 @@ class EntityController extends Controller
             // Update entity
             $entity->update([
                 'entity_name' => $validated['entity_name'],
-                'slug' => $validated['slug'],
                 'desc' => $validated['desc'] ?? null,
                 'fields' => $allFields,
                 'meta_fields' => $metaFieldsData,
@@ -189,6 +187,30 @@ class EntityController extends Controller
                 ->withInput()
                 ->with('error', $e->getMessage());
         }
+    }
+    
+    /**
+     * Generate unique slug for entity
+     * price, price-1, price-2 ...
+     */
+    private function generateUniqueSlug(string $entityName): string
+    {
+        // Convert entity name to table-safe slug
+        $baseSlug = strtolower($entityName);
+        $baseSlug = preg_replace('/[^a-z0-9]+/', '-', $baseSlug);
+        $baseSlug = trim($baseSlug, '-');
+
+        $slug = $baseSlug;
+        $counter = 1;
+
+        while (
+            Entity::where('slug', $slug)->exists()
+        ) {
+            $slug = $baseSlug . '-' . $counter;
+            $counter++;
+        }
+
+        return $slug;
     }
 
     /**
