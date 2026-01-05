@@ -144,6 +144,8 @@ class EntityController extends Controller
         try {
             $entity = Entity::where('uid', $uid)->firstOrFail();
 
+            $isPublished = $entity->status === 'published';
+
             $validated = $request->validate([
                 'entity_name' => 'required|string|max:255|unique:entities,entity_name,' . $entity->id,
                 'desc' => 'nullable|string',
@@ -151,10 +153,22 @@ class EntityController extends Controller
                 'meta_fields' => 'nullable|json',
             ]);
 
-            $tableName = $this->generateTableName($validated['entity_name']);
-            $processedCustomFields = $this->processCustomFields($validated['fields']);
-            $allFields = $this->mergeSystemAndCustomFields($processedCustomFields);
+            // ✅ Primary fields: LOCK after publish
+            if ($isPublished) {
+                $allFields = $entity->fields;
+            } else {
+                $processedCustomFields = $this->processCustomFields($validated['fields']);
+                $allFields = $this->mergeSystemAndCustomFields($processedCustomFields);
+            }
+
+            // Meta fields are always editable
             $metaFieldsData = $this->decodeMetaFields($validated['meta_fields'] ?? null);
+
+            // ❗ Table name MUST NOT change after publish
+            if (!$isPublished) {
+                $tableName = $this->generateTableName($validated['entity_name']);
+                $this->saveEntityMeta($entity, 'table_name', $tableName, false);
+            }
 
             // Update entity
             $entity->update([
@@ -165,23 +179,21 @@ class EntityController extends Controller
                 'updated_by' => auth()->id(),
             ]);
 
-            // Update metadata
-            $this->saveEntityMeta($entity, 'table_name', $tableName, false);
-
             Log::info('Entity updated', [
-                'entity' => $entity->toArray(),
-                'table_name' => $tableName
+                'entity_uid' => $entity->uid,
+                'published' => $isPublished
             ]);
 
             return redirect()
                 ->route('entities.show', $entity->uid)
                 ->with('success', 'Entity updated successfully.');
-                
+
         } catch (Exception $e) {
             Log::error('Error updating entity', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
+
             return redirect()
                 ->back()
                 ->withInput()

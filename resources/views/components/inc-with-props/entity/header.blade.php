@@ -27,7 +27,7 @@
                 </a>
                 @if ($entity->status !== 'published')
                     <form action="{{ route('entities.publish', $entity->uid) }}" method="POST" 
-                          onsubmit="return confirm('Are you sure?')">
+                          onsubmit="return confirm('Publishing will lock primary fields permanently.\nDo you want to continue?')">
                         @csrf
                         <button class="btn btn-sm btn-outline-success d-flex align-items-center justify-content-center gap-2">
                             <i class="fas fa-fw fa-upload"></i> Publish

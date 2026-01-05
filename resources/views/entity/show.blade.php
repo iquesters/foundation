@@ -61,10 +61,12 @@
             collapseId="mainTable"
             colorClass="primary"
             headerContent="Field Definitions">
-            <x-foundation::inc-with-props.entity.fields-table 
-                :fields="$fields" 
-                :systemFields="$systemFields" 
-                :editable="false" />
+            <x-foundation::inc-with-props.entity.fields-table
+                :fields="$fields"
+                :systemFields="$systemFields"
+                :editable="false"
+                :showSystemFields="true"
+            />
         </x-foundation::inc-with-props.entity.accordion-section>
 
         {{-- SECONDARY FIELDS --}}

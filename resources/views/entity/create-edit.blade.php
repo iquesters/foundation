@@ -114,10 +114,12 @@
                 collapseId="mainTable"
                 colorClass="primary"
                 headerContent="Field Definitions">
-                <x-foundation::inc-with-props.entity.fields-table 
-                    :fields="$fields" 
-                    :systemFields="$systemFields" 
-                    :editable="true" />
+                <x-foundation::inc-with-props.entity.fields-table
+                    :fields="$fields"
+                    :systemFields="$systemFields"
+                    :editable="!($entity && $entity->status === 'published')"
+                    :showSystemFields="false"
+                />
             </x-foundation::inc-with-props.entity.accordion-section>
 
             {{-- SECONDARY FIELDS --}}
