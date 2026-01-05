@@ -3,7 +3,7 @@
     'isCreating' => false
 ])
 
-<div class="accordion-body">
+<div class="">
     @if($isCreating)
         <div class="text-muted">
             API endpoints will be available after the entity is created.

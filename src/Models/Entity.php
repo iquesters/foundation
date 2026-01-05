@@ -16,7 +16,6 @@ class Entity extends Model
         'uid',
         'ref_module',
         'entity_name',
-        'slug',
         'desc',
         'fields',
         'meta_fields',

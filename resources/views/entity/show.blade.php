@@ -20,13 +20,13 @@
     $systemFields = ['id','uid','status','created_by','created_at','updated_by','updated_at','deleted_by','deleted_at'];
 
     $apis = [
-        ['GET', 'success', url("/api/entity/index/{$entity->entity_name}")],
-        ['GET', 'success', url("/api/entity/list/{$entity->entity_name}")],
-        ['POST', 'primary', url("/api/entity/store/{$entity->entity_name}")],
-        ['GET', 'success', url("/api/entity/show/{$entity->entity_name}") . '/{uid}'],
-        ['PUT', 'warning', url("/api/entity/update/{$entity->entity_name}") . '/{uid}'],
-        ['DELETE', 'danger', url("/api/entity/delete/{$entity->entity_name}") . '/{uid}'],
-        ['DELETE', 'dark', url("/api/entity/destroy/{$entity->entity_name}") . '/{uid}'],
+        ['GET', 'success', url("/api/entity/index/{$entity->slug}")],
+        ['GET', 'success', url("/api/entity/list/{$entity->slug}")],
+        ['POST', 'primary', url("/api/entity/store/{$entity->slug}")],
+        ['GET', 'success', url("/api/entity/show/{$entity->slug}") . '/{uid}'],
+        ['PUT', 'warning', url("/api/entity/update/{$entity->slug}") . '/{uid}'],
+        ['DELETE', 'danger', url("/api/entity/delete/{$entity->slug}") . '/{uid}'],
+        ['DELETE', 'dark', url("/api/entity/destroy/{$entity->slug}") . '/{uid}'],
     ];
 @endphp
 

@@ -22,7 +22,7 @@
         </button>
     </h2>
     <div id="{{ $collapseId }}" class="accordion-collapse collapse {{ $showByDefault ? 'show' : '' }}">
-        <div class="accordion-body {{ $attributes->get('bodyClass', 'p-0') }}">
+        <div class="accordion-body {{ $attributes->get('bodyClass') }} p-0">
             {{ $slot }}
         </div>
     </div>
