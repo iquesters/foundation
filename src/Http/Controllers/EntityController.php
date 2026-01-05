@@ -92,144 +92,10 @@ class EntityController extends Controller
                 'meta_fields' => 'nullable|json',
             ]);
 
-            // Generate table name from entity name
-            $tableName = strtolower($validated['entity_name']);
-            $tableName = preg_replace('/[^a-z0-9]+/', '_', $tableName);
-            $tableName = trim($tableName, '_');
-
-            // Define system default fields
-            $systemFields = [
-                "id" => [
-                    "name" => "id",
-                    "type" => "bigint",
-                    "label" => "Id",
-                    "required" => true,
-                    "nullable" => false,
-                    "input_type" => "number",
-                    "maxlength" => null,
-                    "default" => null
-                ],
-                "uid" => [
-                    "name" => "uid",
-                    "type" => "char",
-                    "label" => "Uid",
-                    "required" => true,
-                    "nullable" => false,
-                    "input_type" => "text",
-                    "maxlength" => null,
-                    "default" => null
-                ],
-                "status" => [
-                    "name" => "status",
-                    "type" => "varchar",
-                    "label" => "Status",
-                    "required" => true,
-                    "nullable" => false,
-                    "input_type" => "text",
-                    "maxlength" => null,
-                    "default" => "'unknown'"
-                ],
-                "created_by" => [
-                    "name" => "created_by",
-                    "type" => "bigint",
-                    "label" => "Created By",
-                    "required" => false,
-                    "nullable" => true,
-                    "input_type" => "number",
-                    "maxlength" => null,
-                    "default" => "NULL"
-                ],
-                "created_at" => [
-                    "name" => "created_at",
-                    "type" => "timestamp",
-                    "label" => "Created At",
-                    "required" => false,
-                    "nullable" => true,
-                    "input_type" => "datetime-local",
-                    "maxlength" => null,
-                    "default" => "NULL"
-                ],
-                "updated_by" => [
-                    "name" => "updated_by",
-                    "type" => "bigint",
-                    "label" => "Updated By",
-                    "required" => false,
-                    "nullable" => true,
-                    "input_type" => "number",
-                    "maxlength" => null,
-                    "default" => "NULL"
-                ],
-                "updated_at" => [
-                    "name" => "updated_at",
-                    "type" => "timestamp",
-                    "label" => "Updated At",
-                    "required" => false,
-                    "nullable" => true,
-                    "input_type" => "datetime-local",
-                    "maxlength" => null,
-                    "default" => "NULL"
-                ],
-                "deleted_by" => [
-                    "name" => "deleted_by",
-                    "type" => "bigint",
-                    "label" => "Deleted By",
-                    "required" => false,
-                    "nullable" => true,
-                    "input_type" => "number",
-                    "maxlength" => null,
-                    "default" => "NULL"
-                ],
-                "deleted_at" => [
-                    "name" => "deleted_at",
-                    "type" => "timestamp",
-                    "label" => "Deleted At",
-                    "required" => false,
-                    "nullable" => true,
-                    "input_type" => "datetime-local",
-                    "maxlength" => null,
-                    "default" => "NULL"
-                ]
-            ];
-
-            // Decode custom fields from JSON
-            $customFields = json_decode($validated['fields'], true);
-            
-            // Map frontend field types to database types
-            $typeMapping = [
-                'string' => 'varchar',
-                'text' => 'text',
-                'integer' => 'bigint',
-                'decimal' => 'decimal',
-                'boolean' => 'boolean',
-                'date' => 'date',
-                'datetime' => 'timestamp'
-            ];
-
-            // Process custom fields
-            $processedCustomFields = [];
-            if (is_array($customFields)) {
-                foreach ($customFields as $field) {
-                    $fieldName = $field['name'];
-                    $processedCustomFields[$fieldName] = [
-                        "name" => $fieldName,
-                        "type" => $typeMapping[$field['type']] ?? $field['type'],
-                        "label" => $field['label'],
-                        "required" => $field['required'] ?? false,
-                        "nullable" => $field['nullable'] ?? true,
-                        "input_type" => $field['input_type'],
-                        "maxlength" => $field['maxlength'] ?? null,
-                        "default" => $field['default'] ?? null
-                    ];
-                }
-            }
-
-            // Merge system fields with custom fields
-            $allFields = array_merge($systemFields, $processedCustomFields);
-
-            // Decode meta fields
-            $metaFieldsData = $validated['meta_fields'] 
-                ? json_decode($validated['meta_fields'], true) 
-                : [];
+            $tableName = $this->generateTableName($validated['entity_name']);
+            $processedCustomFields = $this->processCustomFields($validated['fields']);
+            $allFields = $this->mergeSystemAndCustomFields($processedCustomFields);
+            $metaFieldsData = $this->decodeMetaFields($validated['meta_fields'] ?? null);
 
             // Create entity
             $entity = Entity::create([
@@ -243,72 +109,18 @@ class EntityController extends Controller
                 'created_by' => auth()->id(),
             ]);
 
-            // Save table_name in entity_meta
-            $entity->metas()->updateOrCreate(
-                ['meta_key' => 'table_name'],
-                [
-                    'meta_value' => $tableName,
-                    'status' => 'active',
-                    'created_by' => auth()->id(),
-                    'updated_by' => auth()->id()
-                ]
-            );
-
-            // Generate Form Schema
-            $formSchema = $this->generateFormSchema($entity, $processedCustomFields);
-            $formSchemaRecord = FormSchema::create([
-                'uid' => Str::ulid(),
-                'slug' => $validated['slug'] . '-form',
-                'name' => $validated['entity_name'] . ' Form',
-                'description' => 'Auto-generated form for ' . $validated['entity_name'],
-                'schema' => $formSchema,
-                'extra_info' => [],
-                'status' => 1,
-                'created_by' => auth()->id(),
-                'updated_by' => auth()->id(),
-            ]);
-
-            // Save form schema UID in entity meta
-            $entity->metas()->updateOrCreate(
-                ['meta_key' => 'form_schema_uid'],
-                [
-                    'meta_value' => $formSchemaRecord->uid,
-                    'status' => 'active',
-                    'created_by' => auth()->id(),
-                    'updated_by' => auth()->id()
-                ]
-            );
-
-            // Generate Table Schema
-            $tableSchema = $this->generateTableSchema($entity, $processedCustomFields, $formSchemaRecord->uid);
-            $tableSchemaRecord = TableSchema::create([
-                'uid' => Str::ulid(),
-                'slug' => $validated['slug'] . '-table',
-                'name' => $validated['entity_name'] . ' Table',
-                'description' => 'Auto-generated table for ' . $validated['entity_name'],
-                'schema' => $tableSchema,
-                'extra_info' => [],
-                'status' => 'active',
-                'created_by' => auth()->id(),
-                'updated_by' => auth()->id(),
-            ]);
-
-            // Save table schema UID in entity meta
-            $entity->metas()->updateOrCreate(
-                ['meta_key' => 'table_schema_uid'],
-                [
-                    'meta_value' => $tableSchemaRecord->uid,
-                    'status' => 'active',
-                    'created_by' => auth()->id(),
-                    'updated_by' => auth()->id()
-                ]
-            );
+            // Save metadata and generate schemas
+            $this->saveEntityMeta($entity, 'table_name', $tableName);
+            $formSchemaUid = $this->createFormSchema($entity, $validated['slug'], $processedCustomFields);
+            $this->saveEntityMeta($entity, 'form_schema_uid', $formSchemaUid);
+            $tableSchemaUid = $this->createTableSchema($entity, $validated['slug'], $processedCustomFields, $formSchemaUid);
+            $this->saveEntityMeta($entity, 'table_schema_uid', $tableSchemaUid);
 
             Log::info('Entity created with schemas', [
                 'entity' => $entity->toArray(),
                 'table_name' => $tableName,
-                'form_schema_uid' => $formSchemaRecord->uid,
-                'table_schema_uid' => $tableSchemaRecord->uid
+                'form_schema_uid' => $formSchemaUid,
+                'table_schema_uid' => $tableSchemaUid
             ]);
 
             return redirect()
@@ -327,6 +139,290 @@ class EntityController extends Controller
         }
     }
 
+    public function update(Request $request, $uid)
+    {
+        try {
+            $entity = Entity::where('uid', $uid)->firstOrFail();
+
+            $validated = $request->validate([
+                'entity_name' => 'required|string|max:255|unique:entities,entity_name,' . $entity->id,
+                'slug' => 'required|string|max:255|unique:entities,slug,' . $entity->id,
+                'desc' => 'nullable|string',
+                'fields' => 'required|json',
+                'meta_fields' => 'nullable|json',
+            ]);
+
+            $tableName = $this->generateTableName($validated['entity_name']);
+            $processedCustomFields = $this->processCustomFields($validated['fields']);
+            $allFields = $this->mergeSystemAndCustomFields($processedCustomFields);
+            $metaFieldsData = $this->decodeMetaFields($validated['meta_fields'] ?? null);
+
+            // Update entity
+            $entity->update([
+                'entity_name' => $validated['entity_name'],
+                'slug' => $validated['slug'],
+                'desc' => $validated['desc'] ?? null,
+                'fields' => $allFields,
+                'meta_fields' => $metaFieldsData,
+                'updated_by' => auth()->id(),
+            ]);
+
+            // Update metadata
+            $this->saveEntityMeta($entity, 'table_name', $tableName, false);
+
+            Log::info('Entity updated', [
+                'entity' => $entity->toArray(),
+                'table_name' => $tableName
+            ]);
+
+            return redirect()
+                ->route('entities.show', $entity->uid)
+                ->with('success', 'Entity updated successfully.');
+                
+        } catch (Exception $e) {
+            Log::error('Error updating entity', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return redirect()
+                ->back()
+                ->withInput()
+                ->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Generate table name from entity name
+     */
+    private function generateTableName($entityName)
+    {
+        $tableName = strtolower($entityName);
+        $tableName = preg_replace('/[^a-z0-9]+/', '_', $tableName);
+        return trim($tableName, '_');
+    }
+
+    /**
+     * Get system default fields
+     */
+    private function getSystemFields()
+    {
+        return [
+            "id" => [
+                "name" => "id",
+                "type" => "bigint",
+                "label" => "Id",
+                "required" => true,
+                "nullable" => false,
+                "input_type" => "number",
+                "maxlength" => null,
+                "default" => null
+            ],
+            "uid" => [
+                "name" => "uid",
+                "type" => "char",
+                "label" => "Uid",
+                "required" => true,
+                "nullable" => false,
+                "input_type" => "text",
+                "maxlength" => null,
+                "default" => null
+            ],
+            "status" => [
+                "name" => "status",
+                "type" => "varchar",
+                "label" => "Status",
+                "required" => true,
+                "nullable" => false,
+                "input_type" => "text",
+                "maxlength" => null,
+                "default" => "'unknown'"
+            ],
+            "created_by" => [
+                "name" => "created_by",
+                "type" => "bigint",
+                "label" => "Created By",
+                "required" => false,
+                "nullable" => true,
+                "input_type" => "number",
+                "maxlength" => null,
+                "default" => "NULL"
+            ],
+            "created_at" => [
+                "name" => "created_at",
+                "type" => "timestamp",
+                "label" => "Created At",
+                "required" => false,
+                "nullable" => true,
+                "input_type" => "datetime-local",
+                "maxlength" => null,
+                "default" => "NULL"
+            ],
+            "updated_by" => [
+                "name" => "updated_by",
+                "type" => "bigint",
+                "label" => "Updated By",
+                "required" => false,
+                "nullable" => true,
+                "input_type" => "number",
+                "maxlength" => null,
+                "default" => "NULL"
+            ],
+            "updated_at" => [
+                "name" => "updated_at",
+                "type" => "timestamp",
+                "label" => "Updated At",
+                "required" => false,
+                "nullable" => true,
+                "input_type" => "datetime-local",
+                "maxlength" => null,
+                "default" => "NULL"
+            ],
+            "deleted_by" => [
+                "name" => "deleted_by",
+                "type" => "bigint",
+                "label" => "Deleted By",
+                "required" => false,
+                "nullable" => true,
+                "input_type" => "number",
+                "maxlength" => null,
+                "default" => "NULL"
+            ],
+            "deleted_at" => [
+                "name" => "deleted_at",
+                "type" => "timestamp",
+                "label" => "Deleted At",
+                "required" => false,
+                "nullable" => true,
+                "input_type" => "datetime-local",
+                "maxlength" => null,
+                "default" => "NULL"
+            ]
+        ];
+    }
+
+    /**
+     * Get type mapping for fields
+     */
+    private function getTypeMapping()
+    {
+        return [
+            'string' => 'varchar',
+            'text' => 'text',
+            'integer' => 'bigint',
+            'decimal' => 'decimal',
+            'boolean' => 'boolean',
+            'date' => 'date',
+            'datetime' => 'timestamp'
+        ];
+    }
+
+    /**
+     * Process custom fields from JSON
+     */
+    private function processCustomFields($fieldsJson)
+    {
+        $customFields = json_decode($fieldsJson, true);
+        $typeMapping = $this->getTypeMapping();
+        $processedCustomFields = [];
+
+        if (is_array($customFields)) {
+            foreach ($customFields as $field) {
+                $fieldName = $field['name'];
+                $processedCustomFields[$fieldName] = [
+                    "name" => $fieldName,
+                    "type" => $typeMapping[$field['type']] ?? $field['type'],
+                    "label" => $field['label'],
+                    "required" => $field['required'] ?? false,
+                    "nullable" => $field['nullable'] ?? true,
+                    "input_type" => $field['input_type'],
+                    "maxlength" => $field['maxlength'] ?? null,
+                    "default" => $field['default'] ?? null
+                ];
+            }
+        }
+
+        return $processedCustomFields;
+    }
+
+    /**
+     * Merge system fields with custom fields
+     */
+    private function mergeSystemAndCustomFields($customFields)
+    {
+        return array_merge($this->getSystemFields(), $customFields);
+    }
+
+    /**
+     * Decode meta fields from JSON
+     */
+    private function decodeMetaFields($metaFieldsJson)
+    {
+        return $metaFieldsJson ? json_decode($metaFieldsJson, true) : [];
+    }
+
+    /**
+     * Save or update entity meta
+     */
+    private function saveEntityMeta($entity, $metaKey, $metaValue, $isCreate = true)
+    {
+        $metaData = [
+            'meta_value' => $metaValue,
+            'status' => 'active',
+            'updated_by' => auth()->id()
+        ];
+
+        if ($isCreate) {
+            $metaData['created_by'] = auth()->id();
+        }
+
+        $entity->metas()->updateOrCreate(
+            ['meta_key' => $metaKey],
+            $metaData
+        );
+    }
+
+    /**
+     * Create form schema and return its UID
+     */
+    private function createFormSchema($entity, $slug, $customFields)
+    {
+        $formSchema = $this->generateFormSchema($entity, $customFields);
+        $formSchemaRecord = FormSchema::create([
+            'uid' => Str::ulid(),
+            'slug' => $slug . '-form',
+            'name' => $entity->entity_name . ' Form',
+            'description' => 'Auto-generated form for ' . $entity->entity_name,
+            'schema' => $formSchema,
+            'extra_info' => [],
+            'status' => 1,
+            'created_by' => auth()->id(),
+            'updated_by' => auth()->id(),
+        ]);
+
+        return $formSchemaRecord->uid;
+    }
+
+    /**
+     * Create table schema and return its UID
+     */
+    private function createTableSchema($entity, $slug, $customFields, $formSchemaUid)
+    {
+        $tableSchema = $this->generateTableSchema($entity, $customFields, $formSchemaUid);
+        $tableSchemaRecord = TableSchema::create([
+            'uid' => Str::ulid(),
+            'slug' => $slug . '-table',
+            'name' => $entity->entity_name . ' Table',
+            'description' => 'Auto-generated table for ' . $entity->entity_name,
+            'schema' => $tableSchema,
+            'extra_info' => [],
+            'status' => 'active',
+            'created_by' => auth()->id(),
+            'updated_by' => auth()->id(),
+        ]);
+
+        return $tableSchemaRecord->uid;
+    }
+
     /**
      * Generate form schema from custom fields
      */
@@ -334,7 +430,6 @@ class EntityController extends Controller
     {
         $fields = [];
         
-        // Map database input types to form input types
         $inputTypeMapping = [
             'text' => 'text',
             'number' => 'number',
@@ -356,12 +451,10 @@ class EntityController extends Controller
                 ]
             ];
 
-            // Add validation rules
             if (isset($field['maxlength']) && $field['maxlength']) {
                 $formField['maxLength'] = $field['maxlength'];
             }
 
-            // Add messages
             $messages = [];
             if ($field['required']) {
                 $messages['required'] = $field['label'] . ' is required';
@@ -407,14 +500,12 @@ class EntityController extends Controller
     {
         $columns = [];
         
-        // Add ID column
         $columns[] = [
             'data' => 'id',
             'title' => 'ID',
             'visible' => true
         ];
 
-        // Add first 2 custom fields (non-system fields)
         $customFieldArray = array_values($customFields);
         $fieldsToShow = array_slice($customFieldArray, 0, 2);
         
@@ -428,15 +519,21 @@ class EntityController extends Controller
             ];
         }
 
-        // Add Status column
         $columns[] = [
             'data' => 'status',
             'title' => 'Status',
             'visible' => true
         ];
+        
+        $tableMeta = $entity->metas()
+        ->where('meta_key', 'table_name')
+        ->first();
+
+        $baseTableName = $tableMeta?->meta_value ?? $this->generateTableName($entity->entity_name);
+        
 
         return [
-            'entity' => $entity->slug,
+            'entity' => $this->pluralizeTableName($baseTableName),
             'dt-options' => [
                 'columns' => $columns,
                 'options' => [
@@ -447,199 +544,6 @@ class EntityController extends Controller
             ],
             'default_view_mode' => 'inbox'
         ];
-    }
-
-    public function update(Request $request, $uid)
-    {
-        try {
-            $entity = Entity::where('uid', $uid)->firstOrFail();
-
-            $validated = $request->validate([
-                'entity_name' => 'required|string|max:255|unique:entities,entity_name,' . $entity->id,
-                'slug' => 'required|string|max:255|unique:entities,slug,' . $entity->id,
-                'desc' => 'nullable|string',
-                'fields' => 'required|json',
-                'meta_fields' => 'nullable|json',
-            ]);
-
-            // Generate table name from entity name
-            $tableName = strtolower($validated['entity_name']);
-            $tableName = preg_replace('/[^a-z0-9]+/', '_', $tableName);
-            $tableName = trim($tableName, '_');
-
-            // Define system default fields
-            $systemFields = [
-                "id" => [
-                    "name" => "id",
-                    "type" => "bigint",
-                    "label" => "Id",
-                    "required" => true,
-                    "nullable" => false,
-                    "input_type" => "number",
-                    "maxlength" => null,
-                    "default" => null
-                ],
-                "uid" => [
-                    "name" => "uid",
-                    "type" => "char",
-                    "label" => "Uid",
-                    "required" => true,
-                    "nullable" => false,
-                    "input_type" => "text",
-                    "maxlength" => null,
-                    "default" => null
-                ],
-                "status" => [
-                    "name" => "status",
-                    "type" => "varchar",
-                    "label" => "Status",
-                    "required" => true,
-                    "nullable" => false,
-                    "input_type" => "text",
-                    "maxlength" => null,
-                    "default" => "'unknown'"
-                ],
-                "created_by" => [
-                    "name" => "created_by",
-                    "type" => "bigint",
-                    "label" => "Created By",
-                    "required" => false,
-                    "nullable" => true,
-                    "input_type" => "number",
-                    "maxlength" => null,
-                    "default" => "NULL"
-                ],
-                "created_at" => [
-                    "name" => "created_at",
-                    "type" => "timestamp",
-                    "label" => "Created At",
-                    "required" => false,
-                    "nullable" => true,
-                    "input_type" => "datetime-local",
-                    "maxlength" => null,
-                    "default" => "NULL"
-                ],
-                "updated_by" => [
-                    "name" => "updated_by",
-                    "type" => "bigint",
-                    "label" => "Updated By",
-                    "required" => false,
-                    "nullable" => true,
-                    "input_type" => "number",
-                    "maxlength" => null,
-                    "default" => "NULL"
-                ],
-                "updated_at" => [
-                    "name" => "updated_at",
-                    "type" => "timestamp",
-                    "label" => "Updated At",
-                    "required" => false,
-                    "nullable" => true,
-                    "input_type" => "datetime-local",
-                    "maxlength" => null,
-                    "default" => "NULL"
-                ],
-                "deleted_by" => [
-                    "name" => "deleted_by",
-                    "type" => "bigint",
-                    "label" => "Deleted By",
-                    "required" => false,
-                    "nullable" => true,
-                    "input_type" => "number",
-                    "maxlength" => null,
-                    "default" => "NULL"
-                ],
-                "deleted_at" => [
-                    "name" => "deleted_at",
-                    "type" => "timestamp",
-                    "label" => "Deleted At",
-                    "required" => false,
-                    "nullable" => true,
-                    "input_type" => "datetime-local",
-                    "maxlength" => null,
-                    "default" => "NULL"
-                ]
-            ];
-
-            // Decode custom fields from JSON
-            $customFields = json_decode($validated['fields'], true);
-            
-            // Map frontend field types to database types
-            $typeMapping = [
-                'string' => 'varchar',
-                'text' => 'text',
-                'integer' => 'bigint',
-                'decimal' => 'decimal',
-                'boolean' => 'boolean',
-                'date' => 'date',
-                'datetime' => 'timestamp'
-            ];
-
-            // Process custom fields
-            $processedCustomFields = [];
-            if (is_array($customFields)) {
-                foreach ($customFields as $field) {
-                    $fieldName = $field['name'];
-                    $processedCustomFields[$fieldName] = [
-                        "name" => $fieldName,
-                        "type" => $typeMapping[$field['type']] ?? $field['type'],
-                        "label" => $field['label'],
-                        "required" => $field['required'] ?? false,
-                        "nullable" => $field['nullable'] ?? true,
-                        "input_type" => $field['input_type'],
-                        "maxlength" => $field['maxlength'] ?? null,
-                        "default" => $field['default'] ?? null
-                    ];
-                }
-            }
-
-            // Merge system fields with custom fields
-            $allFields = array_merge($systemFields, $processedCustomFields);
-
-            // Decode meta fields
-            $metaFieldsData = $validated['meta_fields'] 
-                ? json_decode($validated['meta_fields'], true) 
-                : [];
-
-            // Update entity
-            $entity->update([
-                'entity_name' => $validated['entity_name'],
-                'slug' => $validated['slug'],
-                'desc' => $validated['desc'] ?? null,
-                'fields' => $allFields,
-                'meta_fields' => $metaFieldsData,
-                'updated_by' => auth()->id(),
-            ]);
-
-            // Update table_name in entity_meta
-            $entity->metas()->updateOrCreate(
-                ['meta_key' => 'table_name'],
-                [
-                    'meta_value' => $tableName,
-                    'status' => 'active',
-                    'updated_by' => auth()->id()
-                ]
-            );
-
-            Log::info('Entity updated', [
-                'entity' => $entity->toArray(),
-                'table_name' => $tableName
-            ]);
-
-            return redirect()
-                ->route('entities.show', $entity->uid)
-                ->with('success', 'Entity updated successfully.');
-                
-        } catch (Exception $e) {
-            Log::error('Error updating entity', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return redirect()
-                ->back()
-                ->withInput()
-                ->with('error', $e->getMessage());
-        }
     }
 
     public function show($entityUid)
@@ -765,21 +669,23 @@ class EntityController extends Controller
             // Create meta table
             Schema::create($metaTableName, function (Blueprint $table) use ($tableName) {
                 $table->id();
+
                 $table->unsignedBigInteger('ref_parent')->index();
                 $table->string('meta_key')->index();
                 $table->longText('meta_value')->nullable();
                 $table->string('status')->default('unknown');
-                $table->bigInteger('created_by')->nullable();
-                $table->bigInteger('updated_by')->nullable();
+
+                $table->bigInteger('created_by')->default(0);
+                $table->bigInteger('updated_by')->default(0);
                 $table->bigInteger('deleted_by')->nullable();
-                $table->timestamp('created_at')->nullable();
-                $table->timestamp('updated_at')->nullable();
+
+                // DB-level timestamps (AUTO)
+                $table->timestamp('created_at')->useCurrent();
+                $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
                 $table->timestamp('deleted_at')->nullable();
 
-                // Add composite index for better query performance
                 $table->index(['ref_parent', 'meta_key']);
-                
-                // Add foreign key constraint
+
                 $table->foreign('ref_parent')
                     ->references('id')
                     ->on($tableName)
@@ -935,7 +841,8 @@ class EntityController extends Controller
                 if ($name === 'id') {
                     $column = $table->id();
                 } else {
-                    $column = $table->bigInteger($name);
+                    $column = $table->bigInteger($name)
+                        ->default(in_array($name, ['created_by', 'updated_by']) ? 0 : null);
                 }
                 break;
 
@@ -968,7 +875,16 @@ class EntityController extends Controller
                 break;
 
             case 'timestamp':
-                $column = $table->timestamp($name);
+                if (in_array($name, ['created_at', 'updated_at'])) {
+                    $column = $table->timestamp($name)
+                        ->useCurrent();
+
+                    if ($name === 'updated_at') {
+                        $column->useCurrentOnUpdate();
+                    }
+                } else {
+                    $column = $table->timestamp($name)->nullable();
+                }
                 break;
 
             default:
@@ -977,7 +893,10 @@ class EntityController extends Controller
         }
 
         // Apply nullable
-        if ($nullable && $name !== 'id') {
+        if (
+            $nullable &&
+            !in_array($name, ['id', 'uid', 'created_by', 'updated_by'])
+        ) {
             $column->nullable();
         }
 

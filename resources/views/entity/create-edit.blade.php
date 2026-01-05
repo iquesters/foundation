@@ -18,42 +18,13 @@
     }
 
     $navButtons = [
-        [
-            'label' => 'Primary Fields',
-            'btn' => 'primary',
-            'header' => 'primarySection',
-            'collapse' => 'mainTable',
-            'tooltip' => 'Add/Edit main table field structure',
-        ],
-        [
-            'label' => 'Secondary Fields',
-            'btn' => 'success',
-            'header' => 'secondarySection',
-            'collapse' => 'metaStructure',
-            'tooltip' => 'Add/Edit meta table key structure',
-        ],
-        [
-            'label' => 'APIs',
-            'btn' => 'warning',
-            'header' => 'apiSectionHeader',
-            'collapse' => 'apiSection',
-            'tooltip' => 'View available API endpoints',
-        ],
-        [
-            'label' => 'UI',
-            'btn' => 'dark',
-            'header' => 'uiSectionHeader',
-            'collapse' => 'uiSection',
-            'tooltip' => 'View UI availability and capabilities',
-        ],
+        ['label' => 'Primary Fields', 'btn' => 'primary', 'header' => 'primarySection', 'collapse' => 'mainTable', 'tooltip' => 'Add/Edit main table field structure'],
+        ['label' => 'Secondary Fields', 'btn' => 'success', 'header' => 'secondarySection', 'collapse' => 'metaStructure', 'tooltip' => 'Add/Edit meta table key structure'],
+        ['label' => 'APIs', 'btn' => 'warning', 'header' => 'apiSectionHeader', 'collapse' => 'apiSection', 'tooltip' => 'View available API endpoints'],
+        ['label' => 'UI', 'btn' => 'dark', 'header' => 'uiSectionHeader', 'collapse' => 'uiSection', 'tooltip' => 'View UI availability and capabilities'],
     ];
 
-    $systemFields = [
-        'id','uid','status',
-        'created_by','created_at',
-        'updated_by','updated_at',
-        'deleted_by','deleted_at'
-    ];
+    $systemFields = ['id','uid','status','created_by','created_at','updated_by','updated_at','deleted_by','deleted_at'];
 
     $apis = $isCreating ? [] : [
         ['GET', 'success', url("/api/entity/index/{$entity->entity_name}")],
@@ -73,31 +44,15 @@
     @endif
 
     <div class="mb-3">
-        {{-- HEADER --}}
-        <div class="mb-3">
-            <div class="d-flex align-items-center justify-content-between">
-                <div class="d-flex align-items-center justify-content-start gap-2">
-                    <h5 class="mb-1 fs-6">
-                        {{ $isCreating ? 'Create New Entity' : 'Edit Entity: ' . $entity->entity_name }}
-                    </h5>
-                    @if(!$isCreating)
-                        <span class="badge badge-{{ $entity->status }}">{{ ucfirst($entity->status) }}</span>
-                    @endif
-                </div>
-            </div>
-            @if(!$isCreating)
-                <code>{{ $entity->uid }}</code>
-            @else
-                <code class="text-muted">UID will be auto-generated</code>
-            @endif
-        </div>
-
         <div class="sticky-top entity-sticky-top bg-body pb-2">
+            {{-- HEADER --}}
+            <div class="mb-3">
+                <x-foundation::inc-with-props.entity.header :entity="$entity ?? null" :isCreating="$isCreating" />
+            </div>
+
             {{-- BASIC INFO --}}
             <div class="mb-3">
-
                 <div class="row px-2">
-                    <!-- Entity Name -->
                     <div class="col-md-4">
                         <label for="entity_name" class="form-label">
                             Entity Name <span class="text-danger">*</span>
@@ -114,9 +69,7 @@
                     </div>
 
                     <div class="col-md-4">
-                        <label for="slug" class="form-label">
-                            Slug
-                        </label>
+                        <label for="slug" class="form-label">Slug</label>
                         <input type="text" 
                             class="form-control @error('slug') is-invalid @enderror" 
                             id="slug" 
@@ -127,7 +80,6 @@
                         @enderror
                     </div>
 
-                    <!-- Description -->
                     <div class="col-md-4">
                         <label for="desc" class="form-label">Description</label>
                         <textarea class="form-control @error('desc') is-invalid @enderror" 
@@ -149,456 +101,84 @@
             </div>
 
             {{-- NAV BUTTONS --}}
-            <div class="d-flex flex-wrap gap-2 mb-3">
-                @foreach($navButtons as $btn)
-                    <button
-                        type="button"
-                        class="btn btn-sm btn-outline-{{ $btn['btn'] }}"
-                        onclick="openSection('{{ $btn['header'] }}','{{ $btn['collapse'] }}')"
-                        data-bs-toggle="tooltip"
-                        data-bs-placement="top"
-                        title="{{ $btn['tooltip'] }}"
-                    >
-                        {{ $btn['label'] }}
-                    </button>
-                @endforeach
+            <div class="mb-3">
+                <x-foundation::inc-with-props.entity.nav-buttons :buttons="$navButtons" />
             </div>
         </div>
 
         <div class="accordion" id="entityAccordion">
-
             {{-- PRIMARY FIELDS --}}
-            <div id="primarySection" class="p-2 text-primary">
-                Primary Fields (Main Table Structure)
-            </div>
-
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button bg-primary-subtle text-primary"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#mainTable">
-                        Field Definitions
-                    </button>
-                </h2>
-                <div id="mainTable" class="accordion-collapse collapse show">
-                    <div class="accordion-body p-0">
-                        
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-striped" id="fieldsTable">
-                                <thead class="table-light">
-                                <tr>
-                                    <th>#</th><th>Field Name</th><th>Type</th><th>Label</th>
-                                    <th>Required</th><th>Nullable</th><th>Input Type</th><th>Default</th>
-                                    <th>Actions</th>
-                                </tr>
-                                </thead>
-                                <tbody id="fieldsMainTableBody">
-                                @forelse($fields as $index => $field)
-                                    @if(!in_array($field['name'], $systemFields))
-                                        <tr data-index="{{ $index }}">
-                                            <td>{{ $loop->iteration }}</td>
-                                            <td><input type="text" class="form-control form-control-sm" name="fields[{{ $index }}][name]" value="{{ $field['name'] }}" required></td>
-                                            <td>
-                                                <select class="form-select form-select-sm" name="fields[{{ $index }}][type]" required>
-                                                    <option value="string" {{ $field['type'] == 'string' ? 'selected' : '' }}>String</option>
-                                                    <option value="text" {{ $field['type'] == 'text' ? 'selected' : '' }}>Text</option>
-                                                    <option value="integer" {{ $field['type'] == 'integer' ? 'selected' : '' }}>Integer</option>
-                                                    <option value="decimal" {{ $field['type'] == 'decimal' ? 'selected' : '' }}>Decimal</option>
-                                                    <option value="boolean" {{ $field['type'] == 'boolean' ? 'selected' : '' }}>Boolean</option>
-                                                    <option value="date" {{ $field['type'] == 'date' ? 'selected' : '' }}>Date</option>
-                                                    <option value="datetime" {{ $field['type'] == 'datetime' ? 'selected' : '' }}>DateTime</option>
-                                                </select>
-                                            </td>
-                                            <td><input type="text" class="form-control form-control-sm" name="fields[{{ $index }}][label]" value="{{ $field['label'] }}" required></td>
-                                            <td>
-                                                <select class="form-select form-select-sm" name="fields[{{ $index }}][required]">
-                                                    <option value="1" {{ $field['required'] ? 'selected' : '' }}>YES</option>
-                                                    <option value="0" {{ !$field['required'] ? 'selected' : '' }}>NO</option>
-                                                </select>
-                                            </td>
-                                            <td>
-                                                <select class="form-select form-select-sm" name="fields[{{ $index }}][nullable]">
-                                                    <option value="1" {{ $field['nullable'] ? 'selected' : '' }}>YES</option>
-                                                    <option value="0" {{ !$field['nullable'] ? 'selected' : '' }}>NO</option>
-                                                </select>
-                                            </td>
-                                            <td>
-                                                <select class="form-select form-select-sm" name="fields[{{ $index }}][input_type]" required>
-                                                    <option value="text" {{ $field['input_type'] == 'text' ? 'selected' : '' }}>Text</option>
-                                                    <option value="textarea" {{ $field['input_type'] == 'textarea' ? 'selected' : '' }}>Textarea</option>
-                                                    <option value="number" {{ $field['input_type'] == 'number' ? 'selected' : '' }}>Number</option>
-                                                    <option value="email" {{ $field['input_type'] == 'email' ? 'selected' : '' }}>Email</option>
-                                                    <option value="date" {{ $field['input_type'] == 'date' ? 'selected' : '' }}>Date</option>
-                                                    <option value="checkbox" {{ $field['input_type'] == 'checkbox' ? 'selected' : '' }}>Checkbox</option>
-                                                    <option value="select" {{ $field['input_type'] == 'select' ? 'selected' : '' }}>Select</option>
-                                                </select>
-                                            </td>
-                                            <td><input type="text" class="form-control form-control-sm" name="fields[{{ $index }}][default]" value="{{ $field['default'] ?? '' }}"></td>
-                                            <td>
-                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    @endif
-                                @empty
-                                    <tr class="no-data-row">
-                                        <td colspan="9" class="text-center text-muted">No fields defined. Click "Add Field" to create one.</td>
-                                    </tr>
-                                @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="p-2">
-                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addPrimaryField()">
-                                <i class="fas fa-plus"></i> Field
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <x-foundation::inc-with-props.entity.accordion-section 
+                sectionId="primarySection" 
+                title="Primary Fields (Main Table Structure)"
+                collapseId="mainTable"
+                colorClass="primary"
+                headerContent="Field Definitions">
+                <x-foundation::inc-with-props.entity.fields-table 
+                    :fields="$fields" 
+                    :systemFields="$systemFields" 
+                    :editable="true" />
+            </x-foundation::inc-with-props.entity.accordion-section>
 
             {{-- SECONDARY FIELDS --}}
-            <div id="secondarySection" class="p-2 text-success">
-                Secondary Fields (Meta Attributes)
-            </div>
-
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button bg-success-subtle text-sucess"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#metaStructure">
-                        Meta Field Definitions
-                    </button>
-                </h2>
-                <div id="metaStructure" class="accordion-collapse collapse show">
-                    <div class="accordion-body p-0">
-                        
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-striped" id="metaFieldsTable">
-                                <thead class="table-light">
-                                <tr>
-                                    <th>#</th><th>Meta Key</th><th>Type</th><th>Label</th>
-                                    <th>Required</th><th>Nullable</th><th>Input Type</th><th>Display</th>
-                                    <th>Actions</th>
-                                </tr>
-                                </thead>
-                                <tbody id="metaFieldsTableBody">
-                                @forelse($metaFields as $index => $field)
-                                    <tr data-index="{{ $index }}">
-                                        <td>{{ $index + 1 }}</td>
-                                        <td><input type="text" class="form-control form-control-sm" name="meta_fields[{{ $index }}][meta_key]" value="{{ $field['meta_key'] ?? '' }}" required></td>
-                                        <td>
-                                            <select class="form-select form-select-sm" name="meta_fields[{{ $index }}][type]" required>
-                                                <option value="string" {{ ($field['type'] ?? '') == 'string' ? 'selected' : '' }}>String</option>
-                                                <option value="text" {{ ($field['type'] ?? '') == 'text' ? 'selected' : '' }}>Text</option>
-                                                <option value="integer" {{ ($field['type'] ?? '') == 'integer' ? 'selected' : '' }}>Integer</option>
-                                                <option value="decimal" {{ ($field['type'] ?? '') == 'decimal' ? 'selected' : '' }}>Decimal</option>
-                                                <option value="boolean" {{ ($field['type'] ?? '') == 'boolean' ? 'selected' : '' }}>Boolean</option>
-                                                <option value="json" {{ ($field['type'] ?? '') == 'json' ? 'selected' : '' }}>JSON</option>
-                                            </select>
-                                        </td>
-                                        <td><input type="text" class="form-control form-control-sm" name="meta_fields[{{ $index }}][label]" value="{{ $field['label'] ?? '' }}" required></td>
-                                        <td>
-                                            <select class="form-select form-select-sm" name="meta_fields[{{ $index }}][required]">
-                                                <option value="1" {{ !empty($field['required']) ? 'selected' : '' }}>YES</option>
-                                                <option value="0" {{ empty($field['required']) ? 'selected' : '' }}>NO</option>
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <select class="form-select form-select-sm" name="meta_fields[{{ $index }}][nullable]">
-                                                <option value="1" {{ !empty($field['nullable']) ? 'selected' : '' }}>YES</option>
-                                                <option value="0" {{ empty($field['nullable']) ? 'selected' : '' }}>NO</option>
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <select class="form-select form-select-sm" name="meta_fields[{{ $index }}][input_type]" required>
-                                                <option value="text" {{ ($field['input_type'] ?? 'text') == 'text' ? 'selected' : '' }}>Text</option>
-                                                <option value="textarea" {{ ($field['input_type'] ?? '') == 'textarea' ? 'selected' : '' }}>Textarea</option>
-                                                <option value="number" {{ ($field['input_type'] ?? '') == 'number' ? 'selected' : '' }}>Number</option>
-                                                <option value="select" {{ ($field['input_type'] ?? '') == 'select' ? 'selected' : '' }}>Select</option>
-                                                <option value="checkbox" {{ ($field['input_type'] ?? '') == 'checkbox' ? 'selected' : '' }}>Checkbox</option>
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <select class="form-select form-select-sm" name="meta_fields[{{ $index }}][display]">
-                                                <option value="1" {{ ($field['display'] ?? true) ? 'selected' : '' }}>YES</option>
-                                                <option value="0" {{ !($field['display'] ?? true) ? 'selected' : '' }}>NO</option>
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr class="no-data-row">
-                                        <td colspan="9" class="text-center text-muted">No meta fields defined. Click "Add Meta Field" to create one.</td>
-                                    </tr>
-                                @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="p-2">
-                            <button type="button" class="btn btn-sm btn-outline-success" onclick="addMetaField()">
-                                <i class="fas fa-plus"></i> Meta Field
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <x-foundation::inc-with-props.entity.accordion-section 
+                sectionId="secondarySection" 
+                title="Secondary Fields (Meta Attributes)"
+                collapseId="metaStructure"
+                colorClass="success"
+                headerContent="Meta Field Definitions">
+                <x-foundation::inc-with-props.entity.meta-fields-table 
+                    :metaFields="$metaFields" 
+                    :editable="true" />
+            </x-foundation::inc-with-props.entity.accordion-section>
 
             {{-- API --}}
-            <div id="apiSectionHeader" class="p-2 text-warning">
-                Available API Endpoints
-            </div>
-
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button bg-warning-subtle text-warning"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#apiSection">
-                        API Details
-                    </button>
-                </h2>
-                <div id="apiSection" class="accordion-collapse collapse show">
-                    <div class="accordion-body">
-                        @if($isCreating)
-                            <div class="text-muted">
-                                API endpoints will be available after the entity is created.
-                            </div>
-                        @else
-                            <table class="table table-sm table-hover mb-0">
-                                <thead><tr><th>Method</th><th>Endpoint</th></tr></thead>
-                                <tbody>
-                                @foreach($apis as [$method, $color, $endpoint])
-                                    <tr>
-                                        <td><span class="badge bg-{{ $color }}">{{ $method }}</span></td>
-                                        <td><code>{{ $endpoint }}</code></td>
-                                    </tr>
-                                @endforeach
-                                </tbody>
-                            </table>
-                        @endif
-                    </div>
-                </div>
-            </div>
+            <x-foundation::inc-with-props.entity.accordion-section 
+                sectionId="apiSectionHeader" 
+                title="Available API Endpoints"
+                collapseId="apiSection"
+                colorClass="warning"
+                headerContent="API Details"
+                bodyClass="">
+                <x-foundation::inc-with-props.entity.api-section :apis="$apis" :isCreating="$isCreating" />
+            </x-foundation::inc-with-props.entity.accordion-section>
 
             {{-- UI --}}
-            <div id="uiSectionHeader" class="p-2 text-dark">
-                User Interface Availability
-            </div>
-
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button bg-dark-subtle text-dark"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#uiSection">
-                        UI Capabilities
-                    </button>
-                </h2>
-                <div id="uiSection" class="accordion-collapse collapse show">
-                    <div class="accordion-body">
-                        @if($isCreating)
-                            <div class="text-muted">
-                                UI capabilities will be available after the entity is created.
-                            </div>
-                        @else
-                            <div>✔ List View</div>
-                            <div>✔ Detail View</div>
-                        @endif
-                    </div>
-                </div>
-            </div>
-
+            <x-foundation::inc-with-props.entity.accordion-section 
+                sectionId="uiSectionHeader" 
+                title="User Interface Availability"
+                collapseId="uiSection"
+                colorClass="dark"
+                headerContent="UI Capabilities"
+                bodyClass="">
+                <x-foundation::inc-with-props.entity.ui-section :entity="$entity ?? null" :isCreating="$isCreating" />
+            </x-foundation::inc-with-props.entity.accordion-section>
         </div>
-
     </div>
+
     <div class="d-flex align-items-center justify-content-end mb-3 gap-2">
-        <a href="{{ route('entities.index') }}" class="btn btn-sm btn-outline-dark">
-            Cancel
-        </a>
+        <a href="{{ route('entities.index') }}" class="btn btn-sm btn-outline-dark">Cancel</a>
         <button type="submit" class="btn btn-sm btn-outline-primary">
             {{ $isCreating ? 'Create' : 'Update' }}
         </button>
     </div>
 </form>
 
-{{-- JS --}}
+{{-- Include JS utilities --}}
+@push('scripts')
+<script src="{{ asset('js/entity-utils.js') }}"></script>
 <script>
-let fieldIndex = {{ count($fields) }};
-let metaFieldIndex = {{ count($metaFields) }};
-
-function openSection(headerId, collapseId) {
-    const header = document.getElementById(headerId);
-    const collapse = document.getElementById(collapseId);
-    
-    // Get the collapse instance
-    const collapseInstance = bootstrap.Collapse.getOrCreateInstance(collapse, {
-        toggle: false // Don't auto-toggle
-    });
-    
-    // Check if it's currently hidden
-    if (!collapse.classList.contains('show')) {
-        // If closed, open it
-        collapseInstance.show();
-    }
-    
-    // Scroll to the section after a brief delay to allow animation
-    setTimeout(() => {
-        header.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 150);
-}
-
-function toggleSystemFields(checkbox) {
-    document.querySelectorAll('.system-field').forEach(row => {
-        row.style.display = checkbox.checked ? '' : 'none';
-    });
-}
-
-function removeRow(btn) {
-    const row = btn.closest('tr');
-    row.remove();
-    updateRowNumbers();
-}
-
-function updateRowNumbers() {
-    document.querySelectorAll('#fieldsMainTableBody tr:not(.no-data-row)').forEach((row, index) => {
-        row.querySelector('td:first-child').textContent = index + 1;
-    });
-    
-    document.querySelectorAll('#metaFieldsTableBody tr:not(.no-data-row)').forEach((row, index) => {
-        row.querySelector('td:first-child').textContent = index + 1;
-    });
-}
-
-function addPrimaryField() {
-    const tbody = document.getElementById('fieldsMainTableBody');
-    const noDataRow = tbody.querySelector('.no-data-row');
-    if (noDataRow) noDataRow.remove();
-    
-    const row = document.createElement('tr');
-    row.innerHTML = `
-        <td>${fieldIndex + 1}</td>
-        <td><input type="text" class="form-control form-control-sm" name="fields[${fieldIndex}][name]" required></td>
-        <td>
-            <select class="form-select form-select-sm" name="fields[${fieldIndex}][type]" required>
-                <option value="string">String</option>
-                <option value="text">Text</option>
-                <option value="integer">Integer</option>
-                <option value="decimal">Decimal</option>
-                <option value="boolean">Boolean</option>
-                <option value="date">Date</option>
-                <option value="datetime">DateTime</option>
-            </select>
-        </td>
-        <td><input type="text" class="form-control form-control-sm" name="fields[${fieldIndex}][label]" required></td>
-        <td>
-            <select class="form-select form-select-sm" name="fields[${fieldIndex}][required]">
-                <option value="0" selected>NO</option>
-                <option value="1">YES</option>
-            </select>
-        </td>
-        <td>
-            <select class="form-select form-select-sm" name="fields[${fieldIndex}][nullable]">
-                <option value="1" selected>YES</option>
-                <option value="0">NO</option>
-            </select>
-        </td>
-        <td>
-            <select class="form-select form-select-sm" name="fields[${fieldIndex}][input_type]" required>
-                <option value="text" selected>Text</option>
-                <option value="textarea">Textarea</option>
-                <option value="number">Number</option>
-                <option value="email">Email</option>
-                <option value="date">Date</option>
-                <option value="checkbox">Checkbox</option>
-                <option value="select">Select</option>
-            </select>
-        </td>
-        <td><input type="text" class="form-control form-control-sm" name="fields[${fieldIndex}][default]"></td>
-        <td>
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">
-                <i class="fas fa-trash"></i>
-            </button>
-        </td>
-    `;
-    tbody.appendChild(row);
-    fieldIndex++;
-}
-
-function addMetaField() {
-    const tbody = document.getElementById('metaFieldsTableBody');
-    const noDataRow = tbody.querySelector('.no-data-row');
-    if (noDataRow) noDataRow.remove();
-    
-    const row = document.createElement('tr');
-    row.innerHTML = `
-        <td>${metaFieldIndex + 1}</td>
-        <td><input type="text" class="form-control form-control-sm" name="meta_fields[${metaFieldIndex}][meta_key]" required></td>
-        <td>
-            <select class="form-select form-select-sm" name="meta_fields[${metaFieldIndex}][type]" required>
-                <option value="string" selected>String</option>
-                <option value="text">Text</option>
-                <option value="integer">Integer</option>
-                <option value="decimal">Decimal</option>
-                <option value="boolean">Boolean</option>
-                <option value="json">JSON</option>
-            </select>
-        </td>
-        <td><input type="text" class="form-control form-control-sm" name="meta_fields[${metaFieldIndex}][label]" required></td>
-        <td>
-            <select class="form-select form-select-sm" name="meta_fields[${metaFieldIndex}][required]">
-                <option value="0" selected>NO</option>
-                <option value="1">YES</option>
-            </select>
-        </td>
-        <td>
-            <select class="form-select form-select-sm" name="meta_fields[${metaFieldIndex}][nullable]">
-                <option value="1" selected>YES</option>
-                <option value="0">NO</option>
-            </select>
-        </td>
-        <td>
-            <select class="form-select form-select-sm" name="meta_fields[${metaFieldIndex}][input_type]" required>
-                <option value="text" selected>Text</option>
-                <option value="textarea">Textarea</option>
-                <option value="number">Number</option>
-                <option value="select">Select</option>
-                <option value="checkbox">Checkbox</option>
-            </select>
-        </td>
-        <td>
-            <select class="form-select form-select-sm" name="meta_fields[${metaFieldIndex}][display]">
-                <option value="1" selected>YES</option>
-                <option value="0">NO</option>
-            </select>
-        </td>
-        <td>
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">
-                <i class="fas fa-trash"></i>
-            </button>
-        </td>
-    `;
-    tbody.appendChild(row);
-    metaFieldIndex++;
-}
-
 // Form submission with JSON conversion
 document.getElementById('entityForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
-    const formData = new FormData(this);
     const fields = [];
     const metaFields = [];
     
     // Collect all field data
     document.querySelectorAll('#fieldsMainTableBody tr:not(.no-data-row)').forEach(row => {
         const inputs = row.querySelectorAll('input, select');
-        const field = {
+        fields.push({
             name: inputs[0].value,
             type: inputs[1].value,
             label: inputs[2].value,
@@ -606,14 +186,13 @@ document.getElementById('entityForm').addEventListener('submit', function(e) {
             nullable: inputs[4].value === '1',
             input_type: inputs[5].value,
             default: inputs[6].value || null
-        };
-        fields.push(field);
+        });
     });
     
     // Collect all meta field data
     document.querySelectorAll('#metaFieldsTableBody tr:not(.no-data-row)').forEach(row => {
         const inputs = row.querySelectorAll('input, select');
-        const metaField = {
+        metaFields.push({
             meta_key: inputs[0].value,
             type: inputs[1].value,
             label: inputs[2].value,
@@ -621,8 +200,7 @@ document.getElementById('entityForm').addEventListener('submit', function(e) {
             nullable: inputs[4].value === '1',
             input_type: inputs[5].value,
             display: inputs[6].value === '1'
-        };
-        metaFields.push(metaField);
+        });
     });
     
     // Remove all field inputs from form
@@ -645,5 +223,6 @@ document.getElementById('entityForm').addEventListener('submit', function(e) {
     this.submit();
 });
 </script>
+@endpush
 
 @endsection
