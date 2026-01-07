@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Iquesters\UserInterface\Models\FormSchema;
 use Iquesters\UserInterface\Models\TableSchema;
 use Illuminate\Database\Schema\Blueprint;
+use Iquesters\Foundation\Models\Module;
 use Illuminate\Support\Facades\Schema;
 use Exception;
 
@@ -42,10 +43,12 @@ class EntityController extends Controller
     {
         try {
             Log::info('Creating new entity');
-
+            $modules = Module::where('status', 'active')->get();
+            
             return view('foundation::entity.create-edit', [
                 'entity' => null,
-                'isCreating' => true
+                'isCreating' => true,
+                'modules'    => $modules,
             ]);
         } catch (Exception $e) {
             Log::error('Error displaying create form', [
@@ -64,10 +67,12 @@ class EntityController extends Controller
             Log::info('Editing entity', ['uid' => $uid]);
 
             $entity = Entity::where('uid', $uid)->firstOrFail();
+            $modules = Module::where('status', 'active')->get();
 
             return view('foundation::entity.create-edit', [
                 'entity' => $entity,
-                'isCreating' => false
+                'isCreating' => false,
+                'modules'    => $modules,
             ]);
         } catch (Exception $e) {
             Log::error('Error displaying edit form', [
@@ -86,6 +91,7 @@ class EntityController extends Controller
         try {
             $validated = $request->validate([
                 'entity_name' => 'required|string|max:255|unique:entities,entity_name',
+                'ref_module' => 'required|exists:modules,id',
                 'desc' => 'nullable|string',
                 'fields' => 'required|json',
                 'meta_fields' => 'nullable|json',
@@ -100,6 +106,7 @@ class EntityController extends Controller
             // Create entity
             $entity = new Entity();
             $entity->uid = Str::ulid();
+            $entity->ref_module = $validated['ref_module'];
             $entity->entity_name = $validated['entity_name'];
             $entity->slug = $slug; // ✅ explicitly assigned
             $entity->desc = $validated['desc'] ?? null;
@@ -148,6 +155,7 @@ class EntityController extends Controller
 
             $validated = $request->validate([
                 'entity_name' => 'required|string|max:255|unique:entities,entity_name,' . $entity->id,
+                'ref_module' => 'required|exists:modules,id',
                 'desc' => 'nullable|string',
                 'fields' => 'required|json',
                 'meta_fields' => 'nullable|json',
@@ -172,6 +180,7 @@ class EntityController extends Controller
 
             // Update entity
             $entity->update([
+                'ref_module' => $validated['ref_module'],
                 'entity_name' => $validated['entity_name'],
                 'desc' => $validated['desc'] ?? null,
                 'fields' => $allFields,
