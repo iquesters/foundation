@@ -17,6 +17,7 @@ abstract class BaseServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->registerPackageConf();
+        $this->registerSeederCommands();
         // $this->loadPackageConfigs();
     }
 
@@ -84,6 +85,36 @@ abstract class BaseServiceProvider extends ServiceProvider
     }
 
     /* -------------------------------------------------
+     | Seeder Command Registration (in register phase)
+     |--------------------------------------------------*/
+    protected function registerSeederCommands(): void
+    {
+        Log::debug('Registering seeder commands', [
+            'service_provider_class' => static::class,
+        ]);
+
+        $info = $this->packageInfo();
+        $bindings = $info->getSeederBindings();
+
+        if ($bindings) {
+            foreach ($bindings as $binding) {
+                $commandClass = $binding['command_class'];
+                $seederClass = $binding['seeder_class'];
+                
+                // Bind the SeederCommand with its required constructor parameter
+                $this->app->bind($commandClass, function ($app) use ($commandClass, $seederClass) {
+                    return new $commandClass($seederClass);
+                });
+
+                Log::debug('Bound seeder command', [
+                    'command_class' => $commandClass,
+                    'seeder_class' => $seederClass
+                ]);
+            }
+        }
+    }
+
+    /* -------------------------------------------------
      | Package Registration Methods
      |--------------------------------------------------*/
     protected function registerPackageProviders(): void
@@ -115,14 +146,21 @@ abstract class BaseServiceProvider extends ServiceProvider
 
         $info = $this->packageInfo();
         $commands = $info->getConsoleCommands();
+        $bindings = $info->getSeederBindings();
 
-        if ($commands) {
-            $this->commands($commands);
+        // Merge regular commands with seeder command classes
+        $allCommands = $commands ?? [];
+        if ($bindings) {
+            foreach ($bindings as $binding) {
+                $allCommands[] = $binding['command_class'];
+            }
+        }
+
+        if ($allCommands) {
+            $this->commands($allCommands);
             Log::debug('Registered commands', [
-                'count' => count($commands),
-                'commands' => array_map(function($cmd) {
-                    return is_object($cmd) ? get_class($cmd) : $cmd;
-                }, $commands)
+                'count' => count($allCommands),
+                'commands' => $allCommands
             ]);
         }
     }

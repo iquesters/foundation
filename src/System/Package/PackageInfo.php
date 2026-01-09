@@ -41,7 +41,7 @@ abstract class PackageInfo
     protected ?array $auto_providers = null;
     protected ?array $auto_commands = null;
     protected ?array $auto_middleware_aliases = null;
-    protected ?array $auto_seeder_commands = null;
+    protected ?array $auto_seeder_bindings = null;
 
     // Manual overrides (only if you want to skip auto-discovery)
     protected ?array $specific_providers = null;
@@ -145,11 +145,12 @@ abstract class PackageInfo
     }
 
     /**
-     * Auto-discover seeder and create SeederCommand for it
+     * Auto-discover seeder and return binding info for SeederCommand
+     * Returns array of ['command_class' => string, 'seeder_class' => string]
      */
-    protected function autoDiscoverSeederCommands(): array
+    protected function autoDiscoverSeederBindings(): array
     {
-        $seederCommands = [];
+        $bindings = [];
         
         // Seeders are in database/seeders, not src/Database/Seeders
         $packageRoot = $this->getPackagePath();
@@ -167,7 +168,7 @@ abstract class PackageInfo
                 'module' => $this->module_name,
                 'path' => $seederPath
             ]);
-            return $seederCommands;
+            return $bindings;
         }
 
         // Use namespace for the seeder class
@@ -189,7 +190,7 @@ abstract class PackageInfo
                 'expected_class' => $seederClass,
                 'seeder_path' => $seederPath
             ]);
-            return $seederCommands;
+            return $bindings;
         }
 
         // Look for SeederCommand in module's Console namespace
@@ -205,8 +206,12 @@ abstract class PackageInfo
         }
         
         if (class_exists($seederCommandClass)) {
-            $seederCommands[] = new $seederCommandClass($seederClass);
-            \Log::info("Auto-discovered seeder command", [
+            $bindings[] = [
+                'command_class' => $seederCommandClass,
+                'seeder_class' => $seederClass
+            ];
+            
+            \Log::info("Auto-discovered seeder binding", [
                 'module' => $this->module_name,
                 'seeder' => $seederClass,
                 'command' => $seederCommandClass
@@ -221,7 +226,7 @@ abstract class PackageInfo
             ]);
         }
 
-        return $seederCommands;
+        return $bindings;
     }
 
     /**
@@ -488,10 +493,12 @@ abstract class PackageInfo
 
     public function getConsoleCommands(): ?array
     {
-        $commands = $this->specific_commands ?? $this->auto_commands ?? [];
-        $seederCommands = $this->auto_seeder_commands ?? [];
-        
-        return array_merge($commands, $seederCommands);
+        return $this->specific_commands ?? $this->auto_commands;
+    }
+
+    public function getSeederBindings(): ?array
+    {
+        return $this->auto_seeder_bindings;
     }
 
     public function getMiddlewareAliases(): ?array
@@ -547,7 +554,7 @@ abstract class PackageInfo
         // Auto-discover everything
         $this->auto_providers = $this->autoDiscoverProviders();
         $this->auto_commands = $this->autoDiscoverCommands();
-        $this->auto_seeder_commands = $this->autoDiscoverSeederCommands();
+        $this->auto_seeder_bindings = $this->autoDiscoverSeederBindings();
         $this->auto_middleware_aliases = $this->autoDiscoverMiddlewareAliases();
         $this->auto_conf_class = $this->autoDiscoverConfClass();
         $this->auto_conf_module = $this->autoDiscoverConfModule();
