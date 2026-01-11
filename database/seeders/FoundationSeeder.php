@@ -9,7 +9,7 @@ class FoundationSeeder extends BaseSeeder
     protected string $moduleName = 'foundation';
     protected string $description = 'foundation module';
     protected array $metas = [
-        'module_icon' => 'fas fa-building',
+        'module_icon' => 'fas fa-cube',
         'module_sidebar_menu' => [
             /*
             |-------------------------------------------------
