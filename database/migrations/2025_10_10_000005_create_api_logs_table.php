@@ -73,9 +73,6 @@ return new class extends Migration
             $table->bigInteger('updated_by')->default(0);
 
             $table->timestamps();
-
-            // 🚀 Fast lookups
-            $table->index(['meta_key', 'meta_value']);
         });
     }
 
