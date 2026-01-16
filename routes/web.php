@@ -6,8 +6,19 @@ use Iquesters\Foundation\Http\Controllers\EntityController;
 use Iquesters\Foundation\Http\Controllers\MasterDataController;
 use Iquesters\Foundation\Http\Controllers\ModuleController;
 use Iquesters\Foundation\Http\Controllers\NavigationController;
+use Illuminate\Http\Request;
 
 Route::middleware('web')->group(function () {
+    // -----------------------------
+    // Browser timezone POST route
+    // -----------------------------
+    Route::post('/timezone', function (Request $request) {
+        if ($request->timezone) {
+            session(['timezone' => $request->timezone]);
+        }
+        return response()->noContent();
+    })->name('timezone.store');
+    
     Route::middleware(['auth'])->group(function () {
         
         Route::prefix('entity')->name('entities.')->group(function () {
