@@ -52,18 +52,16 @@ class QueueManager
 
     /**
      * Get currently running workers count for a queue
+     * Uses reserved_at in jobs table as a reliable indicator
      */
     public function getRunningWorkersCount(string $queueName): int
     {
-        // This checks running processes (platform dependent)
-        if (PHP_OS_FAMILY === 'Windows') {
-            $result = Process::run("tasklist /FI \"IMAGENAME eq php.exe\" /FO CSV | findstr \"queue:work.*--queue={$queueName}\"");
-        } else {
-            $result = Process::run("ps aux | grep 'queue:work.*--queue={$queueName}' | grep -v grep");
-        }
-        
-        $output = $result->output();
-        return $output ? substr_count($output, "\n") : 0;
+        // Count jobs that are currently reserved (being processed)
+        // Each reserved job = 1 active worker
+        return DB::table('jobs')
+            ->where('queue', $queueName)
+            ->whereNotNull('reserved_at')
+            ->count();
     }
 
     /**
@@ -97,8 +95,10 @@ class QueueManager
         $sleep = (int) ($metas['sleep'] ?? 3);
         $memory = (int) ($metas['memory'] ?? 128);
 
+        // Use --max-jobs=1 to process only ONE job per worker
+        // This ensures proper concurrency control
         $cmd = sprintf(
-            'php %s/artisan queue:work database --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --stop-when-empty',
+            'php %s/artisan queue:work database --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
             base_path(),
             $queueName,
             $timeout,
@@ -145,14 +145,33 @@ class QueueManager
             $maxWorkers = (int) ($metas['max_workers'] ?? 1);
             $runningWorkers = $this->getRunningWorkersCount($queueName);
 
-            // Start workers up to max_workers limit
-            $workersToStart = min(
-                $maxWorkers - $runningWorkers,
-                $jobCounts['waiting']
-            );
+            // Calculate how many workers we can start
+            // We want to start workers up to max_workers, but only if there are jobs waiting
+            $availableSlots = $maxWorkers - $runningWorkers;
+            
+            if ($availableSlots <= 0) {
+                Log::debug("Queue {$queueName} already at max workers", [
+                    'running' => $runningWorkers,
+                    'max' => $maxWorkers
+                ]);
+                continue;
+            }
+
+            // Start workers for waiting jobs (up to available slots)
+            // Each worker will process 1 job (--max-jobs=1)
+            $workersToStart = min($availableSlots, $jobCounts['waiting']);
+
+            Log::info("Starting workers for queue: {$queueName}", [
+                'waiting_jobs' => $jobCounts['waiting'],
+                'running_workers' => $runningWorkers,
+                'max_workers' => $maxWorkers,
+                'workers_to_start' => $workersToStart
+            ]);
 
             for ($i = 0; $i < $workersToStart; $i++) {
                 $this->startWorker($queueName);
+                // Small delay to prevent race conditions
+                usleep(100000); // 100ms delay between worker starts
             }
         }
     }
