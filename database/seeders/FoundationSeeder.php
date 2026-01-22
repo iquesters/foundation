@@ -61,13 +61,77 @@ class FoundationSeeder extends BaseSeeder
                 //         "default_view_mode" => "inbox"
                 //     ]
                 // ]
+            ],
+            [
+                "icon" => "fas fa-tasks",
+                "label" => "Queue",
+                "route" => "ui.list",
+                "table_schema" => [
+                    "slug" => "queue-table",
+                    "name" => "Queue",
+                    "description" => "Datatable schema for queues",
+                    "schema" => [
+                        "entity" => "queues",
+                        "dt-options" => [
+                            "columns" => [
+                                ["data" => "id", "title" => "ID", "visible" => true],
+                                [
+                                    "data" => "name",
+                                    "title" => "Name",
+                                    "visible" => true,
+                                    "link" => true,
+                                    "form-schema-uid" => "queue-details"
+                                ],
+                                [
+                                    "data" => "description",
+                                    "title" => "Description",
+                                    "visible" => true,
+                                ],
+                                [
+                                    "data" => "meta.max_workers",
+                                    "title" => "Max Workers",
+                                    "visible" => true,
+                                ],
+                                [
+                                    "data" => "meta.max_tries",
+                                    "title" => "Max Tries",
+                                    "visible" => true,
+                                ],
+                                [
+                                    "data" => "meta.timeout",
+                                    "title" => "Timeout",
+                                    "visible" => true,
+                                ],
+                                [
+                                    "data" => "meta.sleep",
+                                    "title" => "Sleep",
+                                    "visible" => true,
+                                ],
+                                [
+                                    "data" => "meta.memory",
+                                    "title" => "Memory",
+                                    "visible" => true,
+                                ],
+                                [
+                                    "data" => "status",
+                                    "title" => "Status",
+                                    "visible" => true
+                                ],
+                            ],
+                            "options" => [
+                                "pageLength" => 10,
+                                "order" => [[0, "desc"]],
+                                "responsive" => true
+                            ]
+                        ],
+                        "default_view_mode" => "table"
+                    ]
+                ]
             ]
         ]
     ];
 
-    protected array $permissions = [
-        
-    ];
+    protected array $permissions = [];
     
     /**
      * Implement abstract method from BaseSeeder
