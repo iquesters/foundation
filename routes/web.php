@@ -6,6 +6,8 @@ use Iquesters\Foundation\Http\Controllers\EntityController;
 use Iquesters\Foundation\Http\Controllers\MasterDataController;
 use Iquesters\Foundation\Http\Controllers\ModuleController;
 use Iquesters\Foundation\Http\Controllers\NavigationController;
+use Iquesters\Foundation\Http\Controllers\QueueController;
+use Iquesters\Foundation\Http\Controllers\JobController;
 use Illuminate\Http\Request;
 
 Route::middleware('web')->group(function () {
@@ -56,6 +58,12 @@ Route::middleware('web')->group(function () {
             Route::get('/module/{moduleUid}/sub-menu', [NavigationController::class, 'loadModuleSubMenu'])->name('navigation.module.submenu');
             Route::post('/save-order', [NavigationController::class, 'saveOrder'])->name('navigation.save-order');
             Route::post('/save-submenu-order', [NavigationController::class, 'saveSubmenuOrder'])->name('navigation.save-submenu-order');
+        });     
+        
+        Route::prefix('jobs')->group(function () {
+            Route::get('/', [JobController::class, 'index'])->name('jobs.index');
+            Route::get('/completed', [JobController::class, 'completed'])->name('jobs.completed');
+            Route::get('/failed', [JobController::class, 'failed'])->name('jobs.failed');
         });
         
     });
