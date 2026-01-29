@@ -9,6 +9,7 @@ use Iquesters\Foundation\Http\Controllers\NavigationController;
 use Iquesters\Foundation\Http\Controllers\QueueController;
 use Iquesters\Foundation\Http\Controllers\JobController;
 use Illuminate\Http\Request;
+use Iquesters\Foundation\Http\Controllers\QueueManagementController;
 
 Route::middleware('web')->group(function () {
     // -----------------------------
@@ -65,6 +66,43 @@ Route::middleware('web')->group(function () {
             Route::get('/completed', [JobController::class, 'completed'])->name('jobs.completed');
             Route::get('/failed', [JobController::class, 'failed'])->name('jobs.failed');
         });
-        
+
+        Route::get('/queue-management', [QueueManagementController::class, 'index'])->name('smart-messenger.queue-management');
     });
+
+    Route::prefix('api/smart-messenger/queue-management')->group(function () {
+
+    Route::get('/scheduler/status',
+        [QueueManagementController::class, 'getSchedulerStatus']
+    );
+
+    Route::post('/scheduler/start',
+        [QueueManagementController::class, 'startScheduler']
+    );
+
+    Route::post('/scheduler/stop',
+        [QueueManagementController::class, 'stopScheduler']
+    );
+
+    Route::get('/queues',
+        [QueueManagementController::class, 'getQueues']
+    );
+
+    Route::get('/queues/{queueName}/details',
+        [QueueManagementController::class, 'getQueueDetails']
+    );
+
+    Route::post('/queues/{queueName}/start-workers',
+        [QueueManagementController::class, 'startWorkers']
+    );
+
+    Route::post('/failed-jobs/{jobId}/retry',
+        [QueueManagementController::class, 'retryFailedJob']
+    );
+
+    Route::delete('/failed-jobs/{jobId}',
+        [QueueManagementController::class, 'deleteFailedJob']
+    );
+});
+
 });
