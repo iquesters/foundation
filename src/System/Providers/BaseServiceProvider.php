@@ -43,11 +43,11 @@ abstract class BaseServiceProvider extends ServiceProvider
         $moduleName = $this->detectModuleName();
         $packageInfoClass = $this->detectPackageInfoClass($moduleName);
 
-        Log::info('Instantiating PackageInfo', [
-            'module_name' => $moduleName,
-            'package_info_class' => $packageInfoClass,
-            'service_provider_class' => static::class,
-        ]);
+        // Log::info('Instantiating PackageInfo', [
+        //     'module_name' => $moduleName,
+        //     'package_info_class' => $packageInfoClass,
+        //     'service_provider_class' => static::class,
+        // ]);
 
         if (!class_exists($packageInfoClass)) {
             throw new \RuntimeException("PackageInfo class not found: {$packageInfoClass}");
@@ -61,9 +61,9 @@ abstract class BaseServiceProvider extends ServiceProvider
      |--------------------------------------------------*/
     protected function registerPackageConf(): void
     {
-        Log::debug('Registering package ConfProvider', [
-            'service_provider_class' => static::class,
-        ]);
+        // Log::debug('Registering package ConfProvider', [
+        //     'service_provider_class' => static::class,
+        // ]);
 
         $info = $this->packageInfo();
         $confClass = $info->getConfClass();
@@ -72,10 +72,10 @@ abstract class BaseServiceProvider extends ServiceProvider
         if ($confClass && $confModule) {
             ConfProvider::register($confModule, $confClass);
             
-            Log::info('ConfProvider registered', [
-                'module' => $confModule,
-                'conf_class' => $confClass,
-            ]);
+            // Log::info('ConfProvider registered', [
+            //     'module' => $confModule,
+            //     'conf_class' => $confClass,
+            // ]);
         } else {
             Log::debug('ConfProvider not registered (no config class or module found)', [
                 'conf_class' => $confClass,
@@ -89,9 +89,9 @@ abstract class BaseServiceProvider extends ServiceProvider
      |--------------------------------------------------*/
     protected function registerSeederCommands(): void
     {
-        Log::debug('Registering seeder commands', [
-            'service_provider_class' => static::class,
-        ]);
+        // Log::debug('Registering seeder commands', [
+        //     'service_provider_class' => static::class,
+        // ]);
 
         $info = $this->packageInfo();
         $bindings = $info->getSeederBindings();
@@ -106,10 +106,10 @@ abstract class BaseServiceProvider extends ServiceProvider
                     return new $commandClass($seederClass);
                 });
 
-                Log::debug('Bound seeder command', [
-                    'command_class' => $commandClass,
-                    'seeder_class' => $seederClass
-                ]);
+                // Log::debug('Bound seeder command', [
+                //     'command_class' => $commandClass,
+                //     'seeder_class' => $seederClass
+                // ]);
             }
         }
     }
@@ -119,9 +119,9 @@ abstract class BaseServiceProvider extends ServiceProvider
      |--------------------------------------------------*/
     protected function registerPackageProviders(): void
     {
-        Log::debug('Registering package providers', [
-            'service_provider_class' => static::class,
-        ]);
+        // Log::debug('Registering package providers', [
+        //     'service_provider_class' => static::class,
+        // ]);
 
         $info = $this->packageInfo();
         $providers = $info->getProviders();
@@ -129,7 +129,7 @@ abstract class BaseServiceProvider extends ServiceProvider
         if ($providers) {
             foreach ($providers as $provider) {
                 $this->app->register($provider);
-                Log::debug('Registered provider', ['provider' => $provider]);
+                // Log::debug('Registered provider', ['provider' => $provider]);
             }
         }
     }
@@ -140,9 +140,9 @@ abstract class BaseServiceProvider extends ServiceProvider
             return;
         }
 
-        Log::debug('Registering package commands', [
-            'service_provider_class' => static::class,
-        ]);
+        // Log::debug('Registering package commands', [
+        //     'service_provider_class' => static::class,
+        // ]);
 
         $info = $this->packageInfo();
         $commands = $info->getConsoleCommands();
@@ -167,9 +167,9 @@ abstract class BaseServiceProvider extends ServiceProvider
 
     protected function registerPackageMiddleware(): void
     {
-        Log::debug('Registering package middleware', [
-            'service_provider_class' => static::class,
-        ]);
+        // Log::debug('Registering package middleware', [
+        //     'service_provider_class' => static::class,
+        // ]);
 
         $info = $this->packageInfo();
         $aliases = $info->getMiddlewareAliases();
@@ -177,10 +177,10 @@ abstract class BaseServiceProvider extends ServiceProvider
         if ($aliases) {
             foreach ($aliases as $alias => $middleware) {
                 $this->app['router']->aliasMiddleware($alias, $middleware);
-                Log::debug('Registered middleware alias', [
-                    'alias' => $alias,
-                    'middleware' => $middleware
-                ]);
+                // Log::debug('Registered middleware alias', [
+                //     'alias' => $alias,
+                //     'middleware' => $middleware
+                // ]);
             }
         }
     }
@@ -190,9 +190,9 @@ abstract class BaseServiceProvider extends ServiceProvider
      |--------------------------------------------------*/
     protected function loadPackageViews(): void
     {
-        Log::debug('Loading package views', [
-            'service_provider_class' => static::class,
-        ]);
+        // Log::debug('Loading package views', [
+        //     'service_provider_class' => static::class,
+        // ]);
 
         $info = $this->packageInfo();
         $paths = $info->getViewsPaths();
@@ -201,16 +201,16 @@ abstract class BaseServiceProvider extends ServiceProvider
         foreach ($paths as $path) {
             if (is_dir($path)) {
                 $this->loadViewsFrom($path, $namespace);
-                Log::debug('Loaded views', ['path' => $path, 'namespace' => $namespace]);
+                // Log::debug('Loaded views', ['path' => $path, 'namespace' => $namespace]);
             }
         }
     }
 
     protected function loadPackageMigrations(): void
     {
-        Log::debug('Loading package migrations', [
-            'service_provider_class' => static::class,
-        ]);
+        // Log::debug('Loading package migrations', [
+        //     'service_provider_class' => static::class,
+        // ]);
 
         $info = $this->packageInfo();
         $paths = $info->getMigrationsPaths();
@@ -218,16 +218,16 @@ abstract class BaseServiceProvider extends ServiceProvider
         foreach ($paths as $path) {
             if (is_dir($path)) {
                 $this->loadMigrationsFrom($path);
-                Log::debug('Loaded migrations', ['path' => $path]);
+                // Log::debug('Loaded migrations', ['path' => $path]);
             }
         }
     }
 
     protected function loadPackageRoutes(): void
     {
-        Log::debug('Loading package routes', [
-            'service_provider_class' => static::class,
-        ]);
+        // Log::debug('Loading package routes', [
+        //     'service_provider_class' => static::class,
+        // ]);
 
         $info = $this->packageInfo();
         $paths = $info->getRoutesPaths();
@@ -235,16 +235,16 @@ abstract class BaseServiceProvider extends ServiceProvider
         foreach ($paths as $path) {
             if (file_exists($path)) {
                 $this->loadRoutesFrom($path);
-                Log::debug('Loaded routes', ['path' => $path]);
+                // Log::debug('Loaded routes', ['path' => $path]);
             }
         }
     }
 
     protected function loadPackageConfigs(): void
     {
-        Log::debug('Loading package configs', [
-            'service_provider_class' => static::class,
-        ]);
+        // Log::debug('Loading package configs', [
+        //     'service_provider_class' => static::class,
+        // ]);
 
         $info = $this->packageInfo();
         $paths = $info->getConfigPaths();
@@ -253,7 +253,7 @@ abstract class BaseServiceProvider extends ServiceProvider
         foreach ($paths as $path) {
             if (file_exists($path)) {
                 $this->mergeConfigFrom($path, $confName);
-                Log::debug('Merged config', ['path' => $path, 'key' => $confName]);
+                // Log::debug('Merged config', ['path' => $path, 'key' => $confName]);
             }
         }
     }
@@ -264,9 +264,9 @@ abstract class BaseServiceProvider extends ServiceProvider
             return;
         }
 
-        Log::debug('Publishing package assets', [
-            'service_provider_class' => static::class,
-        ]);
+        // Log::debug('Publishing package assets', [
+        //     'service_provider_class' => static::class,
+        // ]);
 
         $info = $this->packageInfo();
         $assets = $info->getPublishableAssets();
@@ -274,10 +274,10 @@ abstract class BaseServiceProvider extends ServiceProvider
         if ($assets) {
             foreach ($assets as $tag => $paths) {
                 $this->publishes($paths, $tag);
-                Log::debug('Registered publishable assets', [
-                    'tag' => $tag,
-                    'paths' => $paths
-                ]);
+                // Log::debug('Registered publishable assets', [
+                //     'tag' => $tag,
+                //     'paths' => $paths
+                // ]);
             }
         }
     }
@@ -290,17 +290,17 @@ abstract class BaseServiceProvider extends ServiceProvider
         $namespaceParts = explode('\\', static::class);
         $providerClassName = end($namespaceParts);
 
-        Log::debug('BaseServiceProvider::detectModuleName', [
-            'service_provider_class' => static::class,
-            'provider_class_name' => $providerClassName,
-        ]);
+        // Log::debug('BaseServiceProvider::detectModuleName', [
+        //     'service_provider_class' => static::class,
+        //     'provider_class_name' => $providerClassName,
+        // ]);
 
         $moduleName = Str::kebab(Str::beforeLast($providerClassName, 'ServiceProvider'));
 
-        Log::info('Module name detected successfully', [
-            'service_provider_class' => static::class,
-            'module_name' => $moduleName,
-        ]);
+        // Log::info('Module name detected successfully', [
+        //     'service_provider_class' => static::class,
+        //     'module_name' => $moduleName,
+        // ]);
 
         return $moduleName;
     }
@@ -312,10 +312,10 @@ abstract class BaseServiceProvider extends ServiceProvider
         $studlyModule = $resolver->getModuleNamespace();
         $packageInfoClass = "{$packageInfoNamespace}\\{$studlyModule}PackageInfo";
 
-        Log::debug('PackageInfo class generated via NamespaceResolver', [
-            'module_name' => $moduleName,
-            'package_info_class' => $packageInfoClass,
-        ]);
+        // Log::debug('PackageInfo class generated via NamespaceResolver', [
+        //     'module_name' => $moduleName,
+        //     'package_info_class' => $packageInfoClass,
+        // ]);
 
         return $packageInfoClass;
     }

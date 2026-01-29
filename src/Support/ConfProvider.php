@@ -28,7 +28,7 @@ class ConfProvider
         }
 
         $class = static::$registry[$module];
-        Log::info("Resolving config for module: {$module} ({$class})");
+        // Log::info("Resolving config for module: {$module} ({$class})");
         return new $class();
     }
 }

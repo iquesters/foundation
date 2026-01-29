@@ -100,7 +100,7 @@ abstract class BaseConf
                 // Only set if type allows null or we have a non-null default
                 if (!$type->allowsNull() || $defaultValue !== null) {
                     $prop->setValue($this, $defaultValue);
-                    Log::debug("Initialized scalar property '{$prop->getName()}' with default: " . json_encode($defaultValue));
+                    // Log::debug("Initialized scalar property '{$prop->getName()}' with default: " . json_encode($defaultValue));
                 }
             }
         }
@@ -135,7 +135,7 @@ abstract class BaseConf
                 $currentProp->setAccessible(true);
                 $currentProp->setValue($this, $defaultValue);
                 
-                Log::debug("Applied default value for '{$propName}': " . json_encode($defaultValue));
+                // Log::debug("Applied default value for '{$propName}': " . json_encode($defaultValue));
             }
         }
     }
@@ -489,10 +489,10 @@ abstract class BaseConf
             $dbKey = $identifier;
         }
         
-        Log::debug("Resolved database key", [
-            'identifier' => $identifier,
-            'database_key' => $dbKey
-        ]);
+        // Log::debug("Resolved database key", [
+        //     'identifier' => $identifier,
+        //     'database_key' => $dbKey
+        // ]);
         
         return $dbKey;
     }
@@ -559,11 +559,11 @@ abstract class BaseConf
         $cacheKey = $this->getCacheKey($identifier);
         $dbKey = $this->getDatabaseKey($identifier);
 
-        Log::debug("Loading config", [
-            'identifier' => $identifier,
-            'database_key' => $dbKey,
-            'cache_key' => $cacheKey
-        ]);
+        // Log::debug("Loading config", [
+        //     'identifier' => $identifier,
+        //     'database_key' => $dbKey,
+        //     'cache_key' => $cacheKey
+        // ]);
 
         return Cache::rememberForever($cacheKey, function () use ($dbKey, $identifier) {
             Log::info("Cache miss - querying database", [
@@ -588,11 +588,11 @@ abstract class BaseConf
                 ->where('ref_parent', $moduleEntry->id)
                 ->get(['meta_key', 'meta_value']);
 
-            Log::info("Loaded metas from DB", [
-                'identifier' => $identifier,
-                'master_data_id' => $moduleEntry->id,
-                'meta_count' => $metas->count()
-            ]);
+            // Log::info("Loaded metas from DB", [
+            //     'identifier' => $identifier,
+            //     'master_data_id' => $moduleEntry->id,
+            //     'meta_count' => $metas->count()
+            // ]);
 
             $flattened = [];
             foreach ($metas as $meta) {
@@ -609,10 +609,10 @@ abstract class BaseConf
                     'value' => $value,
                 ];
                 
-                Log::debug("Loaded meta", [
-                    'key' => $meta->meta_key,
-                    'value' => $value
-                ]);
+                // Log::debug("Loaded meta", [
+                //     'key' => $meta->meta_key,
+                //     'value' => $value
+                // ]);
             }
 
             return $flattened;
@@ -625,11 +625,11 @@ abstract class BaseConf
      */
     private function decipherConf(array $pairs): BaseConf
     {
-        Log::debug("Input pairs: " . json_encode($pairs));
+        // Log::debug("Input pairs: " . json_encode($pairs));
 
         foreach ($pairs as $pair) {
             if (!isset($pair['key'], $pair['value'])) {
-                Log::warning("Skipping invalid pair: " . json_encode($pair));
+                // Log::warning("Skipping invalid pair: " . json_encode($pair));
                 continue;
             }
 
@@ -669,7 +669,7 @@ abstract class BaseConf
 
         // 🎯 Leaf assignment
         if (empty($normalizedParts)) {
-            Log::debug("✅ [{$trace}] Assigning value → " . json_encode($value));
+            // Log::debug("✅ [{$trace}] Assigning value → " . json_encode($value));
             $prop->setValue($current, $value);
             return;
         }
@@ -722,7 +722,7 @@ abstract class BaseConf
                             $fqcn = $currentNamespace . '\\' . $elementClass;
                             if (class_exists($fqcn)) {
                                 $elementClass = $fqcn;
-                                Log::debug("Resolved element class to: {$elementClass}");
+                                // Log::debug("Resolved element class to: {$elementClass}");
                             } else {
                                 Log::warning("Could not resolve element class: {$elementClass} (tried {$fqcn})");
                                 $elementClass = null;
@@ -738,14 +738,14 @@ abstract class BaseConf
                                 // Try to find concrete class based on element key
                                 $concreteClass = $this->resolveConcreteClass($elementClass, $elementKey);
                                 if ($concreteClass) {
-                                    Log::debug("🧩 [{$trace}] Instantiating concrete class {$concreteClass} for abstract {$elementClass}");
+                                    // Log::debug("🧩 [{$trace}] Instantiating concrete class {$concreteClass} for abstract {$elementClass}");
                                     $arrayValue[$elementKey] = new $concreteClass();
                                 } else {
                                     Log::warning("⚠️  [{$trace}] Cannot instantiate abstract class {$elementClass} and no concrete class found for '{$elementKey}'");
                                     return;
                                 }
                             } else {
-                                Log::debug("🧩 [{$trace}] Instantiating new {$elementClass}");
+                                // Log::debug("🧩 [{$trace}] Instantiating new {$elementClass}");
                                 $arrayValue[$elementKey] = new $elementClass();
                             }
                         }
