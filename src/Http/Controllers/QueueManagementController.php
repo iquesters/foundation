@@ -217,93 +217,47 @@ class QueueManagementController extends Controller
     // }
 public function startScheduler()
 {
-    // Check if scheduler is already running
+    // Check if already running
     if ($this->isSchedulerRunning()) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Scheduler is already running'
-        ], 400);
+        return response()->json(['success' => false, 'message' => 'Scheduler is already running'], 400);
     }
 
     $lockFile = storage_path('framework/schedule-worker.lock');
-    
-    // Clean up old lock file if exists
-    if (file_exists($lockFile)) {
-        @unlink($lockFile);
-    }
-    
-    // Start scheduler
     $basePath = base_path();
-    
+    $phpPath = '/usr/local/bin/php'; // Your verified path
+
     if (PHP_OS_FAMILY === 'Windows') {
-        // Windows implementation
-        $cmd = sprintf('php "%s/artisan" schedule:work', $basePath);
-        $cmd .= ' > NUL 2>&1';
-        
-        // Start the process
-        pclose(popen("start /B " . $cmd, "r"));
-        
-        // Create lock file for Windows
-        @file_put_contents($lockFile, json_encode([
-            'pid' => 'windows',
-            'started_at' => time()
-        ]));
-        
-        Log::info('Scheduler started manually from UI (Windows)', [
-            'lock_file' => $lockFile,
-            'lock_file_created' => file_exists($lockFile)
-        ]);
-        
+        $cmd = sprintf('start /B %s "%s/artisan" schedule:work > NUL 2>&1', $phpPath, $basePath);
+        pclose(popen($cmd, "r"));
+        $pid = 'windows';
     } else {
-        // Linux/Mac implementation
-        // IMPORTANT: Use separate command for getting PID
-        $cmd = sprintf('php "%s/artisan" schedule:work > /dev/null 2>&1 & echo $!', $basePath);
+        // Use nohup to ensure the process survives after the HTTP request ends
+        $cmd = sprintf(
+            'nohup %s "%s/artisan" schedule:work > /dev/null 2>&1 & echo $!', 
+            $phpPath, 
+            $basePath
+        );
         
-        // Execute and capture PID
         $output = shell_exec($cmd);
         $pid = $output ? (int) trim($output) : null;
-        
-        // Fallback: If PID is still null, try alternative method
-        if (!$pid) {
-            // Alternative: Start process and get last background PID
-            exec(sprintf('nohup php "%s/artisan" schedule:work > /dev/null 2>&1 & echo $!', $basePath), $pidOutput);
-            $pid = !empty($pidOutput[0]) ? (int) trim($pidOutput[0]) : null;
-        }
-        
-        // Store PID in lock file
-        @file_put_contents($lockFile, json_encode([
-            'pid' => $pid,
-            'started_at' => time()
-        ]));
-        
-        Log::info('Scheduler started manually from UI (Linux)', [
-            'pid' => $pid,
-            'lock_file' => $lockFile,
-            'lock_file_created' => file_exists($lockFile)
-        ]);
     }
-    
-    // Give process time to start
-    sleep(2);
-    
-    // Verify it actually started
-    if (!$this->isSchedulerRunning()) {
-        // Clean up lock file if process didn't start
-        if (file_exists($lockFile)) {
-            @unlink($lockFile);
-        }
-        
-        Log::error('Scheduler failed to start - process not found');
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to start scheduler - process did not start. Please check logs.'
-        ], 500);
-    }
+
+    // Write to Laravel Log
+    \Log::info('Queue System: Scheduler started via UI', [
+        'php_path' => $phpPath,
+        'pid' => $pid,
+        'command' => $cmd
+    ]);
+
+    // Store PID in lock file
+    @file_put_contents($lockFile, json_encode([
+        'pid' => $pid,
+        'started_at' => time()
+    ]));
 
     return response()->json([
         'success' => true,
-        'message' => 'Scheduler started successfully'
+        'message' => "Scheduler started successfully (PID: $pid)"
     ]);
 }
 

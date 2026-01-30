@@ -97,8 +97,11 @@ class QueueManager
 
         // Use --max-jobs=1 to process only ONE job per worker
         // This ensures proper concurrency control
+        $phpPath = '/usr/local/bin/php'; // Hardcode the verified path
+
         $cmd = sprintf(
-            'php %s/artisan queue:work database --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
+            '%s %s/artisan queue:work database --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
+            $phpPath, // Use the absolute path here
             base_path(),
             $queueName,
             $timeout,
