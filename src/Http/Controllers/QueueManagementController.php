@@ -178,119 +178,134 @@ class QueueManagementController extends Controller
     /**
      * Start scheduler (for production environments)
      */
-    public function startScheduler()
-    {
-        // Check if scheduler is already running
-        if ($this->isSchedulerRunning()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Scheduler is already running'
-            ], 400);
-        }
+    // public function startScheduler()
+    // {
+    //     // Check if scheduler is already running
+    //     if ($this->isSchedulerRunning()) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Scheduler is already running'
+    //         ], 400);
+    //     }
 
-        $lockFile = storage_path('framework/schedule-worker.lock');
+    //     $lockFile = storage_path('framework/schedule-worker.lock');
         
-        // Start scheduler
-        $cmd = sprintf('php %s/artisan schedule:work', base_path());
+    //     // Start scheduler
+    //     $cmd = sprintf('php %s/artisan schedule:work', base_path());
         
-        if (PHP_OS_FAMILY === 'Windows') {
-            $cmd .= ' > NUL 2>&1';
-            pclose(popen("start /B " . $cmd, "r"));
-        } else {
-            $cmd .= ' > /dev/null 2>&1 &';
-            exec($cmd . ' & echo $!', $output);
-            $pid = !empty($output[0]) ? (int) $output[0] : null;
+    //     if (PHP_OS_FAMILY === 'Windows') {
+    //         $cmd .= ' > NUL 2>&1';
+    //         pclose(popen("start /B " . $cmd, "r"));
+    //     } else {
+    //         $cmd .= ' > /dev/null 2>&1 &';
+    //         exec($cmd . ' & echo $!', $output);
+    //         $pid = !empty($output[0]) ? (int) $output[0] : null;
             
-            // Store PID in lock file
-            @file_put_contents($lockFile, json_encode([
-                'pid' => $pid,
-                'started_at' => time()
-            ]));
-        }
+    //         // Store PID in lock file
+    //         @file_put_contents($lockFile, json_encode([
+    //             'pid' => $pid,
+    //             'started_at' => time()
+    //         ]));
+    //     }
 
-        Log::info('Scheduler started manually from UI');
+    //     Log::info('Scheduler started manually from UI');
 
+    //     return response()->json([
+    //         'success' => true,
+    //         'message' => 'Scheduler started successfully'
+    //     ]);
+    // }
+public function startScheduler()
+{
+    // Check if scheduler is already running
+    if ($this->isSchedulerRunning()) {
         return response()->json([
-            'success' => true,
-            'message' => 'Scheduler started successfully'
+            'success' => false,
+            'message' => 'Scheduler is already running'
+        ], 400);
+    }
+
+    $lockFile = storage_path('framework/schedule-worker.lock');
+    
+    // Clean up old lock file if exists
+    if (file_exists($lockFile)) {
+        @unlink($lockFile);
+    }
+    
+    // Start scheduler
+    $basePath = base_path();
+    
+    if (PHP_OS_FAMILY === 'Windows') {
+        // Windows implementation
+        $cmd = sprintf('php "%s/artisan" schedule:work', $basePath);
+        $cmd .= ' > NUL 2>&1';
+        
+        // Start the process
+        pclose(popen("start /B " . $cmd, "r"));
+        
+        // Create lock file for Windows
+        @file_put_contents($lockFile, json_encode([
+            'pid' => 'windows',
+            'started_at' => time()
+        ]));
+        
+        Log::info('Scheduler started manually from UI (Windows)', [
+            'lock_file' => $lockFile,
+            'lock_file_created' => file_exists($lockFile)
+        ]);
+        
+    } else {
+        // Linux/Mac implementation
+        // IMPORTANT: Use separate command for getting PID
+        $cmd = sprintf('php "%s/artisan" schedule:work > /dev/null 2>&1 & echo $!', $basePath);
+        
+        // Execute and capture PID
+        $output = shell_exec($cmd);
+        $pid = $output ? (int) trim($output) : null;
+        
+        // Fallback: If PID is still null, try alternative method
+        if (!$pid) {
+            // Alternative: Start process and get last background PID
+            exec(sprintf('nohup php "%s/artisan" schedule:work > /dev/null 2>&1 & echo $!', $basePath), $pidOutput);
+            $pid = !empty($pidOutput[0]) ? (int) trim($pidOutput[0]) : null;
+        }
+        
+        // Store PID in lock file
+        @file_put_contents($lockFile, json_encode([
+            'pid' => $pid,
+            'started_at' => time()
+        ]));
+        
+        Log::info('Scheduler started manually from UI (Linux)', [
+            'pid' => $pid,
+            'lock_file' => $lockFile,
+            'lock_file_created' => file_exists($lockFile)
         ]);
     }
-//     public function startScheduler()
-// {
-//     if ($this->isSchedulerRunning()) {
-//         return response()->json(['success' => false, 'message' => 'Scheduler already running'], 400);
-//     }
-
-//     $lockFile = storage_path('framework/schedule-worker.lock');
     
-//     // Clean up old lock file if exists
-//     if (file_exists($lockFile)) {
-//         @unlink($lockFile);
-//     }
-
-//     $basePath = base_path();
-//     $artisanPath = $basePath . DIRECTORY_SEPARATOR . 'artisan';
+    // Give process time to start
+    sleep(2);
     
-//     if (PHP_OS_FAMILY === 'Windows') {
-//         // Windows: Use START command which works reliably
-//         $cmd = sprintf('start /B php "%s" schedule:work', $artisanPath);
+    // Verify it actually started
+    if (!$this->isSchedulerRunning()) {
+        // Clean up lock file if process didn't start
+        if (file_exists($lockFile)) {
+            @unlink($lockFile);
+        }
         
-//         // Execute the command
-//         pclose(popen($cmd, 'r'));
+        Log::error('Scheduler failed to start - process not found');
         
-//         // Give it a moment to start
-//         sleep(1);
-        
-//         // Verify it started
-//         if (!$this->isSchedulerRunning()) {
-//             return response()->json([
-//                 'success' => false, 
-//                 'message' => 'Failed to start scheduler - process did not start'
-//             ], 500);
-//         }
-        
-//         // Store lock file (we can't easily get PID on Windows with START /B)
-//         @file_put_contents($lockFile, json_encode([
-//             'pid' => 'windows',
-//             'started_at' => time(),
-//             'method' => 'start_command'
-//         ]));
-        
-//         Log::info("Scheduler started successfully (Windows)", ['method' => 'START command']);
-        
-//         return response()->json([
-//             'success' => true,
-//             'message' => 'Scheduler started successfully'
-//         ]);
-        
-//     } else {
-//         // Linux/Mac: Use nohup for reliable background execution
-//         $cmd = sprintf('nohup php "%s" schedule:work > /dev/null 2>&1 & echo $!', $artisanPath);
-//         $pid = (int) trim(shell_exec($cmd));
-        
-//         if (!$pid) {
-//             return response()->json([
-//                 'success' => false, 
-//                 'message' => 'Failed to start scheduler - no PID returned'
-//             ], 500);
-//         }
-        
-//         // Store PID in lock file
-//         @file_put_contents($lockFile, json_encode([
-//             'pid' => $pid,
-//             'started_at' => time(),
-//             'method' => 'nohup'
-//         ]));
-        
-//         Log::info("Scheduler started successfully (Linux/Mac)", ['pid' => $pid]);
-        
-//         return response()->json([
-//             'success' => true,
-//             'message' => 'Scheduler started successfully',
-//             'pid' => $pid
-//         ]);
-//     }
-// }
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to start scheduler - process did not start. Please check logs.'
+        ], 500);
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Scheduler started successfully'
+    ]);
+}
 
 
     /**
