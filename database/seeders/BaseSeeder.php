@@ -90,7 +90,10 @@ abstract class BaseSeeder extends Seeder
 
         // 8️⃣ Seed Config for this module
         $this->seedConfig($moduleId);
-
+        
+        // Seed jobs dynamically
+        $this->seedJobs();
+        
         // 9️⃣ Hook for child seeders to add custom logic
         $this->seedCustom();
     }
@@ -472,7 +475,232 @@ abstract class BaseSeeder extends Seeder
             ]
         );
     }
+    
+    /**
+     * Automatically seed jobs from the Jobs directory
+     * 
+     * This method scans the module's Jobs directory and registers all concrete
+     * classes that extend BaseJob into the queues table with default metadata.
+     * 
+     * Directory Detection Strategy:
+     * - Tries multiple common module structures
+     * - Uses the first existing Jobs directory found
+     * 
+     * Supports structures like:
+     * - database/seeders → src/Jobs
+     * 
+     * Skips:
+     * - Abstract classes
+     * - Classes that don't extend BaseJob
+     * - Files with invalid PHP syntax
+     * 
+     * @return void
+     */
+    final protected function seedJobs(): void
+    {
+        $now = now();
+        
+        try {
+            // Determine module Jobs directory
+            $reflection = new \ReflectionClass(static::class);
+            $seederFile = $reflection->getFileName();
+            
+            // Only support database/seeders → src/Jobs
+            $moduleJobsDir = dirname($seederFile, 3) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Jobs';
 
+            if (!is_dir($moduleJobsDir)) {
+                if (app()->runningInConsole()) {
+                    echo "ℹ️  No Jobs directory found\n";
+                }
+                return;
+            }
+            
+            // Scan for all PHP files in Jobs directory
+            $jobFiles = $this->scanDirectoryRecursively($moduleJobsDir);
+            
+            if (empty($jobFiles)) {
+                return;
+            }
+            
+            // Process each file and collect valid jobs
+            $allJobs = [];
+            
+            foreach ($jobFiles as $file) {
+                // Extract fully qualified class name
+                $class = $this->getClassFullNameFromFile($file);
+                
+                if (!$class || !class_exists($class)) {
+                    continue;
+                }
+                
+                try {
+                    $refClass = new \ReflectionClass($class);
+                    
+                    // Only include concrete classes that extend BaseJob
+                    if ($refClass->isSubclassOf(\Iquesters\Foundation\Jobs\BaseJob::class) && !$refClass->isAbstract()) {
+                        $allJobs[] = $class;
+                    }
+                } catch (\ReflectionException $e) {
+                    // Skip files that cause reflection errors
+                    Log::warning("Job class reflection failed", [
+                        'class' => $class,
+                        'error' => $e->getMessage(),
+                    ]);
+                    continue;
+                }
+            }
+            
+            // Exit if no valid jobs found
+            if (empty($allJobs)) {
+                return;
+            }
+            
+            // Insert/update jobs in database
+            foreach ($allJobs as $jobClass) {
+                $queueName = class_basename($jobClass);
+                
+                // Insert or update queue record
+                DB::table('queues')->updateOrInsert(
+                    ['name' => $queueName],
+                    [
+                        'uid'         => (string) Str::ulid(),
+                        'description' => ucfirst($queueName),
+                        'status'      => 'active',
+                        'created_by'  => 0,
+                        'updated_by'  => 0,
+                        'created_at'  => $now,
+                        'updated_at'  => $now,
+                    ]
+                );
+                
+                $queueId = DB::table('queues')->where('name', $queueName)->value('id');
+                
+                // Insert or update queue metadata with default values
+                $queueMetas = [
+                    'max_workers' => 2,      // Maximum concurrent workers
+                    'max_tries'   => 3,      // Maximum retry attempts
+                    'timeout'     => 120,    // Job timeout in seconds
+                    'sleep'       => 3,      // Sleep time between jobs in seconds
+                    'memory'      => 128,    // Memory limit in MB
+                ];
+                
+                foreach ($queueMetas as $key => $value) {
+                    DB::table('queue_metas')->updateOrInsert(
+                        [
+                            'ref_parent' => $queueId,
+                            'meta_key'   => $key,
+                        ],
+                        [
+                            'meta_value' => $value,
+                            'status'     => 'active',
+                            'created_by' => 0,
+                            'updated_by' => 0,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ]
+                    );
+                }
+                
+                // Output to console
+                if (app()->runningInConsole()) {
+                    echo "✅ Queue seeded: $queueName\n";
+                }
+            }
+            
+        } catch (\Exception $e) {
+            // Log critical errors but don't halt seeding
+            Log::error("Job seeding failed", [
+                'module' => $this->moduleName ?? 'unknown',
+                'error' => $e->getMessage(),
+            ]);
+            
+            if (app()->runningInConsole()) {
+                echo "⚠️  Job seeding error: " . $e->getMessage() . "\n";
+            }
+        }
+    }
+
+    /**
+     * Recursively scan directory for PHP files
+     * 
+     * @param string $dir Directory path to scan
+     * @return array Array of file paths
+     */
+    protected function scanDirectoryRecursively(string $dir): array
+    {
+        $files = [];
+        
+        if (!is_readable($dir)) {
+            return $files;
+        }
+        
+        $items = @scandir($dir);
+        
+        if ($items === false) {
+            return $files;
+        }
+        
+        foreach ($items as $item) {
+            // Skip hidden directories
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            
+            $path = $dir . DIRECTORY_SEPARATOR . $item;
+            
+            if (is_dir($path)) {
+                // Recursively scan subdirectories
+                $files = array_merge($files, $this->scanDirectoryRecursively($path));
+            } elseif (pathinfo($item, PATHINFO_EXTENSION) === 'php') {
+                // Collect PHP files
+                $files[] = $path;
+            }
+        }
+        
+        return $files;
+    }
+
+    /**
+     * Extract fully qualified class name from PHP file
+     * 
+     * Parses the file content to extract namespace and class name
+     * Handles abstract and final class declarations
+     * 
+     * @param string $file File path
+     * @return string|null Fully qualified class name or null if not found
+     */
+    protected function getClassFullNameFromFile(string $file): ?string
+    {
+        if (!is_readable($file)) {
+            return null;
+        }
+        
+        $contents = file_get_contents($file);
+        
+        if ($contents === false) {
+            return null;
+        }
+        
+        $namespace = '';
+        $class = '';
+        
+        // Extract namespace (e.g., "namespace App\Jobs\MessageJobs;")
+        if (preg_match('/^\s*namespace\s+([a-zA-Z0-9_\\\\]+)\s*;/m', $contents, $matches)) {
+            $namespace = trim($matches[1]);
+        }
+        
+        // Extract class name (handles: class, abstract class, final class)
+        if (preg_match('/^\s*(?:abstract\s+)?(?:final\s+)?class\s+([a-zA-Z0-9_]+)/m', $contents, $matches)) {
+            $class = trim($matches[1]);
+        }
+        
+        // Return fully qualified class name
+        if ($namespace && $class) {
+            return $namespace . '\\' . $class;
+        }
+        
+        return $class ?: null;
+    }
     
     /**
      * Hook for child seeders to add custom logic
