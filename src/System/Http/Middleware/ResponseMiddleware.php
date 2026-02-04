@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Iquesters\Foundation\System\Traits\Loggable;
 use Iquesters\Foundation\System\Http\ApiResponse;
+use Illuminate\Support\Str;
 
 class ResponseMiddleware
 {
@@ -22,7 +23,13 @@ class ResponseMiddleware
     {
         $this->logMethodStart("==================================================");
 
+        $requestId = $request->header('X-Request-ID')
+            ?? 'req_' . now()->timestamp . '_' . Str::random(6);
+        $request->headers->set('X-Request-ID', $requestId);
+        
         $response = $next($request);
+        
+        $startTime = LARAVEL_START;
 
         $this->logDebug("Processing response...");
 
@@ -59,8 +66,36 @@ class ResponseMiddleware
         }
 
         // Standardize the response
-        return $this->standardizeResponse($response);
+        $response = $this->standardizeResponse($response);
+
+        return $this->attachInfraMetadata($request, $response);
+
     }
+    
+    protected function attachInfraMetadata(Request $request, Response $response): Response
+    {
+        if (!$response instanceof JsonResponse) {
+            return $response;
+        }
+
+        $content = json_decode($response->getContent(), true);
+
+        $content['version'] = config('api.version', 'v1');
+        $content['request_id'] = $request->header('X-Request-ID');
+        $content['timestamp'] = now()->toIso8601String();
+
+        $content['trace'] = app()->environment('production') ? null : [
+            'execution_time_ms' => round((microtime(true) - LARAVEL_START) * 1000),
+            'cache_hit' => false,
+        ];
+
+        return response()->json(
+            $content,
+            $response->getStatusCode(),
+            $response->headers->all()
+        );
+    }
+
 
     /**
      * Check if request is an API request
@@ -91,8 +126,7 @@ class ResponseMiddleware
             && isset($content['success']) 
             && isset($content['status'])
             && isset($content['response_schema'])
-            && isset($content['ui_context'])
-            && isset($content['timestamp']);
+            && isset($content['ui_context']);
     }
 
     /**

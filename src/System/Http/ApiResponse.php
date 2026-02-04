@@ -63,8 +63,6 @@ class ApiResponse
                 'links' => !empty($links) ? (object)$links : null,
             ],
             'ui_context' => self::buildUIContext($uiContext),
-            'timestamp' => now()->toIso8601String(),
-            'request_id' => self::getRequestId(),
         ];
 
         return response()->json($response, $statusCode);
@@ -98,8 +96,6 @@ class ApiResponse
                 'links' => null,
             ],
             'ui_context' => self::buildUIContext($uiContext),
-            'timestamp' => now()->toIso8601String(),
-            'request_id' => self::getRequestId(),
         ];
 
         return response()->json($response, $statusCode);
@@ -140,8 +136,6 @@ class ApiResponse
                 ],
             ],
             'ui_context' => self::buildUIContext($uiContext),
-            'timestamp' => now()->toIso8601String(),
-            'request_id' => self::getRequestId(),
         ];
 
         return response()->json($response, $statusCode)
