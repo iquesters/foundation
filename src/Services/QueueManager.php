@@ -145,8 +145,12 @@ public function startWorker(string $queueName, array $options = []): bool
     $maxWorkers = (int) ($metas['max_workers'] ?? 1);
     $runningWorkers = $this->getRunningWorkersCount($queueName);
 
+    // CRITICAL: Check if we're already at max workers
     if ($runningWorkers >= $maxWorkers) {
-        Log::info("Max workers already running for queue: {$queueName}");
+        Log::debug("Max workers already running for queue: {$queueName}", [
+            'running' => $runningWorkers,
+            'max' => $maxWorkers
+        ]);
         return false;
     }
 
@@ -155,65 +159,60 @@ public function startWorker(string $queueName, array $options = []): bool
     $sleep = (int) ($metas['sleep'] ?? 3);
     $memory = (int) ($metas['memory'] ?? 128);
 
-    // Build command arguments
-    $args = [
-        'queue:work',
-        'database',
-        "--queue={$queueName}",
-        "--timeout={$timeout}",
-        "--tries={$tries}",
-        "--sleep={$sleep}",
-        "--memory={$memory}",
-        '--max-jobs=1',
-        '--stop-when-empty',
-    ];
-
     try {
-        if (PHP_OS_FAMILY === 'Windows') {
-            // Windows: Create a VBS script to run the process invisibly in background
-            $vbsScript = tempnam(sys_get_temp_dir(), 'queue_') . '.vbs';
-            $phpBinary = PHP_BINARY;
-            $artisan = base_path('artisan');
-            $command = escapeshellarg($phpBinary) . ' ' . escapeshellarg($artisan) . ' ' . implode(' ', $args);
-            
-            $vbsContent = 'CreateObject("WScript.Shell").Run "cmd /c ' . addslashes($command) . '", 0, False';
-            file_put_contents($vbsScript, $vbsContent);
-            
-            // Execute VBS script
-            pclose(popen("cscript //nologo " . escapeshellarg($vbsScript), "r"));
-            
-            // Clean up VBS script after a delay
-            register_shutdown_function(function() use ($vbsScript) {
-                @unlink($vbsScript);
-            });
-            
-            Log::info("Worker started (Windows VBS) for queue: {$queueName}", [
-                'running_workers' => $runningWorkers + 1,
-                'max_workers' => $maxWorkers
-            ]);
-        } else {
-            // Linux/Mac: Use Process::start() which works fine on Unix
-            $result = Process::start([
-                PHP_BINARY,
-                base_path('artisan'),
-                ...$args
-            ]);
+        $this->forkWorkerProcess($queueName, $timeout, $tries, $sleep, $memory);
 
-            Log::info("Worker process started for queue: {$queueName}", [
-                'pid' => $result->id(),
-                'running_workers' => $runningWorkers + 1,
-                'max_workers' => $maxWorkers
-            ]);
-        }
+        Log::info("Worker started for queue: {$queueName}", [
+            'running_workers' => $runningWorkers + 1,
+            'max_workers' => $maxWorkers
+        ]);
 
         return true;
     } catch (\Exception $e) {
         Log::error("Failed to start worker", [
             'queue' => $queueName,
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
+            'error' => $e->getMessage()
         ]);
         return false;
+    }
+}
+
+/**
+ * Fork a worker process in the background
+ */
+private function forkWorkerProcess(string $queue, int $timeout, int $tries, int $sleep, int $memory): void
+{
+    $phpBinary = PHP_BINARY;
+    $artisan = base_path('artisan');
+    
+    $command = sprintf(
+        '%s %s queue:work database --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
+        escapeshellarg($phpBinary),
+        escapeshellarg($artisan),
+        escapeshellarg($queue),
+        $timeout,
+        $tries,
+        $sleep,
+        $memory
+    );
+    
+    if (PHP_OS_FAMILY === 'Windows') {
+        // Windows - completely detached process
+        $windowsCommand = sprintf(
+            'start /B "" "%s" "%s" queue:work database --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
+            $phpBinary,
+            $artisan,
+            $queue,
+            $timeout,
+            $tries,
+            $sleep,
+            $memory
+        );
+        
+        pclose(popen($windowsCommand, 'r'));
+    } else {
+        // Linux - background process with output redirect
+        exec($command . ' > /dev/null 2>&1 &');
     }
 }
 
@@ -263,7 +262,7 @@ public function startWorker(string $queueName, array $options = []): bool
             for ($i = 0; $i < $workersToStart; $i++) {
                 $this->startWorker($queueName);
                 // Small delay to prevent race conditions
-                usleep(100000); // 100ms delay between worker starts
+                // usleep(100000); // 100ms delay between worker starts
             }
         }
     }
