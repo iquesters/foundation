@@ -5,7 +5,6 @@ namespace Iquesters\Foundation\Services;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
-
 class QueueManager
 {
     /**
@@ -67,66 +66,156 @@ class QueueManager
     /**
      * Start a worker for a specific queue
      */
-    public function startWorker(string $queueName, array $options = []): bool
-    {
-        $queue = DB::table('queues')->where('name', $queueName)->first();
+    // public function startWorker(string $queueName, array $options = []): bool
+    // {
+    //     $queue = DB::table('queues')->where('name', $queueName)->first();
         
-        if (!$queue) {
-            Log::error("Queue not found: {$queueName}");
-            return false;
-        }
+    //     if (!$queue) {
+    //         Log::error("Queue not found: {$queueName}");
+    //         return false;
+    //     }
 
-        $metas = DB::table('queue_metas')
-            ->where('ref_parent', $queue->id)
-            ->where('status', 'active')
-            ->pluck('meta_value', 'meta_key')
-            ->toArray();
+    //     $metas = DB::table('queue_metas')
+    //         ->where('ref_parent', $queue->id)
+    //         ->where('status', 'active')
+    //         ->pluck('meta_value', 'meta_key')
+    //         ->toArray();
 
-        $maxWorkers = (int) ($metas['max_workers'] ?? 1);
-        $runningWorkers = $this->getRunningWorkersCount($queueName);
+    //     $maxWorkers = (int) ($metas['max_workers'] ?? 1);
+    //     $runningWorkers = $this->getRunningWorkersCount($queueName);
 
-        if ($runningWorkers >= $maxWorkers) {
-            Log::info("Max workers already running for queue: {$queueName}");
-            return false;
-        }
+    //     if ($runningWorkers >= $maxWorkers) {
+    //         Log::info("Max workers already running for queue: {$queueName}");
+    //         return false;
+    //     }
 
-        $timeout = (int) ($metas['timeout'] ?? 120);
-        $tries = (int) ($metas['max_tries'] ?? 3);
-        $sleep = (int) ($metas['sleep'] ?? 3);
-        $memory = (int) ($metas['memory'] ?? 128);
+    //     $timeout = (int) ($metas['timeout'] ?? 120);
+    //     $tries = (int) ($metas['max_tries'] ?? 3);
+    //     $sleep = (int) ($metas['sleep'] ?? 3);
+    //     $memory = (int) ($metas['memory'] ?? 128);
 
-        // Use --max-jobs=1 to process only ONE job per worker
-        // This ensures proper concurrency control
-        $phpPath = '/usr/local/bin/php'; // Hardcode the verified path
+    //     // Use --max-jobs=1 to process only ONE job per worker
+    //     // This ensures proper concurrency control
+    //     $phpPath = '/usr/local/bin/php'; // Hardcode the verified path
 
-        $cmd = sprintf(
-            '%s %s/artisan queue:work database --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
-            $phpPath, // Use the absolute path here
-            base_path(),
-            $queueName,
-            $timeout,
-            $tries,
-            $sleep,
-            $memory
-        );
+    //     $cmd = sprintf(
+    //         '%s %s/artisan queue:work database --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
+    //         $phpPath, // Use the absolute path here
+    //         base_path(),
+    //         $queueName,
+    //         $timeout,
+    //         $tries,
+    //         $sleep,
+    //         $memory
+    //     );
 
-        // Run in background
+    //     // Run in background
+    //     if (PHP_OS_FAMILY === 'Windows') {
+    //         $cmd .= ' > NUL 2>&1';
+    //         pclose(popen("start /B " . $cmd, "r"));
+    //     } else {
+    //         $cmd .= ' > /dev/null 2>&1 &';
+    //         exec($cmd);
+    //     }
+
+    //     Log::info("Worker started for queue: {$queueName}", [
+    //         'command' => $cmd,
+    //         'running_workers' => $runningWorkers + 1,
+    //         'max_workers' => $maxWorkers
+    //     ]);
+
+    //     return true;
+    // }
+    
+public function startWorker(string $queueName, array $options = []): bool
+{
+    $queue = DB::table('queues')->where('name', $queueName)->first();
+    
+    if (!$queue) {
+        Log::error("Queue not found: {$queueName}");
+        return false;
+    }
+
+    $metas = DB::table('queue_metas')
+        ->where('ref_parent', $queue->id)
+        ->where('status', 'active')
+        ->pluck('meta_value', 'meta_key')
+        ->toArray();
+
+    $maxWorkers = (int) ($metas['max_workers'] ?? 1);
+    $runningWorkers = $this->getRunningWorkersCount($queueName);
+
+    if ($runningWorkers >= $maxWorkers) {
+        Log::info("Max workers already running for queue: {$queueName}");
+        return false;
+    }
+
+    $timeout = (int) ($metas['timeout'] ?? 120);
+    $tries = (int) ($metas['max_tries'] ?? 3);
+    $sleep = (int) ($metas['sleep'] ?? 3);
+    $memory = (int) ($metas['memory'] ?? 128);
+
+    // Build command arguments
+    $args = [
+        'queue:work',
+        'database',
+        "--queue={$queueName}",
+        "--timeout={$timeout}",
+        "--tries={$tries}",
+        "--sleep={$sleep}",
+        "--memory={$memory}",
+        '--max-jobs=1',
+        '--stop-when-empty',
+    ];
+
+    try {
         if (PHP_OS_FAMILY === 'Windows') {
-            $cmd .= ' > NUL 2>&1';
-            pclose(popen("start /B " . $cmd, "r"));
+            // Windows: Create a VBS script to run the process invisibly in background
+            $vbsScript = tempnam(sys_get_temp_dir(), 'queue_') . '.vbs';
+            $phpBinary = PHP_BINARY;
+            $artisan = base_path('artisan');
+            $command = escapeshellarg($phpBinary) . ' ' . escapeshellarg($artisan) . ' ' . implode(' ', $args);
+            
+            $vbsContent = 'CreateObject("WScript.Shell").Run "cmd /c ' . addslashes($command) . '", 0, False';
+            file_put_contents($vbsScript, $vbsContent);
+            
+            // Execute VBS script
+            pclose(popen("cscript //nologo " . escapeshellarg($vbsScript), "r"));
+            
+            // Clean up VBS script after a delay
+            register_shutdown_function(function() use ($vbsScript) {
+                @unlink($vbsScript);
+            });
+            
+            Log::info("Worker started (Windows VBS) for queue: {$queueName}", [
+                'running_workers' => $runningWorkers + 1,
+                'max_workers' => $maxWorkers
+            ]);
         } else {
-            $cmd .= ' > /dev/null 2>&1 &';
-            exec($cmd);
-        }
+            // Linux/Mac: Use Process::start() which works fine on Unix
+            $result = Process::start([
+                PHP_BINARY,
+                base_path('artisan'),
+                ...$args
+            ]);
 
-        Log::info("Worker started for queue: {$queueName}", [
-            'command' => $cmd,
-            'running_workers' => $runningWorkers + 1,
-            'max_workers' => $maxWorkers
-        ]);
+            Log::info("Worker process started for queue: {$queueName}", [
+                'pid' => $result->id(),
+                'running_workers' => $runningWorkers + 1,
+                'max_workers' => $maxWorkers
+            ]);
+        }
 
         return true;
+    } catch (\Exception $e) {
+        Log::error("Failed to start worker", [
+            'queue' => $queueName,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return false;
     }
+}
 
     /**
      * Process all queues that have pending jobs
