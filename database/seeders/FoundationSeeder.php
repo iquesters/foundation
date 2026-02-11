@@ -63,6 +63,11 @@ class FoundationSeeder extends BaseSeeder
                 // ]
             ],
             [
+                "icon" => "fas fa-layer-group",
+                "label" => "Queue OLD",
+                "route" => "smart-messenger.queue-management",
+            ],
+            [
                 "icon" => "fas fa-tasks",
                 "label" => "Queue",
                 "route" => "ui.list",
@@ -127,7 +132,151 @@ class FoundationSeeder extends BaseSeeder
                         "default_view_mode" => "table"
                     ]
                 ]
+            ],
+            [
+                "icon" => "fas fa-sync-alt",
+                "label" => "Job OLD",
+                "route" => "jobs.index",
+            ],
+            [
+                "icon" => "fas fa-tasks",
+                "label" => "Jobs",
+                "route" => "ui.list",
+                "table_schema" => [
+                    "slug" => "jobs-table",
+                    "name" => "Jobs",
+                    "description" => "Datatable schema for queued jobs",
+                    "schema" => [
+                        "entity" => "jobs",
+                        "dt-options" => [
+                            "columns" => [
+                                [
+                                    "data" => "id",
+                                    "title" => "ID",
+                                    "visible" => true
+                                ],
+                                [
+                                    "data" => "queue",
+                                    "title" => "Queue",
+                                    "visible" => true
+                                ],
+                                [
+                                    "data" => "attempts",
+                                    "title" => "Attempts",
+                                    "visible" => true
+                                ],
+                                [
+                                    "data" => "reserved_at",
+                                    "title" => "Reserved At",
+                                    "visible" => true
+                                ],
+                                [
+                                    "data" => "available_at",
+                                    "title" => "Available At",
+                                    "visible" => true
+                                ],
+                                [
+                                    "data" => "created_at",
+                                    "title" => "Created At",
+                                    "visible" => true
+                                ],
+                            ],
+                            "options" => [
+                                "pageLength" => 10,
+                                "order" => [[0, "desc"]],
+                                "responsive" => true
+                            ]
+                        ],
+                        "default_view_mode" => "table"
+                    ]
+                ]
+            ],
+            [
+                "icon" => "fas fa-times-circle",
+                "label" => "Failed Jobs",
+                "route" => "ui.list",
+                "table_schema" => [
+                    "slug" => "failed-jobs-table",
+                    "name" => "Failed Jobs",
+                    "description" => "Datatable schema for failed queue jobs",
+                    "schema" => [
+                        "entity" => "failed_jobs",
+                        "dt-options" => [
+                            "columns" => [
+                                [
+                                    "data" => "id",
+                                    "title" => "ID",
+                                    "visible" => true,
+                                    "link" => true,
+                                    "form-schema-uid" => "failed-job-details"
+                                ],
+                                [
+                                    "data" => "connection",
+                                    "title" => "Connection",
+                                    "visible" => true
+                                ],
+                                [
+                                    "data" => "failed_at",
+                                    "title" => "Failed At",
+                                    "visible" => true
+                                ],
+                            ],
+                            "options" => [
+                                "pageLength" => 10,
+                                "order" => [[0, "desc"]],
+                                "responsive" => true
+                            ]
+                        ],
+                        "default_view_mode" => "table"
+                    ]
+                ]
+            ],
+            [
+                "icon" => "fas fa-check-circle",
+                "label" => "Completed Jobs",
+                "route" => "ui.list",
+                "table_schema" => [
+                    "slug" => "completed-jobs-table",
+                    "name" => "Completed Jobs",
+                    "description" => "Datatable schema for completed jobs",
+                    "schema" => [
+                        "entity" => "completed_jobs",
+                        "dt-options" => [
+                            "columns" => [
+                                [
+                                    "data" => "id",
+                                    "title" => "ID",
+                                    "visible" => true,
+                                    "link" => true,
+                                    "form-schema-uid" => "completed-job-details"
+                                ],
+                                [
+                                    "data" => "connection",
+                                    "title" => "Connection",
+                                    "visible" => true
+                                ],
+                                [
+                                    "data" => "queue",
+                                    "title" => "Queue",
+                                    "visible" => true
+                                ],
+                                [
+                                    "data" => "completed_at",
+                                    "title" => "Completed At",
+                                    "visible" => true
+                                ],
+                            ],
+                            "options" => [
+                                "pageLength" => 10,
+                                "order" => [[0, "desc"]],
+                                "responsive" => true
+                            ]
+                        ],
+                        "default_view_mode" => "table"
+                    ]
+                ]
             ]
+
         ]
     ];
 
