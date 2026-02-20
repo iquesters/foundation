@@ -7,14 +7,18 @@ use DateTimeInterface;
 
 class DateTimeHelper
 {
-    // | Scenario            | sessionStorage  | Detection    | Server Call? | Final Value |
-    // | ------------------- | --------------- | ------------ | ------------ | ----------- |
-    // | First load          | Empty           | Fresh        | ✅ YES        | Fresh       |
-    // | Reload (no change)  | Cached          | Fresh (same) | ❌ NO         | Cached      |
-    // | Reload (DST change) | Cached (old)    | Fresh (new)  | ✅ YES        | Fresh       |
-    // | Reload (travel)     | Cached (IST)    | Fresh (EST)  | ✅ YES        | Fresh       |
-    // | Tab close + reopen  | Empty (new tab) | Fresh        | ✅ YES        | Fresh       |
-    
+    /**
+     * ---------------------------------
+     * CORE DATE RESOLVER (single source)
+     * ---------------------------------
+     */
+    private static function resolveDate(string|DateTimeInterface $time): Carbon
+    {
+        $timezone = session('timezone', config('app.timezone'));
+
+        return Carbon::parse($time)->setTimezone($timezone);
+    }
+
     /**
      * Display time based on user settings or local/browser timezone.
      */
@@ -48,17 +52,88 @@ class DateTimeHelper
     }
 
     /**
-     * -------------------------
+     * ---------------------------------
+     * SMART CHAT LIST FORMAT
+     * ---------------------------------
+     */
+    public static function displaySmart(
+        string|DateTimeInterface|null $time,
+        string $fallback = 'N/A'
+    ): string {
+        if (!$time) return $fallback;
+
+        try {
+            $date = self::resolveDate($time);
+
+            if ($date->isToday()) {
+                return $date->format('h:i A');
+            }
+
+            if ($date->isYesterday()) {
+                return 'Yesterday';
+            }
+
+            if ($date->isCurrentWeek()) {
+                return $date->format('D');
+            }
+
+            if ($date->isCurrentYear()) {
+                return $date->format('d M');
+            }
+
+            return $date->format('d/m/Y');
+
+        } catch (\Throwable) {
+            return $fallback;
+        }
+    }
+
+    /**
+     * ---------------------------------
+     * CONVERSATIONAL MESSAGE FORMAT
+     * ---------------------------------
+     */
+    public static function displayConversational(
+        string|DateTimeInterface|null $time,
+        string $fallback = 'N/A'
+    ): string {
+        if (!$time) return $fallback;
+
+        try {
+            $date = self::resolveDate($time);
+
+            if ($date->isToday()) {
+                return $date->format('h:i A');
+            }
+
+            if ($date->isYesterday()) {
+                return 'Yesterday ' . $date->format('h:i A');
+            }
+
+            if ($date->isCurrentWeek()) {
+                return $date->format('l h:i A');
+            }
+
+            if ($date->isCurrentYear()) {
+                return $date->format('d F, h:i A');
+            }
+
+            return $date->format('d F Y, h:i A');
+
+        } catch (\Throwable) {
+            return $fallback;
+        }
+    }
+
+    /**
+     * ---------------------------------
      * LOCAL / BROWSER TIMEZONE
-     * -------------------------
+     * ---------------------------------
      */
     private static function displayFromLocal(string|DateTimeInterface $time, string $fallback): string
     {
         try {
-            $timezone = session('timezone', config('app.timezone')); // browser -> session -> fallback
-            return Carbon::parse($time)
-                ->setTimezone($timezone)
-                ->format('h:i A'); // default 12h format
+            return self::resolveDate($time)->format('h:i A');
         } catch (\Throwable) {
             return $fallback;
         }
@@ -67,38 +142,39 @@ class DateTimeHelper
     private static function displayDateTimeFromLocal(string|DateTimeInterface $time, string $fallback): string
     {
         try {
-            $timezone = session('timezone', config('app.timezone'));
-            \Log::info('Using timezone in DateTimeHelper', [
-                'timezone' => $timezone,
-                'time_from_db' => $time,
-            ]);
-            return Carbon::parse($time)
-                ->setTimezone($timezone)
-                ->format('d M Y, h:i A'); // default full datetime format
+            return self::resolveDate($time)->format('d M Y, h:i A');
         } catch (\Throwable) {
             return $fallback;
         }
     }
 
     /**
-     * -------------------------
-     * USER SETTINGS (stub)
-     * -------------------------
+     * ---------------------------------
+     * USER SETTINGS (future support)
+     * ---------------------------------
      */
     private static function hasUserDateTimeSettings(): bool
     {
-        // example for future implementation:
-        // return auth()->check() && auth()->user()?->timezone && auth()->user()?->time_format;
+        // future example:
+        // return auth()->check() && auth()->user()?->timezone;
         return false;
     }
 
     private static function displayFromUserSettings(string|DateTimeInterface $time, string $fallback): string
     {
-        // TODO: implement user timezone + user time format
+        try {
+            return self::resolveDate($time)->format('h:i A');
+        } catch (\Throwable) {
+            return $fallback;
+        }
     }
 
     private static function displayDateTimeFromUserSettings(string|DateTimeInterface $time, string $fallback): string
     {
-        // TODO: implement user timezone + user datetime format
+        try {
+            return self::resolveDate($time)->format('d M Y, h:i A');
+        } catch (\Throwable) {
+            return $fallback;
+        }
     }
 }
