@@ -118,9 +118,7 @@
                             <small><small class="text-muted">{{ $entity->uid }}</small></small>
                         </td>
                         <td>
-                            <span class="badge badge-{{ strtolower($entity->status) }}">
-                                {{ ucfirst($entity->status) }}
-                            </span>
+                            <x-userinterface::status :status="$entity->status" />
                         </td>
                         <td>{{ $entity->created_at->format('d M Y') }}</td>
                         <td>

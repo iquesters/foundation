@@ -119,9 +119,9 @@
                 <td class="text-warning">{{ number_format($queue->pending_jobs) }}</td>
                 <td>
                     @if($queue->oldest_job)
-                        <span class="badge badge-draft" title="{{ \Carbon\Carbon::createFromTimestamp($queue->oldest_job)->format('Y-m-d H:i:s') }}">
+                        <x-userinterface::status status="draft">
                             {{ \Carbon\Carbon::createFromTimestamp($queue->oldest_job)->diffForHumans() }}
-                        </span>
+                        </x-userinterface::status>
                     @else
                         <span class="text-muted">—</span>
                     @endif

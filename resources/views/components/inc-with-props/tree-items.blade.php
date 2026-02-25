@@ -13,10 +13,7 @@
             @if($data->value)
                 <span class="tree-item-value">- {{ $data->value }}</span>
             @endif
-            <span class="ms-2 badge badge-{{ $data->status }}">
-                {{ ucfirst($data->status) }}
-            </span>
-
+            <x-userinterface::status :status="$data->status" />
         </div>
     </div>
 

@@ -15,7 +15,7 @@
                 @endif
             </h5>
             @if(!$isCreating)
-                <span class="badge badge-{{ $entity->status }}">{{ ucfirst($entity->status) }}</span>
+                <x-userinterface::status :status="$entity->status" />
             @endif
         </div>
         

@@ -81,7 +81,9 @@
                     <span class="text-truncate" style="max-width: 80%;">
                         <code class="text-danger">{{ Str::limit($exception->exception_type, 100) }}</code>
                     </span>
-                    <span class="badge badge-deleted rounded-pill">{{ $exception->count }}</span>
+                    <x-userinterface::status status="deleted" class="rounded-pill">
+                        {{ $exception->count }}
+                    </x-userinterface::status>
                 </div>
             @endforeach
         </div>
@@ -105,9 +107,9 @@
                 <td>{{ $queue->queue }}</td>
                 <td>{{ number_format($queue->failed_jobs) }}</td>
                 <td>
-                    <span class="badge badge-deleted" title="{{ $queue->last_failed_at }}">
+                    <x-userinterface::status status="deleted">
                         {{ \Carbon\Carbon::parse($queue->last_failed_at)->diffForHumans() }}
-                    </span>
+                    </x-userinterface::status>
                 </td>
             </tr>
         @endforeach

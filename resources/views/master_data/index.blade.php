@@ -49,9 +49,7 @@
                             <a href="{{ route('master-data.show', $parentNode->id) }}">
                                 <span class="tree-item-key">{{ $parentNode->key }}</span>
                             </a>
-                            <span class="badge badge-{{ $parentNode->status }}">
-                                {{ ucfirst($parentNode->status) }}
-                            </span>
+                            <x-userinterface::status :status="$parentNode->status" />
                         </div>
                         @if($parentNode->value)
                             <span class="text-muted">{{ $parentNode->value }}</span>
@@ -89,9 +87,7 @@
                     </div>
                     <div class="d-flex align-items-center justify-content-start gap-2">
                         <span><i class="fas fa-fw fa-key"></i>Key: {{ $selectedNode->key ?? 'N/A' }}</span>
-                        <span class="badge badge-{{ $selectedNode->status }}">
-                            {{ ucfirst($selectedNode->status) }}
-                        </span>
+                        <x-userinterface::status :status="$selectNode->status" />
                     </div>
                     @if($selectedNode->value)
                         <span><i class="fas fa-fw fa-tag"></i>Value: {{ $selectedNode->value ?? 'N/A' }}</span>
@@ -136,9 +132,7 @@
                                 class="mb-2 d-block text-decoration-none">
                                 <div class="d-flex align-items-center justify-content-start gap-2">
                                     <span>{{ $child->key }}</span>
-                                    <span class="badge badge-{{ $child->status }}">
-                                        {{ ucfirst($child->status) }}
-                                    </span>
+                                    <x-userinterface::status :status="$child->status" />
                                 </div>
                                 @if($child->value)
                                     <span class="text-muted">{{ $child->value }}</span>

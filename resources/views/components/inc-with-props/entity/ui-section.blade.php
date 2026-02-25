@@ -27,7 +27,9 @@
                             <i class="fas fa-eye"></i>
                         </a>
                     @else
-                        <span class="badge badge-draft">N/A</span>
+                        <x-userinterface::status :status="draft">
+                            N/A
+                        </x-userinterface::status>
                     @endif
                 </div>
 
@@ -53,7 +55,9 @@
                             <i class="fas fa-eye"></i>
                         </a>
                     @else
-                        <span class="badge badge-draft">N/A</span>
+                        <x-userinterface::status :status="draft">
+                            N/A
+                        </x-userinterface::status>
                     @endif
                 </div>
 

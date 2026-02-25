@@ -86,9 +86,9 @@
                     {{ number_format($queue->completed_jobs) }}
                 </td>
                 <td>
-                    <span class="badge badge-active" title="{{ $queue->last_completed_at }}">
+                    <x-userinterface::status status="active">
                         {{ \Carbon\Carbon::parse($queue->last_completed_at)->diffForHumans() }}
-                    </span>
+                    </x-userinterface::status>
                 </td>
             </tr>
         @endforeach
