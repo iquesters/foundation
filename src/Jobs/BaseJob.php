@@ -70,7 +70,7 @@ abstract class BaseJob implements ShouldQueue
         try {
             $this->process();
             $this->afterHandle();
-            
+
         } catch (\Throwable $e) {
             Log::error('Job failed', [
                 'job_class' => static::class,
@@ -78,23 +78,24 @@ abstract class BaseJob implements ShouldQueue
                 'trace' => $e->getTraceAsString()
             ]);
 
+            // Only call onRetry hook here - do NOT call failed() manually.
+            // Laravel will call failed() automatically when max attempts exceeded.
             if ($this->attempts() < $this->tries) {
                 $this->onRetry($e);
-            } else {
-                $this->failed($e);
             }
+            // ↑ Removed the else branch entirely — Laravel handles failed() itself
 
-            throw $e;
+            throw $e; // Always rethrow; Laravel manages the rest
         }
     }
     
     /**
      * Determine the time at which the job should timeout.
      */
-    public function retryUntil(): \DateTime
-    {
-        return now()->addMinutes(10);
-    }
+    // public function retryUntil(): \DateTime
+    // {
+    //     return now()->addMinutes(10);
+    // }
 
     /**
      * Get the middleware the job should pass through.
