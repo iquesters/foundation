@@ -158,11 +158,13 @@ public function startWorker(string $queueName, array $options = []): bool
     $tries = (int) ($metas['max_tries'] ?? 3);
     $sleep = (int) ($metas['sleep'] ?? 3);
     $memory = (int) ($metas['memory'] ?? 128);
+    $connection = $this->resolveConnection($metas);
 
     try {
-        $this->forkWorkerProcess($queueName, $timeout, $tries, $sleep, $memory);
+        $this->forkWorkerProcess($connection, $queueName, $timeout, $tries, $sleep, $memory);
 
         Log::info("Worker started for queue: {$queueName}", [
+            'connection' => $connection,
             'running_workers' => $runningWorkers + 1,
             'max_workers' => $maxWorkers
         ]);
@@ -180,15 +182,16 @@ public function startWorker(string $queueName, array $options = []): bool
 /**
  * Fork a worker process in the background
  */
-private function forkWorkerProcess(string $queue, int $timeout, int $tries, int $sleep, int $memory): void
+private function forkWorkerProcess(string $connection, string $queue, int $timeout, int $tries, int $sleep, int $memory): void
 {
     $phpBinary = PHP_BINARY;
     $artisan = base_path('artisan');
     
     $command = sprintf(
-        '%s %s queue:work database --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
+        '%s %s queue:work %s --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
         escapeshellarg($phpBinary),
         escapeshellarg($artisan),
+        escapeshellarg($connection),
         escapeshellarg($queue),
         $timeout,
         $tries,
@@ -199,9 +202,10 @@ private function forkWorkerProcess(string $queue, int $timeout, int $tries, int 
     if (PHP_OS_FAMILY === 'Windows') {
         // Windows - completely detached process
         $windowsCommand = sprintf(
-            'start /B "" "%s" "%s" queue:work database --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
+            'start /B "" "%s" "%s" queue:work %s --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
             $phpBinary,
             $artisan,
+            $connection,
             $queue,
             $timeout,
             $tries,
@@ -215,6 +219,32 @@ private function forkWorkerProcess(string $queue, int $timeout, int $tries, int 
         exec($command . ' > /dev/null 2>&1 &');
     }
 }
+
+    /**
+     * Resolve queue connection from queue metas.
+     */
+    private function resolveConnection(array $metas): string
+    {
+        $connection = trim((string) ($metas['connection'] ?? 'database'));
+
+        if ($connection === '') {
+            return 'database';
+        }
+
+        $availableConnections = array_keys(config('queue.connections', []));
+
+        if (!in_array($connection, $availableConnections, true)) {
+            Log::warning('Invalid queue connection configured, falling back to database', [
+                'configured_connection' => $connection,
+                'fallback' => 'database',
+                'available_connections' => $availableConnections,
+            ]);
+
+            return 'database';
+        }
+
+        return $connection;
+    }
 
     /**
      * Process all queues that have pending jobs
