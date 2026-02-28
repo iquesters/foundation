@@ -159,7 +159,16 @@ public function startWorker(string $queueName, array $options = []): bool
     $sleep = (int) ($metas['sleep'] ?? 3);
     $memory = (int) ($metas['memory'] ?? 128);
     $connection = $this->resolveConnection($metas);
-
+    Log::debug("Attempting to start worker", [
+        'queue' => $queueName,
+        'connection' => $connection,
+        'max_workers' => $maxWorkers,
+        'running_workers' => $runningWorkers,
+        'timeout' => $timeout,
+        'tries' => $tries,
+        'sleep' => $sleep,
+        'memory' => $memory
+    ]);
     try {
         $this->forkWorkerProcess($connection, $queueName, $timeout, $tries, $sleep, $memory);
 
