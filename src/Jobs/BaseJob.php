@@ -15,7 +15,7 @@ abstract class BaseJob implements ShouldQueue
     /**
      * Number of times the job may be attempted
      */
-    public int $tries = 3;
+    // public int $tries = 3;
 
     /**
      * Number of seconds to wait before retrying
@@ -25,12 +25,12 @@ abstract class BaseJob implements ShouldQueue
     /**
      * Number of seconds the job can run before timing out
      */
-    public int $timeout = 120;
+    // public int $timeout = 120;
 
     /**
      * The number of seconds to wait before retrying a job that encountered a deadlock.
      */
-    public int $backoffDeadlock = 5;
+    // public int $backoffDeadlock = 5;
 
     /**
      * Store the response data from job processing
@@ -78,12 +78,7 @@ abstract class BaseJob implements ShouldQueue
                 'trace' => $e->getTraceAsString()
             ]);
 
-            // Only call onRetry hook here - do NOT call failed() manually.
-            // Laravel will call failed() automatically when max attempts exceeded.
-            if ($this->attempts() < $this->tries) {
-                $this->onRetry($e);
-            }
-            // ↑ Removed the else branch entirely — Laravel handles failed() itself
+            $this->onRetry($e);
 
             throw $e; // Always rethrow; Laravel manages the rest
         }
@@ -156,12 +151,11 @@ abstract class BaseJob implements ShouldQueue
      */
     protected function onRetry(\Throwable $exception): void
     {
-        Log::warning('Job retry scheduled', [
+        Log::warning('Job attempt failed', [
             'job_class' => static::class,
-            'job_id' => $this->job?->getJobId(),
-            'attempt' => $this->attempts(),
-            'max_tries' => $this->tries,
-            'error' => $exception->getMessage(),
+            'job_id'    => $this->job?->getJobId(),
+            'attempt'   => $this->attempts(),
+            'error'     => $exception->getMessage(),
             'next_retry_in' => $this->backoff . ' seconds'
         ]);
     }
