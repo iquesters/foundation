@@ -6,11 +6,11 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
+use Iquesters\Foundation\System\Traits\Loggable;
 
 abstract class BaseJob implements ShouldQueue
 {
-    use Queueable, InteractsWithQueue, SerializesModels;
+    use Queueable, InteractsWithQueue, SerializesModels, Loggable;
 
     /**
      * Number of times the job may be attempted
@@ -41,10 +41,10 @@ abstract class BaseJob implements ShouldQueue
     {
         // Use short class name as queue name
         $this->queue = (new \ReflectionClass(static::class))->getShortName();
-        Log::debug('Job initialized', [
+        $this->logDebug('Job initialized' . $this->ctx([
             'job_class' => static::class,
             'queue' => $this->queue
-        ]);
+        ]));
         
         // Call child initializer
         $this->initialize(...$arguments);
@@ -72,11 +72,10 @@ abstract class BaseJob implements ShouldQueue
             $this->afterHandle();
 
         } catch (\Throwable $e) {
-            Log::error('Job failed', [
+            $this->logError('Job failed' . $this->ctx([
                 'job_class' => static::class,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+            ]));
 
             $this->onRetry($e);
 
@@ -105,15 +104,14 @@ abstract class BaseJob implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('Job failed permanently', [
+        $this->logError('Job failed permanently' . $this->ctx([
             'job_class' => static::class,
             'job_id' => $this->job?->getJobId(),
             'attempts' => $this->attempts(),
             'error' => $exception->getMessage(),
             'file' => $exception->getFile(),
             'line' => $exception->getLine(),
-            'trace' => $exception->getTraceAsString()
-        ]);
+        ]));
 
         // Call child class hook if exists
         if (method_exists($this, 'onFailure')) {
@@ -126,11 +124,11 @@ abstract class BaseJob implements ShouldQueue
      */
     protected function beforeHandle(): void
     {
-        Log::debug('Job starting', [
+        $this->logDebug('Job starting' . $this->ctx([
             'job_class' => static::class,
             'job_id' => $this->job?->getJobId(),
             'attempt' => $this->attempts()
-        ]);
+        ]));
     }
 
     /**
@@ -138,12 +136,12 @@ abstract class BaseJob implements ShouldQueue
      */
     protected function afterHandle(): void
     {
-        Log::debug('Job completed successfully', [
+        $this->logDebug('Job completed successfully' . $this->ctx([
             'job_class' => static::class,
             'job_id' => $this->job?->getJobId(),
             'attempts' => $this->attempts(),
             'response' => $this->jobResponse
-        ]);
+        ]));
     }
 
     /**
@@ -151,13 +149,13 @@ abstract class BaseJob implements ShouldQueue
      */
     protected function onRetry(\Throwable $exception): void
     {
-        Log::warning('Job attempt failed', [
+        $this->logWarning('Job attempt failed' . $this->ctx([
             'job_class' => static::class,
             'job_id'    => $this->job?->getJobId(),
             'attempt'   => $this->attempts(),
             'error'     => $exception->getMessage(),
             'next_retry_in' => $this->backoff . ' seconds'
-        ]);
+        ]));
     }
 
     /**
@@ -174,5 +172,10 @@ abstract class BaseJob implements ShouldQueue
     public function getResponse(): mixed
     {
         return $this->jobResponse;
+    }
+
+    protected function ctx(array $context): string
+    {
+        return ' | context=' . json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 }
