@@ -17,10 +17,18 @@ class CompletedJob extends Model
         'queue',
         'payload',
         'response',
+        'queued_at',
+        'available_at',
+        'reserved_at',
+        'started_at',
         'completed_at',
     ];
 
     protected $casts = [
+        'queued_at' => 'datetime',
+        'available_at' => 'datetime',
+        'reserved_at' => 'datetime',
+        'started_at' => 'datetime',
         'completed_at' => 'datetime',
     ];
 
