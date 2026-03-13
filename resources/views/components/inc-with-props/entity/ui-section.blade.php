@@ -27,7 +27,7 @@
                             <i class="fas fa-eye"></i>
                         </a>
                     @else
-                        <x-userinterface::status :status="draft">
+                        <x-userinterface::status status="draft">
                             N/A
                         </x-userinterface::status>
                     @endif
@@ -55,7 +55,7 @@
                             <i class="fas fa-eye"></i>
                         </a>
                     @else
-                        <x-userinterface::status :status="draft">
+                        <x-userinterface::status status="draft">
                             N/A
                         </x-userinterface::status>
                     @endif

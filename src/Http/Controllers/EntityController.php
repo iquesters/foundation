@@ -3,6 +3,7 @@
 namespace Iquesters\Foundation\Http\Controllers;
 
 use Illuminate\Routing\Controller;
+use Iquesters\Foundation\Constants\EntityStatus;
 use Iquesters\Foundation\Models\Entity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -16,6 +17,42 @@ use Exception;
 
 class EntityController extends Controller
 {
+    private const SUPPORTED_PRIMARY_FIELD_TYPES = [
+        'string',
+        'text',
+        'longtext',
+        'integer',
+        'decimal',
+        'boolean',
+        'date',
+        'datetime',
+        'time',
+    ];
+
+    private const SUPPORTED_META_FIELD_TYPES = [
+        'string',
+        'text',
+        'longtext',
+        'integer',
+        'decimal',
+        'boolean',
+        'date',
+        'datetime',
+        'time',
+    ];
+
+    private const SUPPORTED_INPUT_TYPES = [
+        'text',
+        'textarea',
+        'number',
+        'email',
+        'date',
+        'datetime-local',
+        'time',
+        'checkbox',
+        'select',
+    ];
+
     public function index()
     {
         try {
@@ -118,7 +155,7 @@ class EntityController extends Controller
 
             // Save metadata and generate schemas
             $this->saveEntityMeta($entity, 'table_name', $tableName);
-            $formSchemaUid = $this->createFormSchema($entity, $slug, $processedCustomFields);
+            $formSchemaUid = $this->createFormSchema($entity, $slug, $processedCustomFields, $metaFieldsData);
             $this->saveEntityMeta($entity, 'form_schema_uid', $formSchemaUid);
             $tableSchemaUid = $this->createTableSchema($entity, $slug, $processedCustomFields, $formSchemaUid);
             $this->saveEntityMeta($entity, 'table_schema_uid', $tableSchemaUid);
@@ -187,6 +224,12 @@ class EntityController extends Controller
                 'meta_fields' => $metaFieldsData,
                 'updated_by' => auth()->id(),
             ]);
+
+            $customFieldsForSchema = $isPublished
+                ? $this->extractCustomFieldsFromEntityFields($allFields)
+                : ($processedCustomFields ?? []);
+
+            $this->ensureGeneratedFormSchema($entity, $customFieldsForSchema, $metaFieldsData);
 
             Log::info('Entity updated', [
                 'entity_uid' => $entity->uid,
@@ -351,11 +394,13 @@ class EntityController extends Controller
         return [
             'string' => 'varchar',
             'text' => 'text',
+            'longtext' => 'longtext',
             'integer' => 'bigint',
             'decimal' => 'decimal',
             'boolean' => 'boolean',
             'date' => 'date',
-            'datetime' => 'timestamp'
+            'datetime' => 'timestamp',
+            'time' => 'time',
         ];
     }
 
@@ -371,15 +416,25 @@ class EntityController extends Controller
         if (is_array($customFields)) {
             foreach ($customFields as $field) {
                 $fieldName = $field['name'];
+                $fieldType = $field['type'];
+
+                if (! in_array($fieldType, self::SUPPORTED_PRIMARY_FIELD_TYPES, true)) {
+                    throw new Exception("Field type '{$fieldType}' is not supported for primary fields.");
+                }
+
+                if (! in_array($field['input_type'], self::SUPPORTED_INPUT_TYPES, true)) {
+                    throw new Exception("Input type '{$field['input_type']}' is not supported.");
+                }
+
                 $processedCustomFields[$fieldName] = [
                     "name" => $fieldName,
-                    "type" => $typeMapping[$field['type']] ?? $field['type'],
+                    "type" => $typeMapping[$fieldType] ?? $fieldType,
                     "label" => $field['label'],
                     "required" => $field['required'] ?? false,
                     "nullable" => $field['nullable'] ?? true,
                     "input_type" => $field['input_type'],
                     "maxlength" => $field['maxlength'] ?? null,
-                    "default" => $field['default'] ?? null
+                    "default" => $this->normalizeFieldDefault($field['default'] ?? null, $fieldType)
                 ];
             }
         }
@@ -395,12 +450,53 @@ class EntityController extends Controller
         return array_merge($this->getSystemFields(), $customFields);
     }
 
+    private function normalizeFieldDefault(mixed $default, string $fieldType): mixed
+    {
+        if ($default === null) {
+            return null;
+        }
+
+        if (is_string($default)) {
+            $default = trim($default);
+
+            if ($default === '' || Str::lower($default) === 'null') {
+                return null;
+            }
+        }
+
+        return match ($fieldType) {
+            'integer' => (int) $default,
+            'decimal' => (float) $default,
+            'boolean' => filter_var($default, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false,
+            default => $default,
+        };
+    }
+
     /**
      * Decode meta fields from JSON
      */
     private function decodeMetaFields($metaFieldsJson)
     {
-        return $metaFieldsJson ? json_decode($metaFieldsJson, true) : [];
+        $metaFields = $metaFieldsJson ? json_decode($metaFieldsJson, true) : [];
+
+        if (! is_array($metaFields)) {
+            return [];
+        }
+
+        foreach ($metaFields as $field) {
+            $fieldType = $field['type'] ?? null;
+            $inputType = $field['input_type'] ?? null;
+
+            if ($fieldType && ! in_array($fieldType, self::SUPPORTED_META_FIELD_TYPES, true)) {
+                throw new Exception("Meta field type '{$fieldType}' is not supported.");
+            }
+
+            if ($inputType && ! in_array($inputType, self::SUPPORTED_INPUT_TYPES, true)) {
+                throw new Exception("Meta input type '{$inputType}' is not supported.");
+            }
+        }
+
+        return $metaFields;
     }
 
     /**
@@ -427,9 +523,9 @@ class EntityController extends Controller
     /**
      * Create form schema and return its UID
      */
-    private function createFormSchema($entity, $slug, $customFields)
+    private function createFormSchema($entity, $slug, $customFields, $metaFields = [])
     {
-        $formSchema = $this->generateFormSchema($entity, $customFields);
+        $formSchema = $this->generateFormSchema($entity, $customFields, $metaFields);
         $formSchemaRecord = FormSchema::create([
             'uid' => Str::ulid(),
             'slug' => $slug . '-form',
@@ -437,12 +533,60 @@ class EntityController extends Controller
             'description' => 'Auto-generated form for ' . $entity->entity_name,
             'schema' => $formSchema,
             'extra_info' => [],
-            'status' => 1,
+            'status' => EntityStatus::ACTIVE,
             'created_by' => auth()->id(),
             'updated_by' => auth()->id(),
         ]);
 
         return $formSchemaRecord->uid;
+    }
+
+    private function ensureGeneratedFormSchema($entity, $customFields, $metaFields): void
+    {
+        $formSchemaUid = $entity->getMeta('form_schema_uid');
+        $formSchemaSlug = $entity->slug . '-form';
+
+        if (! $formSchemaUid) {
+            $newFormSchemaUid = $this->createFormSchema($entity, $entity->slug, $customFields, $metaFields);
+            $this->saveEntityMeta($entity, 'form_schema_uid', $newFormSchemaUid, false);
+
+            Log::info('Generated form schema recreated because form_schema_uid was missing', [
+                'entity_uid' => $entity->uid,
+                'form_schema_uid' => $newFormSchemaUid,
+            ]);
+
+            return;
+        }
+
+        $formSchemaRecord = FormSchema::where('uid', $formSchemaUid)->first();
+
+        if (! $formSchemaRecord) {
+            $formSchemaRecord = FormSchema::where('slug', $formSchemaSlug)->first();
+        }
+
+        if (! $formSchemaRecord) {
+            $newFormSchemaUid = $this->createFormSchema($entity, $entity->slug, $customFields, $metaFields);
+            $this->saveEntityMeta($entity, 'form_schema_uid', $newFormSchemaUid, false);
+
+            Log::info('Generated form schema recreated because stored schema record was missing', [
+                'entity_uid' => $entity->uid,
+                'missing_form_schema_uid' => $formSchemaUid,
+                'new_form_schema_uid' => $newFormSchemaUid,
+            ]);
+
+            return;
+        }
+
+        $formSchemaRecord->update([
+            'name' => $entity->entity_name . ' Form',
+            'description' => 'Auto-generated form for ' . $entity->entity_name,
+            'schema' => $this->generateFormSchema($entity, $customFields, $metaFields),
+            'updated_by' => auth()->id(),
+        ]);
+
+        if ($formSchemaRecord->uid !== $formSchemaUid) {
+            $this->saveEntityMeta($entity, 'form_schema_uid', $formSchemaRecord->uid, false);
+        }
     }
 
     /**
@@ -469,45 +613,12 @@ class EntityController extends Controller
     /**
      * Generate form schema from custom fields
      */
-    private function generateFormSchema($entity, $customFields)
+    private function generateFormSchema($entity, $customFields, $metaFields = [])
     {
-        $fields = [];
-        
-        $inputTypeMapping = [
-            'text' => 'text',
-            'number' => 'number',
-            'email' => 'email',
-            'datetime-local' => 'datetime-local',
-            'date' => 'date',
-        ];
-
-        foreach ($customFields as $field) {
-            $formField = [
-                'id' => $field['name'],
-                'type' => $inputTypeMapping[$field['input_type']] ?? 'text',
-                'label' => $field['label'],
-                'placeholder' => 'Enter ' . strtolower($field['label']),
-                'helpertext' => $field['label'] . ' field',
-                'required' => $field['required'],
-                'size' => [
-                    'md' => 12
-                ]
-            ];
-
-            if (isset($field['maxlength']) && $field['maxlength']) {
-                $formField['maxLength'] = $field['maxlength'];
-            }
-
-            $messages = [];
-            if ($field['required']) {
-                $messages['required'] = $field['label'] . ' is required';
-            }
-            if (!empty($messages)) {
-                $formField['messages'] = $messages;
-            }
-
-            $fields[] = $formField;
-        }
+        $fields = array_merge(
+            $this->buildFormSchemaFields($customFields, false),
+            $this->buildFormSchemaFields($this->filterDisplayableMetaFields($metaFields), true)
+        );
 
         return [
             'info' => [
@@ -534,6 +645,77 @@ class EntityController extends Controller
                 ]
             ]
         ];
+    }
+
+    private function buildFormSchemaFields(array $fields, bool $isMetaField): array
+    {
+        $schemaFields = [];
+        $inputTypeMapping = [
+            'text' => 'text',
+            'textarea' => 'textarea',
+            'number' => 'number',
+            'email' => 'email',
+            'datetime-local' => 'datetime-local',
+            'date' => 'date',
+            'time' => 'time',
+            'checkbox' => 'checkbox',
+            'select' => 'select',
+        ];
+
+        foreach ($fields as $field) {
+            $fieldId = $isMetaField ? ($field['meta_key'] ?? null) : ($field['name'] ?? null);
+            $fieldLabel = $field['label'] ?? Str::headline((string) $fieldId);
+
+            if (! $fieldId) {
+                continue;
+            }
+
+            $formField = [
+                'id' => $fieldId,
+                'type' => $inputTypeMapping[$field['input_type']] ?? 'text',
+                'label' => $fieldLabel,
+                'placeholder' => 'Enter ' . strtolower($fieldLabel),
+                'helpertext' => $fieldLabel . ' field',
+                'required' => ! empty($field['required']),
+                'size' => [
+                    'md' => 12
+                ]
+            ];
+
+            if (! empty($field['maxlength'])) {
+                $formField['maxLength'] = $field['maxlength'];
+            }
+
+            if (! empty($field['required'])) {
+                $formField['messages'] = [
+                    'required' => $fieldLabel . ' is required'
+                ];
+            }
+
+            if ($isMetaField) {
+                $formField['meta'] = true;
+            }
+
+            $schemaFields[] = $formField;
+        }
+
+        return $schemaFields;
+    }
+
+    private function filterDisplayableMetaFields(array $metaFields): array
+    {
+        return array_values(array_filter($metaFields, function ($field) {
+            return ($field['display'] ?? true) === true || ($field['display'] ?? 1) === 1;
+        }));
+    }
+
+    private function extractCustomFieldsFromEntityFields(array $fields): array
+    {
+        $systemFieldNames = array_keys($this->getSystemFields());
+
+        return array_filter($fields, function ($field) use ($systemFieldNames) {
+            return ! in_array($field['name'] ?? null, $systemFieldNames, true);
+        });
     }
 
     /**
@@ -905,6 +1087,10 @@ class EntityController extends Controller
                 $column = $table->text($name);
                 break;
 
+            case 'longtext':
+                $column = $table->longText($name);
+                break;
+
             case 'decimal':
                 $column = $table->decimal($name, 10, 2);
                 break;
@@ -915,6 +1101,10 @@ class EntityController extends Controller
 
             case 'date':
                 $column = $table->date($name);
+                break;
+
+            case 'time':
+                $column = $table->time($name);
                 break;
 
             case 'timestamp':
@@ -945,10 +1135,9 @@ class EntityController extends Controller
 
         // Apply default value
         if ($default !== null && $name !== 'id' && $name !== 'uid') {
-            // Remove quotes from default value if present
-            $defaultValue = trim($default, "'\"");
-            
-            if ($defaultValue === 'NULL') {
+            $defaultValue = is_string($default) ? trim($default, "'\"") : $default;
+
+            if (is_string($defaultValue) && Str::lower($defaultValue) === 'null') {
                 $column->nullable();
             } elseif ($type === 'boolean') {
                 $column->default($defaultValue === 'true' || $defaultValue === '1');

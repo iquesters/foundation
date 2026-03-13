@@ -32,10 +32,13 @@
                             <select class="form-select form-select-sm" name="meta_fields[{{ $index }}][type]" required>
                                 <option value="string" {{ ($field['type'] ?? '') == 'string' ? 'selected' : '' }}>String</option>
                                 <option value="text" {{ ($field['type'] ?? '') == 'text' ? 'selected' : '' }}>Text</option>
+                                <option value="longtext" {{ ($field['type'] ?? '') == 'longtext' ? 'selected' : '' }}>Longtext</option>
                                 <option value="integer" {{ ($field['type'] ?? '') == 'integer' ? 'selected' : '' }}>Integer</option>
                                 <option value="decimal" {{ ($field['type'] ?? '') == 'decimal' ? 'selected' : '' }}>Decimal</option>
                                 <option value="boolean" {{ ($field['type'] ?? '') == 'boolean' ? 'selected' : '' }}>Boolean</option>
-                                <option value="json" {{ ($field['type'] ?? '') == 'json' ? 'selected' : '' }}>JSON</option>
+                                <option value="date" {{ ($field['type'] ?? '') == 'date' ? 'selected' : '' }}>Date</option>
+                                <option value="datetime" {{ ($field['type'] ?? '') == 'datetime' ? 'selected' : '' }}>DateTime</option>
+                                <option value="time" {{ ($field['type'] ?? '') == 'time' ? 'selected' : '' }}>Time</option>
                             </select>
                         @else
                             {{ $field['type'] ?? '—' }}
@@ -76,6 +79,10 @@
                                 <option value="text" {{ ($field['input_type'] ?? 'text') == 'text' ? 'selected' : '' }}>Text</option>
                                 <option value="textarea" {{ ($field['input_type'] ?? '') == 'textarea' ? 'selected' : '' }}>Textarea</option>
                                 <option value="number" {{ ($field['input_type'] ?? '') == 'number' ? 'selected' : '' }}>Number</option>
+                                <option value="email" {{ ($field['input_type'] ?? '') == 'email' ? 'selected' : '' }}>Email</option>
+                                <option value="date" {{ ($field['input_type'] ?? '') == 'date' ? 'selected' : '' }}>Date</option>
+                                <option value="datetime-local" {{ ($field['input_type'] ?? '') == 'datetime-local' ? 'selected' : '' }}>Datetime-local</option>
+                                <option value="time" {{ ($field['input_type'] ?? '') == 'time' ? 'selected' : '' }}>Time</option>
                                 <option value="select" {{ ($field['input_type'] ?? '') == 'select' ? 'selected' : '' }}>Select</option>
                                 <option value="checkbox" {{ ($field['input_type'] ?? '') == 'checkbox' ? 'selected' : '' }}>Checkbox</option>
                             </select>

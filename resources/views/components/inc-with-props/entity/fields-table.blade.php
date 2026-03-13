@@ -56,7 +56,7 @@
                             <select class="form-select form-select-sm"
                                     name="fields[{{ $index }}][type]"
                                     required>
-                                @foreach(['string','text','integer','decimal','boolean','date','datetime'] as $type)
+                                @foreach(['string','text','longtext','integer','decimal','boolean','date','datetime','time'] as $type)
                                     <option value="{{ $type }}" {{ $field['type'] === $type ? 'selected' : '' }}>
                                         {{ ucfirst($type) }}
                                     </option>
@@ -111,7 +111,7 @@
                         @if($editable && !$isSystem)
                             <select class="form-select form-select-sm"
                                     name="fields[{{ $index }}][input_type]">
-                                @foreach(['text','textarea','number','email','date','checkbox','select'] as $input)
+                                @foreach(['text','textarea','number','email','date','datetime-local','time','checkbox','select'] as $input)
                                     <option value="{{ $input }}" {{ $field['input_type'] === $input ? 'selected' : '' }}>
                                         {{ ucfirst($input) }}
                                     </option>
