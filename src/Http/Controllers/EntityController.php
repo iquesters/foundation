@@ -625,7 +625,9 @@ class EntityController extends Controller
                 'icon' => 'far fa-lightbulb',
                 'innerHTML' => 'You are creating a new ' . $entity->entity_name
             ],
-            'endpoint' => 'post_' . url('/entities/' . $entity->slug . '/store'),
+            'entity' => $this->generateTableName($entity->entity_name),
+            'method' => 'POST',
+            'endpoint' => url('/api/entity/store/' . $this->generateTableName($entity->entity_name)),
             'floatinglabel' => false,
             'enctype' => 'multipart/form-data',
             'header' => [
