@@ -14,5 +14,6 @@ class Module
     public const PRODUCT   = self::VENDOR . 'product';
     public const SMART_MESSENGER = self::VENDOR . 'smart-messenger';
     public const INTEGRATION = self::VENDOR . 'integration';
+    public const HELP_SUPPORT = self::VENDOR . 'help-support';
     public const DEV     = self::VENDOR . 'dev';
 }
