@@ -106,3 +106,5 @@ Route::middleware('web')->group(function () {
 });
 
 });
+
+require __DIR__ . '/api.php';
