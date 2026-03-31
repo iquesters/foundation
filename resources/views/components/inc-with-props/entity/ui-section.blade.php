@@ -49,7 +49,7 @@
                     </div>
 
                     @if ($entity->getMeta('form_schema_uid'))
-                        <a href="#"
+                        <a href="{{ route('ui.view', $entity->getMeta('form_schema_uid')) }}"
                            class="btn btn-sm btn-outline-info"
                            title="View Form UI">
                             <i class="fas fa-eye"></i>

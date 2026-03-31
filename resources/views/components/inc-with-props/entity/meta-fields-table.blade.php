@@ -77,6 +77,7 @@
                         @if($editable)
                             <select class="form-select form-select-sm" name="meta_fields[{{ $index }}][input_type]" required>
                                 <option value="text" {{ ($field['input_type'] ?? 'text') == 'text' ? 'selected' : '' }}>Text</option>
+                                <option value="hidden" {{ ($field['input_type'] ?? '') == 'hidden' ? 'selected' : '' }}>Hidden</option>
                                 <option value="textarea" {{ ($field['input_type'] ?? '') == 'textarea' ? 'selected' : '' }}>Textarea</option>
                                 <option value="number" {{ ($field['input_type'] ?? '') == 'number' ? 'selected' : '' }}>Number</option>
                                 <option value="email" {{ ($field['input_type'] ?? '') == 'email' ? 'selected' : '' }}>Email</option>

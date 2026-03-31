@@ -111,7 +111,7 @@
                         @if($editable && !$isSystem)
                             <select class="form-select form-select-sm"
                                     name="fields[{{ $index }}][input_type]">
-                                @foreach(['text','textarea','number','email','date','datetime-local','time','checkbox','select'] as $input)
+                                @foreach(['text','hidden','textarea','number','email','date','datetime-local','time','checkbox','select'] as $input)
                                     <option value="{{ $input }}" {{ $field['input_type'] === $input ? 'selected' : '' }}>
                                         {{ ucfirst($input) }}
                                     </option>

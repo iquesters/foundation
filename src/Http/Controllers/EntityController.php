@@ -43,6 +43,7 @@ class EntityController extends Controller
 
     private const SUPPORTED_INPUT_TYPES = [
         'text',
+        'hidden',
         'textarea',
         'number',
         'email',
@@ -654,6 +655,7 @@ class EntityController extends Controller
         $schemaFields = [];
         $inputTypeMapping = [
             'text' => 'text',
+            'hidden' => 'hidden',
             'textarea' => 'textarea',
             'number' => 'number',
             'email' => 'email',
