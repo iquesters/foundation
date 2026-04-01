@@ -140,3 +140,30 @@ Any update to the MasterData module should include:
 - Migration/rollback plan if schema changes
 - Updated automated tests
 - Release notes for behavior changes
+
+## Folder Structure
+foundation/
+├── docs/
+│   ├── master_developer.md
+│   ├── master_user.md
+│   └── queue.md
+├── src/
+│   ├── Config/
+│   ├── Console/
+│   ├── Constants/
+│   ├── Enums/
+│   ├── Helpers/
+│   ├── Http/
+│   ├── Jobs/
+│   ├── Models/
+│   ├── OpenApi/
+│   ├── Package/
+│   ├── Providers/
+│   ├── Routing/
+│   ├── Services/
+│   ├── Support/
+│   ├── System/
+│   ├── Utils/
+│   └── FoundationServiceProvider.php
+└── database/
+└── migrations/

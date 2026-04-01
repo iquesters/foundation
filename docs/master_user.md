@@ -59,3 +59,30 @@ This document is for:
 The MasterData module provides structured and secure management of 
 core system configuration data, ensuring reliable and consistent 
 data across the platform.
+
+## Folder Structure
+foundation/
+├── docs/
+│   ├── master_developer.md
+│   ├── master_user.md
+│   └── queue.md
+├── src/
+│   ├── Config/
+│   ├── Console/
+│   ├── Constants/
+│   ├── Enums/
+│   ├── Helpers/
+│   ├── Http/
+│   ├── Jobs/
+│   ├── Models/
+│   ├── OpenApi/
+│   ├── Package/
+│   ├── Providers/
+│   ├── Routing/
+│   ├── Services/
+│   ├── Support/
+│   ├── System/
+│   ├── Utils/
+│   └── FoundationServiceProvider.php
+└── database/
+└── migrations/
