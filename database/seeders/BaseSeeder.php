@@ -183,17 +183,24 @@ abstract class BaseSeeder extends Seeder
             $fields = $entityConfig['fields'] ?? [];
             $metaFields = $entityConfig['meta_fields'] ?? [];
             $metas = $entityConfig['metas'] ?? [];
+            $tableName = $entityConfig['table_name'] ?? $this->generateTableName($entityName);
+            $existingEntity = DB::table('entities')
+                ->where('entity_name', $entityName)
+                ->where('ref_module', $moduleId)
+                ->first();
+            $slug = $existingEntity->slug ?? $this->generateUniqueEntitySlug($entityName, $moduleId, $existingEntity->id ?? null);
 
             // Insert or update entity
             $entityData = [
-                'uid' => (string) Str::ulid(),
+                'uid' => $existingEntity->uid ?? (string) Str::ulid(),
                 'ref_module' => $moduleId,
                 'entity_name' => $entityName,
+                'slug' => $slug,
                 'fields' => !empty($fields) ? json_encode($fields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
                 'meta_fields' => !empty($metaFields) ? json_encode($metaFields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
                 'status' => 'active',
                 'updated_at' => now(),
-                'created_at' => now(),
+                'created_at' => $existingEntity->created_at ?? now(),
             ];
 
             DB::table('entities')->updateOrInsert(
@@ -206,6 +213,16 @@ abstract class BaseSeeder extends Seeder
                 ->where('entity_name', $entityName)
                 ->where('ref_module', $moduleId)
                 ->value('id');
+
+            DB::table('entity_metas')->updateOrInsert(
+                ['ref_parent' => $entityId, 'meta_key' => 'table_name'],
+                [
+                    'meta_value' => $tableName,
+                    'status' => 'active',
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
 
             // Insert entity metadata
             foreach ($metas as $key => $value) {
@@ -228,6 +245,33 @@ abstract class BaseSeeder extends Seeder
                 echo "✅ Entity '{$entityName}' seeded successfully.\n";
             }
         }
+    }
+
+    protected function generateUniqueEntitySlug(string $entityName, int $moduleId, ?int $existingEntityId = null): string
+    {
+        $baseSlug = strtolower($entityName);
+        $baseSlug = preg_replace('/[^a-z0-9]+/', '-', $baseSlug);
+        $baseSlug = trim($baseSlug, '-');
+
+        $slug = $baseSlug;
+        $counter = 1;
+
+        while (
+            DB::table('entities')
+                ->where('slug', $slug)
+                ->when($existingEntityId, fn ($query) => $query->where('id', '!=', $existingEntityId))
+                ->exists()
+        ) {
+            $slug = $baseSlug . '-' . $counter;
+            $counter++;
+        }
+
+        return $slug;
+    }
+
+    protected function generateTableName(string $entityName): string
+    {
+        return Str::snake(Str::pluralStudly($entityName));
     }
 
     final protected function seedConfig(int $moduleId): void
