@@ -8,6 +8,7 @@ use Iquesters\Foundation\Models\Entity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Iquesters\Foundation\Services\FormSchemaGenerator;
 use Iquesters\UserInterface\Models\FormSchema;
 use Iquesters\UserInterface\Models\TableSchema;
 use Illuminate\Database\Schema\Blueprint;
@@ -17,6 +18,10 @@ use Exception;
 
 class EntityController extends Controller
 {
+    public function __construct(
+        private readonly FormSchemaGenerator $formSchemaGenerator
+    ) {}
+
     private const SUPPORTED_PRIMARY_FIELD_TYPES = [
         'string',
         'text',
@@ -435,6 +440,8 @@ class EntityController extends Controller
                     "nullable" => $field['nullable'] ?? true,
                     "input_type" => $field['input_type'],
                     "maxlength" => $field['maxlength'] ?? null,
+                    "size" => $field['size'] ?? null,
+                    "gridSize" => $field['gridSize'] ?? null,
                     "default" => $this->normalizeFieldDefault($field['default'] ?? null, $fieldType)
                 ];
             }
@@ -526,7 +533,7 @@ class EntityController extends Controller
      */
     private function createFormSchema($entity, $slug, $customFields, $metaFields = [])
     {
-        $formSchema = $this->generateFormSchema($entity, $customFields, $metaFields);
+        $formSchema = $this->formSchemaGenerator->generate($entity, $customFields, $metaFields);
         $formSchemaRecord = FormSchema::create([
             'uid' => Str::ulid(),
             'slug' => $slug . '-form',
@@ -581,7 +588,7 @@ class EntityController extends Controller
         $formSchemaRecord->update([
             'name' => $entity->entity_name . ' Form',
             'description' => 'Auto-generated form for ' . $entity->entity_name,
-            'schema' => $this->generateFormSchema($entity, $customFields, $metaFields),
+            'schema' => $this->formSchemaGenerator->generate($entity, $customFields, $metaFields),
             'updated_by' => auth()->id(),
         ]);
 
@@ -609,108 +616,6 @@ class EntityController extends Controller
         ]);
 
         return $tableSchemaRecord->uid;
-    }
-
-    /**
-     * Generate form schema from custom fields
-     */
-    private function generateFormSchema($entity, $customFields, $metaFields = [])
-    {
-        $fields = array_merge(
-            $this->buildFormSchemaFields($customFields, false),
-            $this->buildFormSchemaFields($this->filterDisplayableMetaFields($metaFields), true)
-        );
-
-        return [
-            'info' => [
-                'icon' => 'far fa-lightbulb',
-                'innerHTML' => 'You are creating a new ' . $entity->entity_name
-            ],
-            'entity' => $this->generateTableName($entity->entity_name),
-            'method' => 'POST',
-            'endpoint' => url('/api/entity/store/' . $this->generateTableName($entity->entity_name)),
-            'floatinglabel' => false,
-            'enctype' => 'multipart/form-data',
-            'header' => [
-                'icon' => 'fas fa-database',
-                'text' => 'Create ' . $entity->entity_name
-            ],
-            'fields' => $fields,
-            'actions' => [
-                [
-                    'icon' => 'far fa-save',
-                    'type' => 'submit',
-                    'route' => '#',
-                    'element' => [
-                        'type' => 'button',
-                        'color' => 'success'
-                    ]
-                ]
-            ]
-        ];
-    }
-
-    private function buildFormSchemaFields(array $fields, bool $isMetaField): array
-    {
-        $schemaFields = [];
-        $inputTypeMapping = [
-            'text' => 'text',
-            'hidden' => 'hidden',
-            'textarea' => 'textarea',
-            'number' => 'number',
-            'email' => 'email',
-            'datetime-local' => 'datetime-local',
-            'date' => 'date',
-            'time' => 'time',
-            'checkbox' => 'checkbox',
-            'select' => 'select',
-        ];
-
-        foreach ($fields as $field) {
-            $fieldId = $isMetaField ? ($field['meta_key'] ?? null) : ($field['name'] ?? null);
-            $fieldLabel = $field['label'] ?? Str::headline((string) $fieldId);
-
-            if (! $fieldId) {
-                continue;
-            }
-
-            $formField = [
-                'id' => $fieldId,
-                'type' => $inputTypeMapping[$field['input_type']] ?? 'text',
-                'label' => $fieldLabel,
-                'placeholder' => 'Enter ' . strtolower($fieldLabel),
-                'helpertext' => $fieldLabel . ' field',
-                'required' => ! empty($field['required']),
-                'size' => [
-                    'md' => 12
-                ]
-            ];
-
-            if (! empty($field['maxlength'])) {
-                $formField['maxLength'] = $field['maxlength'];
-            }
-
-            if (! empty($field['required'])) {
-                $formField['messages'] = [
-                    'required' => $fieldLabel . ' is required'
-                ];
-            }
-
-            if ($isMetaField) {
-                $formField['meta'] = true;
-            }
-
-            $schemaFields[] = $formField;
-        }
-
-        return $schemaFields;
-    }
-
-    private function filterDisplayableMetaFields(array $metaFields): array
-    {
-        return array_values(array_filter($metaFields, function ($field) {
-            return ($field['display'] ?? true) === true || ($field['display'] ?? 1) === 1;
-        }));
     }
 
     private function extractCustomFieldsFromEntityFields(array $fields): array
