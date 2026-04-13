@@ -1,5 +1,19 @@
 @extends('userinterface::layouts.app')
 
+@section('page-title', \Iquesters\Foundation\Helpers\MetaHelper::make(['Entity']))
+@section('meta-description', \Iquesters\Foundation\Helpers\MetaHelper::description('List of Entities'))
+
+@php
+    $tabs = [
+        [
+            'route' => 'entities.index',
+            'params' => [],
+            'icon' => 'fas fa-fw fa-cube',
+            'label' => 'Entity',
+        ],
+    ];
+@endphp
+
 @section('content')
 <div>
     {{-- <h5 class="mb-2 fs-6 text-muted">Entities</h5> --}}
