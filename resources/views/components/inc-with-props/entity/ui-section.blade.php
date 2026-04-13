@@ -27,9 +27,12 @@
                             <i class="fas fa-eye"></i>
                         </a>
                     @else
-                        <x-userinterface::status status="draft">
-                            N/A
-                        </x-userinterface::status>
+                        <form method="POST" action="{{ route('entities.generate-table-schema', $entity->uid) }}">
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-outline-success" title="Generate Table Schema">
+                                <i class="fas fa-wand-magic-sparkles me-1"></i>Generate
+                            </button>
+                        </form>
                     @endif
                 </div>
 
@@ -55,9 +58,12 @@
                             <i class="fas fa-eye"></i>
                         </a>
                     @else
-                        <x-userinterface::status status="draft">
-                            N/A
-                        </x-userinterface::status>
+                        <form method="POST" action="{{ route('entities.generate-form-schema', $entity->uid) }}">
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-outline-info" title="Generate Form Schema">
+                                <i class="fas fa-wand-magic-sparkles me-1"></i>Generate
+                            </button>
+                        </form>
                     @endif
                 </div>
 

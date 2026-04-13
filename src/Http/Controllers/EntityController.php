@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Iquesters\Foundation\Services\FormSchemaGenerator;
+use Iquesters\Foundation\Services\TableSchemaGenerator;
 use Iquesters\UserInterface\Models\FormSchema;
 use Iquesters\UserInterface\Models\TableSchema;
 use Illuminate\Database\Schema\Blueprint;
@@ -19,7 +20,8 @@ use Exception;
 class EntityController extends Controller
 {
     public function __construct(
-        private readonly FormSchemaGenerator $formSchemaGenerator
+        private readonly FormSchemaGenerator $formSchemaGenerator,
+        private readonly TableSchemaGenerator $tableSchemaGenerator
     ) {}
 
     private const SUPPORTED_PRIMARY_FIELD_TYPES = [
@@ -602,7 +604,7 @@ class EntityController extends Controller
      */
     private function createTableSchema($entity, $slug, $customFields, $formSchemaUid)
     {
-        $tableSchema = $this->generateTableSchema($entity, $customFields, $formSchemaUid);
+        $tableSchema = $this->tableSchemaGenerator->generate($entity, $customFields, $formSchemaUid);
         $tableSchemaRecord = TableSchema::create([
             'uid' => Str::ulid(),
             'slug' => $slug . '-table',
@@ -610,12 +612,60 @@ class EntityController extends Controller
             'description' => 'Auto-generated table for ' . $entity->entity_name,
             'schema' => $tableSchema,
             'extra_info' => [],
-            'status' => 'active',
+            'status' => EntityStatus::ACTIVE,
             'created_by' => auth()->id(),
             'updated_by' => auth()->id(),
         ]);
 
         return $tableSchemaRecord->uid;
+    }
+
+    private function ensureGeneratedTableSchema($entity, $customFields, $formSchemaUid): void
+    {
+        $tableSchemaUid = $entity->getMeta('table_schema_uid');
+        $tableSchemaSlug = $entity->slug . '-table';
+
+        if (! $tableSchemaUid) {
+            $newTableSchemaUid = $this->createTableSchema($entity, $entity->slug, $customFields, $formSchemaUid);
+            $this->saveEntityMeta($entity, 'table_schema_uid', $newTableSchemaUid, false);
+
+            Log::info('Generated table schema recreated because table_schema_uid was missing', [
+                'entity_uid' => $entity->uid,
+                'table_schema_uid' => $newTableSchemaUid,
+            ]);
+
+            return;
+        }
+
+        $tableSchemaRecord = TableSchema::where('uid', $tableSchemaUid)->first();
+
+        if (! $tableSchemaRecord) {
+            $tableSchemaRecord = TableSchema::where('slug', $tableSchemaSlug)->first();
+        }
+
+        if (! $tableSchemaRecord) {
+            $newTableSchemaUid = $this->createTableSchema($entity, $entity->slug, $customFields, $formSchemaUid);
+            $this->saveEntityMeta($entity, 'table_schema_uid', $newTableSchemaUid, false);
+
+            Log::info('Generated table schema recreated because stored schema record was missing', [
+                'entity_uid' => $entity->uid,
+                'missing_table_schema_uid' => $tableSchemaUid,
+                'new_table_schema_uid' => $newTableSchemaUid,
+            ]);
+
+            return;
+        }
+
+        $tableSchemaRecord->update([
+            'name' => $entity->entity_name . ' Table',
+            'description' => 'Auto-generated table for ' . $entity->entity_name,
+            'schema' => $this->tableSchemaGenerator->generate($entity, $customFields, $formSchemaUid),
+            'updated_by' => auth()->id(),
+        ]);
+
+        if ($tableSchemaRecord->uid !== $tableSchemaUid) {
+            $this->saveEntityMeta($entity, 'table_schema_uid', $tableSchemaRecord->uid, false);
+        }
     }
 
     private function extractCustomFieldsFromEntityFields(array $fields): array
@@ -625,59 +675,6 @@ class EntityController extends Controller
         return array_filter($fields, function ($field) use ($systemFieldNames) {
             return ! in_array($field['name'] ?? null, $systemFieldNames, true);
         });
-    }
-
-    /**
-     * Generate table schema with system fields and first 2 custom fields
-     */
-    private function generateTableSchema($entity, $customFields, $formSchemaUid)
-    {
-        $columns = [];
-        
-        $columns[] = [
-            'data' => 'id',
-            'title' => 'ID',
-            'visible' => true
-        ];
-
-        $customFieldArray = array_values($customFields);
-        $fieldsToShow = array_slice($customFieldArray, 0, 2);
-        
-        foreach ($fieldsToShow as $field) {
-            $columns[] = [
-                'data' => $field['name'],
-                'title' => $field['label'],
-                'visible' => true,
-                'link' => true,
-                'form-schema-uid' => $formSchemaUid
-            ];
-        }
-
-        $columns[] = [
-            'data' => 'status',
-            'title' => 'Status',
-            'visible' => true
-        ];
-        
-        $tableMeta = $entity->metas()
-        ->where('meta_key', 'table_name')
-        ->first();
-
-        $baseTableName = $tableMeta?->meta_value ?? $this->generateTableName($entity->entity_name);
-        
-
-        return [
-            'entity' => $this->pluralizeTableName($baseTableName),
-            'dt-options' => [
-                'columns' => $columns,
-                'options' => [
-                    'pageLength' => 10,
-                    'order' => [[0, 'desc']],
-                    'responsive' => true
-                ]
-            ],
-            'default_view_mode' => 'inbox'
-        ];
     }
 
     public function show($entityUid)
@@ -702,6 +699,63 @@ class EntityController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage());
+        }
+    }
+
+    public function generateFormSchemaFromEntity(string $entityUid)
+    {
+        try {
+            $entity = Entity::with('metas')->where('uid', $entityUid)->firstOrFail();
+            $customFields = $this->extractCustomFieldsFromEntityFields($entity->fields ?? []);
+            $metaFields = is_array($entity->meta_fields) ? $entity->meta_fields : [];
+
+            $this->ensureGeneratedFormSchema($entity, $customFields, $metaFields);
+
+            return redirect()
+                ->route('entities.show', $entity->uid)
+                ->with('success', 'Form schema generated successfully.');
+        } catch (Exception $e) {
+            Log::error('Error generating form schema from entity', [
+                'entity_uid' => $entityUid,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage());
+        }
+    }
+
+    public function generateTableSchemaFromEntity(string $entityUid)
+    {
+        try {
+            $entity = Entity::with('metas')->where('uid', $entityUid)->firstOrFail();
+            $customFields = $this->extractCustomFieldsFromEntityFields($entity->fields ?? []);
+            $metaFields = is_array($entity->meta_fields) ? $entity->meta_fields : [];
+
+            $this->ensureGeneratedFormSchema($entity, $customFields, $metaFields);
+            $formSchemaUid = $entity->getMeta('form_schema_uid');
+
+            if (! $formSchemaUid) {
+                throw new Exception('Unable to generate table schema without a form schema.');
+            }
+
+            $this->ensureGeneratedTableSchema($entity, $customFields, $formSchemaUid);
+
+            return redirect()
+                ->route('entities.show', $entity->uid)
+                ->with('success', 'Table schema generated successfully.');
+        } catch (Exception $e) {
+            Log::error('Error generating table schema from entity', [
+                'entity_uid' => $entityUid,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return redirect()
                 ->back()
                 ->with('error', $e->getMessage());
@@ -880,31 +934,6 @@ class EntityController extends Controller
             return redirect()
                 ->back()
                 ->with('error', 'Error: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Pluralize table name if not already plural
-     */
-    private function pluralizeTableName($tableName)
-    {
-        // Common plural endings
-        $pluralEndings = ['s', 'es', 'ies'];
-        
-        foreach ($pluralEndings as $ending) {
-            if (substr($tableName, -strlen($ending)) === $ending) {
-                return $tableName; // Already plural
-            }
-        }
-        
-        // Simple pluralization rules
-        if (substr($tableName, -1) === 'y') {
-            return substr($tableName, 0, -1) . 'ies'; // category -> categories
-        } elseif (in_array(substr($tableName, -1), ['s', 'x', 'z']) || 
-                in_array(substr($tableName, -2), ['sh', 'ch'])) {
-            return $tableName . 'es'; // box -> boxes, dish -> dishes
-        } else {
-            return $tableName . 's'; // test -> tests
         }
     }
 

@@ -133,7 +133,7 @@ class FormSchemaGenerator
 
                 $formField = [
                     'id' => $fieldId,
-                    'type' => $inputTypeMapping[$field['input_type']] ?? 'text',
+                    'type' => $this->resolveFormFieldType($field, $inputTypeMapping),
                     'label' => $fieldLabel,
                     'placeholder' => 'Enter ' . strtolower($fieldLabel),
                     'helpertext' => $fieldLabel . ' field',
@@ -210,6 +210,41 @@ class FormSchemaGenerator
             ];
         } catch (Throwable $throwable) {
             $this->logError('Failed to build field size config: ' . $throwable->getMessage());
+            throw $throwable;
+        }
+    }
+
+    private function resolveFormFieldType(array $field, array $inputTypeMapping): string
+    {
+        $this->logMethodStart('Resolving form field type');
+
+        try {
+            $inputType = $field['input_type'] ?? null;
+
+            if (is_string($inputType) && isset($inputTypeMapping[$inputType])) {
+                $this->logMethodEnd('Resolved form field type from input type');
+
+                return $inputTypeMapping[$inputType];
+            }
+
+            $fieldType = strtolower((string) ($field['type'] ?? ''));
+
+            $resolvedType = match ($fieldType) {
+                'text', 'longtext' => 'textarea',
+                'integer', 'bigint', 'decimal', 'float', 'double' => 'number',
+                'boolean' => 'checkbox',
+                'date' => 'date',
+                'datetime', 'timestamp' => 'datetime-local',
+                'time' => 'time',
+                'email' => 'email',
+                default => 'text',
+            };
+
+            $this->logMethodEnd('Resolved form field type from field type fallback');
+
+            return $resolvedType;
+        } catch (Throwable $throwable) {
+            $this->logError('Failed to resolve form field type: ' . $throwable->getMessage());
             throw $throwable;
         }
     }

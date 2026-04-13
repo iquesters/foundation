@@ -29,6 +29,8 @@ Route::middleware('web')->group(function () {
             Route::get('/create', [EntityController::class, 'create'])->name('create');
             Route::post('/', [EntityController::class, 'store'])->name('store');
             Route::get('/{entityUid}/edit', [EntityController::class, 'edit'])->name('edit');
+            Route::post('/{entityUid}/generate-form-schema', [EntityController::class, 'generateFormSchemaFromEntity'])->name('generate-form-schema');
+            Route::post('/{entityUid}/generate-table-schema', [EntityController::class, 'generateTableSchemaFromEntity'])->name('generate-table-schema');
             Route::put('/entities/{entityUid}', [EntityController::class, 'update'])->name('update');
             Route::delete('/{entityUid}', [EntityController::class, 'destroy'])->name('destroy');
             Route::post('/{entityUid}/publish', [EntityController::class, 'publish'])->name('publish');
