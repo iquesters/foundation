@@ -1,5 +1,19 @@
 @extends('userinterface::layouts.app')
 
+@section('page-title', \Iquesters\Foundation\Helpers\MetaHelper::make(['Master Data']))
+@section('meta-description', \Iquesters\Foundation\Helpers\MetaHelper::description('List of Master Data'))
+
+@php
+    $tabs = [
+        [
+            'route' => 'master-data.index',
+            'params' => [],
+            'icon' => 'fas fa-fw fa-database',
+            'label' => 'Master Data',
+        ],
+    ];
+@endphp
+
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-2">
     <h5 class="fs-6 text-muted">Total {{ $masterData->count() }} Master Data(s)</h5>
