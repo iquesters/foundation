@@ -59,7 +59,6 @@ abstract class BaseSeeder extends Seeder
      * ]
      */
     protected array $entities = [];
-
     /**
      * Run the seeder
      */

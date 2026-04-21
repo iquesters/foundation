@@ -281,6 +281,29 @@ class FoundationSeeder extends BaseSeeder
     ];
 
     protected array $permissions = [];
+
+    protected array $entities = [
+        'navigations' => [
+            'fields' => [],
+            'meta_fields' => [],
+            'metas' => [],
+        ],
+        'api_logs' => [
+            'fields' => [],
+            'meta_fields' => [],
+            'metas' => [],
+        ],
+        'queues' => [
+            'fields' => [],
+            'meta_fields' => [],
+            'metas' => [],
+        ],
+        'completed_jobs' => [
+            'fields' => [],
+            'meta_fields' => [],
+            'metas' => [],
+        ],
+    ];
     
     /**
      * Implement abstract method from BaseSeeder
