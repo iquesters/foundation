@@ -296,6 +296,43 @@ class EntityController extends Controller
     }
 
     /**
+     * Pluralize a base table name for published entity tables.
+     */
+    private function pluralizeTableName(string $tableName): string
+    {
+        try {
+            $pluralEndings = ['s', 'es', 'ies'];
+
+            foreach ($pluralEndings as $ending) {
+                if (substr($tableName, -strlen($ending)) === $ending) {
+                    return $tableName;
+                }
+            }
+
+            if (substr($tableName, -1) === 'y') {
+                return substr($tableName, 0, -1) . 'ies';
+            }
+
+            if (
+                in_array(substr($tableName, -1), ['s', 'x', 'z'], true) ||
+                in_array(substr($tableName, -2), ['sh', 'ch'], true)
+            ) {
+                return $tableName . 'es';
+            }
+
+            return $tableName . 's';
+        } catch (\Throwable $th) {
+            Log::error('Error pluralizing table name', [
+                'table_name' => $tableName,
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString(),
+            ]);
+
+            throw $th;
+        }
+    }
+
+    /**
      * Get system default fields
      */
     private function getSystemFields()
@@ -696,12 +733,14 @@ class EntityController extends Controller
 
         } catch (\Throwable $th) {
             Log::error('Error fetching entity', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'entity_uid' => $entityUid,
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
             ]);
+
             return redirect()
                 ->back()
-                ->with('error', $e->getMessage());
+                ->with('error', $th->getMessage());
         }
     }
 
