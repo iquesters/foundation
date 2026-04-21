@@ -292,10 +292,46 @@ class FoundationSeeder extends BaseSeeder
             'fields' => [],
             'meta_fields' => [],
             'metas' => [],
-        ],
+        ],         
         'queues' => [
             'fields' => [],
-            'meta_fields' => [],
+            'meta_fields' => [
+                'max_workers' => [
+                    'meta_key' => 'max_workers',
+                    'type' => 'integer',
+                    'label' => 'Max Workers',
+                    'required' => false,
+                    'nullable' => false,
+                ],
+                'max_tries' => [
+                    'meta_key' => 'max_tries',
+                    'type' => 'integer',
+                    'label' => 'Max Tries',
+                    'required' => false,
+                    'nullable' => false,
+                ],
+                'timeout' => [
+                    'meta_key' => 'timeout',
+                    'type' => 'integer',
+                    'label' => 'Timeout',
+                    'required' => false,
+                    'nullable' => false,
+                ],
+                'sleep' => [
+                    'meta_key' => 'sleep',
+                    'type' => 'integer',
+                    'label' => 'Sleep',
+                    'required' => false,
+                    'nullable' => false,
+                ],
+                'memory' => [
+                    'meta_key' => 'memory',
+                    'type' => 'integer',
+                    'label' => 'Memory',
+                    'required' => false,
+                    'nullable' => false,
+                ],
+            ],
             'metas' => [],
         ],
         'completed_jobs' => [
