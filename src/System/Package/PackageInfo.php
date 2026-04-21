@@ -207,6 +207,7 @@ abstract class PackageInfo
         
         if (class_exists($seederCommandClass)) {
             $bindings[] = [
+                'binding_name' => 'command.' . $this->module_name . '.seed',
                 'command_class' => $seederCommandClass,
                 'seeder_class' => $seederClass
             ];

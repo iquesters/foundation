@@ -98,11 +98,12 @@ abstract class BaseServiceProvider extends ServiceProvider
 
         if ($bindings) {
             foreach ($bindings as $binding) {
+                $bindingName = $binding['binding_name'] ?? $binding['command_class'];
                 $commandClass = $binding['command_class'];
                 $seederClass = $binding['seeder_class'];
                 
                 // Bind the SeederCommand with its required constructor parameter
-                $this->app->bind($commandClass, function ($app) use ($commandClass, $seederClass) {
+                $this->app->bind($bindingName, function ($app) use ($commandClass, $seederClass) {
                     return new $commandClass($seederClass);
                 });
 
@@ -152,7 +153,7 @@ abstract class BaseServiceProvider extends ServiceProvider
         $allCommands = $commands ?? [];
         if ($bindings) {
             foreach ($bindings as $binding) {
-                $allCommands[] = $binding['command_class'];
+                $allCommands[] = $binding['binding_name'] ?? $binding['command_class'];
             }
         }
 
