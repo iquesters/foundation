@@ -132,7 +132,7 @@ abstract class PackageInfo
             
             if (class_exists($className) && $this->isCommand($className)) {
                 // Skip SeederCommand - it needs special handling
-                if (basename($className) === 'SeederCommand') {
+                if (class_basename($className) === 'SeederCommand') {
                     continue;
                 }
                 
