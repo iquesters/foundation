@@ -591,34 +591,17 @@ class EntityController extends Controller
     private function ensureGeneratedFormSchema($entity, $customFields, $metaFields): void
     {
         $formSchemaUid = $entity->getMeta('form_schema_uid');
-        $formSchemaSlug = $entity->slug . '-form';
-
-        if (! $formSchemaUid) {
-            $newFormSchemaUid = $this->createFormSchema($entity, $entity->slug, $customFields, $metaFields);
-            $this->saveEntityMeta($entity, 'form_schema_uid', $newFormSchemaUid, false);
-
-            Log::info('Generated form schema recreated because form_schema_uid was missing', [
-                'entity_uid' => $entity->uid,
-                'form_schema_uid' => $newFormSchemaUid,
-            ]);
-
-            return;
-        }
-
-        $formSchemaRecord = FormSchema::where('uid', $formSchemaUid)->first();
+        $entitySlug = $this->resolveEntitySlug($entity);
+        $formSchemaRecord = $this->findExistingFormSchemaRecord($entity, $formSchemaUid, $entitySlug);
 
         if (! $formSchemaRecord) {
-            $formSchemaRecord = FormSchema::where('slug', $formSchemaSlug)->first();
-        }
-
-        if (! $formSchemaRecord) {
-            $newFormSchemaUid = $this->createFormSchema($entity, $entity->slug, $customFields, $metaFields);
+            $newFormSchemaUid = $this->createFormSchema($entity, $entitySlug, $customFields, $metaFields);
             $this->saveEntityMeta($entity, 'form_schema_uid', $newFormSchemaUid, false);
 
-            Log::info('Generated form schema recreated because stored schema record was missing', [
+            Log::info('Generated form schema created because no existing schema record could be resolved', [
                 'entity_uid' => $entity->uid,
                 'missing_form_schema_uid' => $formSchemaUid,
-                'new_form_schema_uid' => $newFormSchemaUid,
+                'form_schema_uid' => $newFormSchemaUid,
             ]);
 
             return;
@@ -660,34 +643,17 @@ class EntityController extends Controller
     private function ensureGeneratedTableSchema($entity, $customFields, $formSchemaUid): void
     {
         $tableSchemaUid = $entity->getMeta('table_schema_uid');
-        $tableSchemaSlug = $entity->slug . '-table';
-
-        if (! $tableSchemaUid) {
-            $newTableSchemaUid = $this->createTableSchema($entity, $entity->slug, $customFields, $formSchemaUid);
-            $this->saveEntityMeta($entity, 'table_schema_uid', $newTableSchemaUid, false);
-
-            Log::info('Generated table schema recreated because table_schema_uid was missing', [
-                'entity_uid' => $entity->uid,
-                'table_schema_uid' => $newTableSchemaUid,
-            ]);
-
-            return;
-        }
-
-        $tableSchemaRecord = TableSchema::where('uid', $tableSchemaUid)->first();
+        $entitySlug = $this->resolveEntitySlug($entity);
+        $tableSchemaRecord = $this->findExistingTableSchemaRecord($entity, $tableSchemaUid, $entitySlug);
 
         if (! $tableSchemaRecord) {
-            $tableSchemaRecord = TableSchema::where('slug', $tableSchemaSlug)->first();
-        }
-
-        if (! $tableSchemaRecord) {
-            $newTableSchemaUid = $this->createTableSchema($entity, $entity->slug, $customFields, $formSchemaUid);
+            $newTableSchemaUid = $this->createTableSchema($entity, $entitySlug, $customFields, $formSchemaUid);
             $this->saveEntityMeta($entity, 'table_schema_uid', $newTableSchemaUid, false);
 
-            Log::info('Generated table schema recreated because stored schema record was missing', [
+            Log::info('Generated table schema created because no existing schema record could be resolved', [
                 'entity_uid' => $entity->uid,
                 'missing_table_schema_uid' => $tableSchemaUid,
-                'new_table_schema_uid' => $newTableSchemaUid,
+                'table_schema_uid' => $newTableSchemaUid,
             ]);
 
             return;
@@ -703,6 +669,133 @@ class EntityController extends Controller
         if ($tableSchemaRecord->uid !== $tableSchemaUid) {
             $this->saveEntityMeta($entity, 'table_schema_uid', $tableSchemaRecord->uid, false);
         }
+    }
+
+    private function findExistingFormSchemaRecord(Entity $entity, ?string $formSchemaUid, string $entitySlug): ?FormSchema
+    {
+        if ($formSchemaUid) {
+            $formSchemaRecord = FormSchema::where('uid', $formSchemaUid)->first();
+
+            if ($formSchemaRecord) {
+                return $formSchemaRecord;
+            }
+        }
+
+        foreach ($this->buildSchemaSlugCandidates($entitySlug, 'form') as $candidateSlug) {
+            $formSchemaRecord = FormSchema::where('slug', $candidateSlug)->first();
+
+            if ($formSchemaRecord) {
+                return $formSchemaRecord;
+            }
+        }
+
+        $entityTableNames = $this->buildEntityTableNameCandidates($entity);
+
+        foreach ($entityTableNames as $entityTableName) {
+            $formSchemaRecord = FormSchema::where('schema->entity', $entityTableName)->first();
+
+            if ($formSchemaRecord) {
+                return $formSchemaRecord;
+            }
+        }
+
+        return null;
+    }
+
+    private function findExistingTableSchemaRecord(Entity $entity, ?string $tableSchemaUid, string $entitySlug): ?TableSchema
+    {
+        if ($tableSchemaUid) {
+            $tableSchemaRecord = TableSchema::where('uid', $tableSchemaUid)->first();
+
+            if ($tableSchemaRecord) {
+                return $tableSchemaRecord;
+            }
+        }
+
+        foreach ($this->buildSchemaSlugCandidates($entitySlug, 'table') as $candidateSlug) {
+            $tableSchemaRecord = TableSchema::where('slug', $candidateSlug)->first();
+
+            if ($tableSchemaRecord) {
+                return $tableSchemaRecord;
+            }
+        }
+
+        $entityTableNames = $this->buildEntityTableNameCandidates($entity);
+
+        foreach ($entityTableNames as $entityTableName) {
+            $tableSchemaRecord = TableSchema::where('schema->entity', $entityTableName)->first();
+
+            if ($tableSchemaRecord) {
+                return $tableSchemaRecord;
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveEntitySlug(Entity $entity): string
+    {
+        $slug = trim((string) ($entity->slug ?? ''));
+
+        if ($slug !== '') {
+            return $slug;
+        }
+
+        $slug = $this->buildSlugFromEntityName($entity->entity_name);
+
+        if ($slug === '') {
+            $slug = 'entity-' . $entity->uid;
+        }
+
+        $entity->slug = $slug;
+        $entity->save();
+
+        return $slug;
+    }
+
+    private function buildSlugFromEntityName(string $entityName): string
+    {
+        $slug = strtolower($entityName);
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+
+        return trim((string) $slug, '-');
+    }
+
+    private function buildSchemaSlugCandidates(string $entitySlug, string $suffix): array
+    {
+        $candidates = [];
+
+        foreach ([$entitySlug, Str::singular($entitySlug), Str::plural($entitySlug)] as $candidateBase) {
+            $candidateBase = trim((string) $candidateBase, '-');
+
+            if ($candidateBase === '') {
+                continue;
+            }
+
+            $candidates[] = $candidateBase . '-' . $suffix;
+        }
+
+        return array_values(array_unique($candidates));
+    }
+
+    private function buildEntityTableNameCandidates(Entity $entity): array
+    {
+        $metaTableName = trim((string) ($entity->getMeta('table_name') ?? ''));
+        $generatedTableName = trim((string) $this->generateTableName($entity->entity_name));
+
+        $candidates = [];
+
+        foreach ([$metaTableName, $generatedTableName] as $baseTableName) {
+            if ($baseTableName === '') {
+                continue;
+            }
+
+            $candidates[] = $baseTableName;
+            $candidates[] = $this->pluralizeTableName($baseTableName);
+            $candidates[] = Str::singular($baseTableName);
+        }
+
+        return array_values(array_unique($candidates));
     }
 
     private function extractCustomFieldsFromEntityFields(array $fields): array
