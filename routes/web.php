@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Iquesters\Foundation\Http\Controllers\BusinessEntityController;
 use Iquesters\Foundation\Http\Controllers\ConfigController;
 use Iquesters\Foundation\Http\Controllers\EntityController;
 use Iquesters\Foundation\Http\Controllers\MasterDataController;
@@ -33,6 +34,16 @@ Route::middleware('web')->group(function () {
             Route::delete('/{entityUid}', [EntityController::class, 'destroy'])->name('destroy');
             Route::post('/{entityUid}/publish', [EntityController::class, 'publish'])->name('publish');
             Route::get('/{entityUid}', [EntityController::class, 'show'])->name('show');
+        });
+
+        Route::prefix('business-entity')->name('business-entities.')->group(function () {
+            Route::get('/', [BusinessEntityController::class, 'index'])->name('index');
+            Route::get('/create', [BusinessEntityController::class, 'create'])->name('create');
+            Route::get('/entity-options', [BusinessEntityController::class, 'entityOptions'])->name('entity-options');
+            Route::post('/', [BusinessEntityController::class, 'store'])->name('store');
+            Route::get('/{businessEntityUid}/edit', [BusinessEntityController::class, 'edit'])->name('edit');
+            Route::put('/{businessEntityUid}', [BusinessEntityController::class, 'update'])->name('update');
+            Route::delete('/{businessEntityUid}', [BusinessEntityController::class, 'destroy'])->name('destroy');
         });
         
         // Module-Role assignment routes
