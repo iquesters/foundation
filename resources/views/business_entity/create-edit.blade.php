@@ -102,7 +102,7 @@
                 </div>
             </div>
 
-            <div class="alert alert-info mb-3">
+            <div class="alert alert-info mb-2">
                 Select entities, choose primary and meta fields, then save. Only selected fields are stored in <code>field_mapping</code>.
             </div>
         </div>
@@ -143,6 +143,99 @@
 <style>
     .business-entity-sticky-top {
         z-index: 900;
+    }
+
+    .business-entity-tree,
+    .business-entity-tree ul,
+    .business-entity-tree li {
+        list-style: none;
+        margin: 0;
+        padding-left: 0;
+    }
+
+    .business-entity-tree {
+        min-width: max-content;
+    }
+
+    .business-entity-tree .tree-item {
+        position: relative;
+        margin-bottom: 4px;
+    }
+
+    .business-entity-tree .tree-item-content {
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    .business-entity-tree .tree-item-children {
+        margin-left: 25px;
+        margin-top: 4px;
+        position: relative;
+    }
+
+    .business-entity-tree .tree-item-children::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: -4px;
+        bottom: 20px;
+        width: 1px;
+        border-left: 1px solid #adb5bd;
+    }
+
+    .business-entity-tree .tree-item-children .tree-item::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 18px;
+        width: 20px;
+        border-top: 1px solid #adb5bd;
+    }
+
+    .business-entity-tree .tree-item-children .tree-item-content {
+        padding-left: 25px;
+    }
+
+    .business-entity-tree .tree-item-value {
+        color: #6c757d;
+        margin-left: 6px;
+    }
+
+    .business-entity-tree-header {
+        padding: 4px 8px;
+    }
+
+    .business-entity-sequence {
+        margin-left: 25px;
+        position: relative;
+    }
+
+    .business-entity-sequence::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 18px;
+        bottom: 20px;
+        width: 1px;
+        border-left: 1px solid #adb5bd;
+    }
+
+    .business-entity-sequence > .tree-item::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 18px;
+        width: 20px;
+        border-top: 1px solid #adb5bd;
+    }
+
+    .business-entity-sequence > .tree-item > .tree-item-content {
+        padding-left: 25px;
+    }
+
+    .business-relationship-row {
+        justify-content: flex-start;
+        margin-left: 0;
     }
 </style>
 @endpush
@@ -243,6 +336,7 @@ let relationships = Array.isArray(existingMapping.relationships)
     ? existingMapping.relationships.map(normalizeRelationship)
     : [];
 let openEntityUid = selectedEntities[selectedEntities.length - 1]?.entity_uid || null;
+let submitConfirmedByPreview = false;
 
 function buildMapping() {
     return {
@@ -309,6 +403,169 @@ function escapeHtml(value) {
         .replace(/'/g, '&#039;');
 }
 
+function getMappingFieldName(field) {
+    return field.field || field.name || field.meta_key || '';
+}
+
+function getMappingMetaFieldName(field) {
+    return field.meta_key || field.field || field.name || '';
+}
+
+function getDisplayMetaFieldName(field) {
+    const metaFieldName = getMappingMetaFieldName(field);
+
+    return metaFieldName.startsWith('m_') ? metaFieldName : `m_${metaFieldName}`;
+}
+
+function renderTreeNode(label, value = '', children = '', icon = 'fa-circle') {
+    return `
+        <li class="tree-item">
+            <div class="tree-item-content">
+                <i class="fas fa-fw ${icon} text-muted me-1"></i>
+                <span class="tree-item-key">${escapeHtml(label)}</span>
+                ${value ? `<span class="tree-item-value">- ${escapeHtml(value)}</span>` : ''}
+            </div>
+            ${children ? `<ul class="tree-item-children">${children}</ul>` : ''}
+        </li>
+    `;
+}
+
+function renderFieldTree(fields, emptyLabel) {
+    if (!fields.length) {
+        return renderTreeNode(emptyLabel, '', '', 'fa-minus');
+    }
+
+    return fields.map(field => renderTreeNode(
+        getMappingFieldName(field),
+        [field.label, field.type].filter(Boolean).join(' | '),
+        '',
+        'fa-table-columns'
+    )).join('');
+}
+
+function renderMetaFieldTree(fields) {
+    return fields.map(field => renderTreeNode(
+        getDisplayMetaFieldName(field),
+        [field.label, field.type].filter(Boolean).join(' | '),
+        '',
+        'fa-tags'
+    )).join('');
+}
+
+function findRelationshipsBetween(sourceEntity, targetEntity, mappingRelationships) {
+    return mappingRelationships.filter(relationship => {
+        return (
+            relationship.source_entity === sourceEntity.entity
+            && relationship.target_entity === targetEntity.entity
+        ) || (
+            relationship.source_entity === targetEntity.entity
+            && relationship.target_entity === sourceEntity.entity
+        );
+    });
+}
+
+function renderRelationshipConnector(sourceEntity, targetEntity, mappingRelationships) {
+    const matchingRelationships = findRelationshipsBetween(sourceEntity, targetEntity, mappingRelationships);
+
+    if (!matchingRelationships.length) {
+        return renderTreeNode(
+            `${sourceEntity.entity || 'source'} -> ${targetEntity.entity || 'target'}`,
+            'No relationship configured',
+            '',
+            'fa-link'
+        );
+    }
+
+    return matchingRelationships.map(relationship => {
+        const relationLabel = `${relationship.source_entity || 'source'} -> ${relationship.target_entity || 'target'}`;
+        const relationValue = [
+            relationship.type,
+            relationship.source_key && relationship.target_key
+                ? `${relationship.source_key} -> ${relationship.target_key}`
+                : ''
+        ].filter(Boolean).join(' | ');
+
+        return renderTreeNode(relationLabel, relationValue, '', 'fa-link');
+    }).join('');
+}
+
+function renderBusinessEntityTree(mapping) {
+    const mappingRelationships = mapping.relationships || [];
+    const entityNodes = (mapping.entities || []).map((entity, index) => {
+        const entityFields = [
+            renderFieldTree(entity.fields || [], 'No fields selected'),
+            renderMetaFieldTree(entity.meta_fields || [])
+        ].join('');
+        const entityNode = renderTreeNode(
+            entity.entity || 'Unnamed entity',
+            entity.is_primary ? 'Primary' : '',
+            entityFields || renderTreeNode('No fields selected', '', '', 'fa-minus'),
+            entity.is_primary ? 'fa-star' : 'fa-table'
+        );
+        const nextEntity = (mapping.entities || [])[index + 1];
+
+        if (!nextEntity) {
+            return entityNode;
+        }
+
+        return entityNode + renderTreeNode(
+            'Relationship',
+            '',
+            renderRelationshipConnector(entity, nextEntity, mappingRelationships),
+            'fa-diagram-project'
+        );
+    }).join('');
+
+    return `
+        <div class="overflow-auto bg-light border rounded p-2" style="max-height: 60vh;">
+            <div class="business-entity-tree-header">
+                <i class="fas fa-fw fa-sitemap text-muted me-1"></i>
+                <span class="tree-item-key">Selected Entities / Tables</span>
+                <span class="tree-item-value">- ${(mapping.entities || []).length} selected</span>
+            </div>
+            <ul class="business-entity-tree business-entity-sequence">
+                ${entityNodes || renderTreeNode('No entities selected', '', '', 'fa-minus')}
+            </ul>
+        </div>
+    `;
+}
+
+function showBusinessEntityPreviewModal(options = {}) {
+    syncFieldMappingInput();
+    const mapping = buildMapping();
+    const modalBody = document.createElement('div');
+    modalBody.innerHTML = renderBusinessEntityTree(mapping);
+    const actions = [];
+
+    if (typeof options.onConfirm === 'function') {
+        actions.push({
+            id: 'confirmBusinessEntitySave',
+            label: options.confirmLabel || 'Continue',
+            className: 'btn btn-primary',
+            action: options.onConfirm
+        });
+    }
+
+    showModal({
+        header: {
+            enabled: true,
+            content: `
+                <h5 class="modal-title">${escapeHtml(options.title || 'Business Entity Mapping')}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            `,
+        },
+        body: {
+            enabled: true,
+            content: modalBody,
+        },
+        footer: {
+            enabled: true,
+            allowCancel: true,
+            actions: actions,
+        },
+    });
+}
+
 function getEntityKeyOptions(entityUid) {
     const entity = findEntity(entityUid);
     const primaryKeys = (entity?.fields || []).map(getFieldName).filter(Boolean);
@@ -344,8 +601,7 @@ function renderRelationshipButton(sourceEntity, targetEntity, sourceIndex) {
         : 'Relationship';
 
     return `
-        <div class="d-flex align-items-center gap-2 my-2 ps-2">
-            <div class="border-top flex-grow-1"></div>
+        <div class="d-flex align-items-center gap-2 my-2 business-relationship-row">
             <button type="button"
                 class="btn btn-sm ${relationship ? 'btn-outline-success' : 'btn-outline-secondary'} edit-business-relationship"
                 data-source-index="${sourceIndex}"
@@ -353,7 +609,6 @@ function renderRelationshipButton(sourceEntity, targetEntity, sourceIndex) {
                 <i class="fa-solid fa-fw fa-link"></i>
                 <span class="ms-1">${label}</span>
             </button>
-            <div class="border-top flex-grow-1"></div>
         </div>
     `;
 }
@@ -883,12 +1138,61 @@ document.addEventListener('shown.bs.collapse', function(event) {
     openEntityUid = selectedEntities[entityIndex]?.entity_uid || openEntityUid;
 });
 
+document.addEventListener('hidden.bs.collapse', function(event) {
+    if (!event.target.id.startsWith('businessEntityItem')) {
+        return;
+    }
+
+    const accordion = document.getElementById('businessEntityItemsAccordion');
+
+    const openPanels = accordion.querySelectorAll(
+        '.accordion-collapse.show'
+    );
+
+    // If at least one is still open, do nothing
+    if (openPanels.length > 0) {
+        return;
+    }
+
+    // Find another panel to reopen
+    const allPanels = accordion.querySelectorAll(
+        '.accordion-collapse'
+    );
+
+    const panelToOpen = [...allPanels].find(
+        panel => panel.id !== event.target.id
+    );
+
+    if (panelToOpen) {
+        bootstrap.Collapse.getOrCreateInstance(panelToOpen).show();
+
+        const entityIndex = Number(
+            panelToOpen.id.replace('businessEntityItem', '')
+        );
+
+        openEntityUid = selectedEntities[entityIndex]?.entity_uid || openEntityUid;
+    }
+});
 document.getElementById('businessEntityForm').addEventListener('submit', function(event) {
     syncFieldMappingInput();
 
     if (!selectedEntities.length) {
         event.preventDefault();
         alert('Please add at least one entity.');
+        return;
+    }
+
+    if (!submitConfirmedByPreview) {
+        event.preventDefault();
+        showBusinessEntityPreviewModal({
+            title: '{{ $isCreating ? 'Review Business Entity Before Create' : 'Review Business Entity Before Update' }}',
+            confirmLabel: '{{ $isCreating ? 'Create' : 'Update' }}',
+            onConfirm: function() {
+                submitConfirmedByPreview = true;
+                bootstrap.Modal.getInstance(document.getElementById('labModal'))?.hide();
+                document.getElementById('businessEntityForm').requestSubmit();
+            }
+        });
     }
 });
 
