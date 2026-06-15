@@ -36,7 +36,9 @@ class BusinessEntityController extends Controller
     public function create()
     {
         $modules = Module::where('status', 'active')->get();
-        $entities = Entity::where('status', 'active')->get();
+        $entities = Entity::with('metas')
+            ->where('status', 'active')
+            ->get();
 
         return view('foundation::business_entity.create-edit', [
             'businessEntity' => null,
@@ -89,7 +91,9 @@ class BusinessEntityController extends Controller
         try {
             $businessEntity = BusinessEntity::where('uid', $businessEntityUid)->firstOrFail();
             $modules = Module::where('status', 'active')->get();
-            $entities = Entity::where('status', 'active')->get();
+            $entities = Entity::with('metas')
+                ->where('status', 'active')
+                ->get();
 
             return view('foundation::business_entity.create-edit', [
                 'businessEntity' => $businessEntity,
