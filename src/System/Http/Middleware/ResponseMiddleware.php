@@ -5,10 +5,11 @@ namespace Iquesters\Foundation\System\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Symfony\Component\HttpFoundation\Response;
+use Iquesters\Foundation\Constants\HttpStatusCode;
 use Iquesters\Foundation\System\Traits\Loggable;
 use Iquesters\Foundation\System\Http\ApiResponse;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 class ResponseMiddleware
 {
@@ -141,41 +142,56 @@ class ResponseMiddleware
 
         // Handle different status code ranges
         switch (true) {
-            // 2xx Success
-            case $statusCode >= 200 && $statusCode < 300:
+            case HttpStatusCode::isInformational($statusCode):
+                return $this->handleInformationalResponse($response);
+
+            case HttpStatusCode::isSuccess($statusCode):
                 return $this->handleSuccessResponse($response);
-            
-            // 3xx Redirection
-            case $statusCode >= 300 && $statusCode < 400:
+
+            case HttpStatusCode::isRedirect($statusCode):
                 return $this->handleRedirectResponse($response);
-                
-            // 4xx Client Errors
-            case $statusCode === 400:
+
+            case $statusCode === HttpStatusCode::HTTP_BAD_REQUEST:
                 return $this->handleBadRequest($response);
-            case $statusCode === 401:
+            case $statusCode === HttpStatusCode::HTTP_UNAUTHORIZED:
                 return $this->handleUnauthorized($response);
-            case $statusCode === 403:
+            case $statusCode === HttpStatusCode::HTTP_FORBIDDEN:
                 return $this->handleForbidden($response);
-            case $statusCode === 404:
+            case $statusCode === HttpStatusCode::HTTP_NOT_FOUND:
                 return $this->handleNotFound($response);
-            case $statusCode === 405:
+            case $statusCode === HttpStatusCode::HTTP_METHOD_NOT_ALLOWED:
                 return $this->handleMethodNotAllowed($response);
-            case $statusCode === 409:
+            case $statusCode === HttpStatusCode::HTTP_CONFLICT:
                 return $this->handleConflict($response);
-            case $statusCode === 422:
+            case $statusCode === HttpStatusCode::HTTP_UNPROCESSABLE_ENTITY:
                 return $this->handleValidationError($response);
-            case $statusCode === 429:
+            case $statusCode === HttpStatusCode::HTTP_TOO_MANY_REQUESTS:
                 return $this->handleTooManyRequests($response);
-            case $statusCode >= 400 && $statusCode < 500:
+            case HttpStatusCode::isClientError($statusCode):
                 return $this->handleClientError($response);
-                
-            // 5xx Server Errors
-            case $statusCode >= 500:
+
+            case HttpStatusCode::isServerError($statusCode):
                 return $this->handleServerError($response);
-                
+
             default:
                 return $this->handleGenericError($response);
         }
+    }
+
+    /**
+     * Handle informational responses (1xx)
+     */
+    protected function handleInformationalResponse(Response $response): Response
+    {
+        $this->logDebug("Processing informational response: " . $response->getStatusCode());
+
+        $content = $this->getResponseContent($response);
+        $statusCode = $response->getStatusCode();
+        $message = $this->extractMessage($content, HttpStatusCode::defaultMessage($statusCode));
+        $meta = $this->extractMeta($content);
+        $uiContext = $this->extractUIContext($content);
+
+        return ApiResponse::byStatusCode($statusCode, $this->extractData($content), $message, $meta, $uiContext);
     }
 
     /**
@@ -378,7 +394,7 @@ class ResponseMiddleware
             
         $uiContext = $this->extractUIContext($content);
 
-        if ($response->getStatusCode() === 503) {
+        if ($response->getStatusCode() === HttpStatusCode::HTTP_SERVICE_UNAVAILABLE) {
             $retryAfter = $response->headers->get('Retry-After');
             return ApiResponse::serviceUnavailable($message, $retryAfter ? (int)$retryAfter : null, $uiContext);
         }

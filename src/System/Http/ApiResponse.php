@@ -3,6 +3,7 @@
 namespace Iquesters\Foundation\System\Http;
 
 use Illuminate\Http\JsonResponse;
+use Iquesters\Foundation\Constants\HttpStatusCode;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -47,7 +48,7 @@ class ApiResponse
     public static function success(
         $data = null,
         string $message = 'Request successful',
-        int $statusCode = Response::HTTP_OK,
+        int $statusCode = HttpStatusCode::HTTP_OK,
         array $meta = [],
         array $links = [],
         array $uiContext = []
@@ -80,7 +81,7 @@ class ApiResponse
      */
     public static function error(
         string $message = 'Request failed',
-        int $statusCode = Response::HTTP_BAD_REQUEST,
+        int $statusCode = HttpStatusCode::HTTP_BAD_REQUEST,
         $errors = null,
         array $meta = [],
         array $uiContext = []
@@ -114,7 +115,7 @@ class ApiResponse
     public static function redirect(
         string $redirectUrl,
         string $message = 'Redirecting',
-        int $statusCode = Response::HTTP_FOUND,
+        int $statusCode = HttpStatusCode::HTTP_FOUND,
         array $meta = [],
         array $uiContext = []
     ): JsonResponse {
@@ -163,9 +164,13 @@ class ApiResponse
         array $links = [],
         array $uiContext = []
     ): JsonResponse {
-        $lastPage = (int) ceil($total / $perPage);
-        $from = (($currentPage - 1) * $perPage) + 1;
-        $to = min($currentPage * $perPage, $total);
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $from = $total > 0 ? (($currentPage - 1) * $perPage) + 1 : null;
+        $to = $total > 0 ? min($currentPage * $perPage, $total) : null;
+        $currentOffset = max(($currentPage - 1) * $perPage, 0);
+        $lastOffset = $total > 0 ? max(($lastPage - 1) * $perPage, 0) : 0;
+        $prevOffset = $currentPage > 1 ? max($currentOffset - $perPage, 0) : null;
+        $nextOffset = $currentPage < $lastPage ? $currentOffset + $perPage : null;
 
         $meta = [
             'pagination' => [
@@ -173,8 +178,8 @@ class ApiResponse
                 'per_page' => $perPage,
                 'current_page' => $currentPage,
                 'last_page' => $lastPage,
-                'from' => $from > $total ? null : $from,
-                'to' => $to > $total ? null : $to,
+                'from' => $from,
+                'to' => $to,
                 'has_more' => $currentPage < $lastPage,
             ]
         ];
@@ -184,19 +189,19 @@ class ApiResponse
         $queryParams = request()->query();
         
         $paginationLinks = [
-            'first' => self::buildPaginationUrl($baseUrl, $queryParams, 1, $perPage),
-            'last' => self::buildPaginationUrl($baseUrl, $queryParams, $lastPage, $perPage),
-            'prev' => $currentPage > 1 
-                ? self::buildPaginationUrl($baseUrl, $queryParams, $currentPage - 1, $perPage) 
+            'first' => self::buildPaginationUrl($baseUrl, $queryParams, 0, $perPage),
+            'last' => self::buildPaginationUrl($baseUrl, $queryParams, $lastOffset, $perPage),
+            'prev' => $prevOffset !== null
+                ? self::buildPaginationUrl($baseUrl, $queryParams, $prevOffset, $perPage)
                 : null,
-            'next' => $currentPage < $lastPage 
-                ? self::buildPaginationUrl($baseUrl, $queryParams, $currentPage + 1, $perPage) 
+            'next' => $nextOffset !== null
+                ? self::buildPaginationUrl($baseUrl, $queryParams, $nextOffset, $perPage)
                 : null,
         ];
 
         $links = array_merge($paginationLinks, $links);
 
-        return self::success($data, $message, Response::HTTP_OK, $meta, $links, $uiContext);
+        return self::success($data, $message, HttpStatusCode::HTTP_OK, $meta, $links, $uiContext);
     }
 
     /**
@@ -219,7 +224,7 @@ class ApiResponse
             $links['resource'] = $resourceUrl;
         }
 
-        $response = self::success($data, $message, Response::HTTP_CREATED, [], $links, $uiContext);
+        $response = self::success($data, $message, HttpStatusCode::HTTP_CREATED, [], $links, $uiContext);
         
         if ($resourceUrl) {
             $response->header('Location', $resourceUrl);
@@ -248,7 +253,7 @@ class ApiResponse
             $links['status'] = $statusUrl;
         }
 
-        return self::success($data, $message, Response::HTTP_ACCEPTED, [], $links, $uiContext);
+        return self::success($data, $message, HttpStatusCode::HTTP_ACCEPTED, [], $links, $uiContext);
     }
 
     /**
@@ -269,12 +274,7 @@ class ApiResponse
      */
     public static function notModified(array $meta = []): JsonResponse
     {
-        return self::success(
-            null,
-            'Resource not modified',
-            Response::HTTP_NOT_MODIFIED,
-            $meta
-        );
+        return self::success(null, 'Resource not modified', HttpStatusCode::HTTP_NOT_MODIFIED, $meta);
     }
 
     /**
@@ -290,7 +290,7 @@ class ApiResponse
         string $message = 'Resource moved permanently',
         array $uiContext = []
     ): JsonResponse {
-        return self::redirect($url, $message, Response::HTTP_MOVED_PERMANENTLY, [], $uiContext);
+        return self::redirect($url, $message, HttpStatusCode::HTTP_MOVED_PERMANENTLY, [], $uiContext);
     }
 
     /**
@@ -306,7 +306,7 @@ class ApiResponse
         string $message = 'Resource found at new location',
         array $uiContext = []
     ): JsonResponse {
-        return self::redirect($url, $message, Response::HTTP_FOUND, [], $uiContext);
+        return self::redirect($url, $message, HttpStatusCode::HTTP_FOUND, [], $uiContext);
     }
 
     /**
@@ -322,7 +322,7 @@ class ApiResponse
         string $message = 'See other resource',
         array $uiContext = []
     ): JsonResponse {
-        return self::redirect($url, $message, Response::HTTP_SEE_OTHER, [], $uiContext);
+        return self::redirect($url, $message, HttpStatusCode::HTTP_SEE_OTHER, [], $uiContext);
     }
 
     /**
@@ -338,7 +338,7 @@ class ApiResponse
         string $message = 'Temporary redirect',
         array $uiContext = []
     ): JsonResponse {
-        return self::redirect($url, $message, Response::HTTP_TEMPORARY_REDIRECT, [], $uiContext);
+        return self::redirect($url, $message, HttpStatusCode::HTTP_TEMPORARY_REDIRECT, [], $uiContext);
     }
 
     /**
@@ -354,7 +354,7 @@ class ApiResponse
         string $message = 'Permanent redirect',
         array $uiContext = []
     ): JsonResponse {
-        return self::redirect($url, $message, Response::HTTP_PERMANENTLY_REDIRECT, [], $uiContext);
+        return self::redirect($url, $message, HttpStatusCode::HTTP_PERMANENTLY_REDIRECT, [], $uiContext);
     }
 
     /**
@@ -370,7 +370,7 @@ class ApiResponse
         $errors = null,
         array $uiContext = []
     ): JsonResponse {
-        return self::error($message, Response::HTTP_BAD_REQUEST, $errors, [], $uiContext);
+        return self::error($message, HttpStatusCode::HTTP_BAD_REQUEST, $errors, [], $uiContext);
     }
 
     /**
@@ -384,7 +384,7 @@ class ApiResponse
         string $message = 'Unauthorized',
         array $uiContext = []
     ): JsonResponse {
-        return self::error($message, Response::HTTP_UNAUTHORIZED, null, [], $uiContext);
+        return self::error($message, HttpStatusCode::HTTP_UNAUTHORIZED, null, [], $uiContext);
     }
 
     /**
@@ -398,7 +398,7 @@ class ApiResponse
         string $message = 'Forbidden',
         array $uiContext = []
     ): JsonResponse {
-        return self::error($message, Response::HTTP_FORBIDDEN, null, [], $uiContext);
+        return self::error($message, HttpStatusCode::HTTP_FORBIDDEN, null, [], $uiContext);
     }
 
     /**
@@ -412,7 +412,7 @@ class ApiResponse
         string $message = 'Resource not found',
         array $uiContext = []
     ): JsonResponse {
-        return self::error($message, Response::HTTP_NOT_FOUND, null, [], $uiContext);
+        return self::error($message, HttpStatusCode::HTTP_NOT_FOUND, null, [], $uiContext);
     }
 
     /**
@@ -430,7 +430,7 @@ class ApiResponse
     ): JsonResponse {
         $meta = !empty($allowedMethods) ? ['allowed_methods' => $allowedMethods] : [];
         
-        $response = self::error($message, Response::HTTP_METHOD_NOT_ALLOWED, null, $meta, $uiContext);
+        $response = self::error($message, HttpStatusCode::HTTP_METHOD_NOT_ALLOWED, null, $meta, $uiContext);
         
         if (!empty($allowedMethods)) {
             $response->header('Allow', implode(', ', $allowedMethods));
@@ -452,7 +452,7 @@ class ApiResponse
         $errors = null,
         array $uiContext = []
     ): JsonResponse {
-        return self::error($message, Response::HTTP_CONFLICT, $errors, [], $uiContext);
+        return self::error($message, HttpStatusCode::HTTP_CONFLICT, $errors, [], $uiContext);
     }
 
     /**
@@ -468,7 +468,7 @@ class ApiResponse
         string $message = 'Validation failed',
         array $uiContext = []
     ): JsonResponse {
-        return self::error($message, Response::HTTP_UNPROCESSABLE_ENTITY, $errors, [], $uiContext);
+        return self::error($message, HttpStatusCode::HTTP_UNPROCESSABLE_ENTITY, $errors, [], $uiContext);
     }
 
     /**
@@ -489,7 +489,7 @@ class ApiResponse
             $meta['retry_after'] = $retryAfter;
         }
 
-        $response = self::error($message, Response::HTTP_TOO_MANY_REQUESTS, null, $meta, $uiContext);
+        $response = self::error($message, HttpStatusCode::HTTP_TOO_MANY_REQUESTS, null, $meta, $uiContext);
         
         if ($retryAfter !== null) {
             $response->header('Retry-After', $retryAfter);
@@ -511,7 +511,7 @@ class ApiResponse
         $errors = null,
         array $uiContext = []
     ): JsonResponse {
-        return self::error($message, Response::HTTP_INTERNAL_SERVER_ERROR, $errors, [], $uiContext);
+        return self::error($message, HttpStatusCode::HTTP_INTERNAL_SERVER_ERROR, $errors, [], $uiContext);
     }
 
     /**
@@ -532,7 +532,7 @@ class ApiResponse
             $meta['retry_after'] = $retryAfter;
         }
 
-        $response = self::error($message, Response::HTTP_SERVICE_UNAVAILABLE, null, $meta, $uiContext);
+        $response = self::error($message, HttpStatusCode::HTTP_SERVICE_UNAVAILABLE, null, $meta, $uiContext);
         
         if ($retryAfter !== null) {
             $response->header('Retry-After', $retryAfter);
@@ -558,7 +558,9 @@ class ApiResponse
         array $meta = [],
         array $uiContext = []
     ): JsonResponse {
-        $isSuccess = $statusCode >= 200 && $statusCode < 400;
+        $isSuccess = HttpStatusCode::isInformational($statusCode)
+            || HttpStatusCode::isSuccess($statusCode)
+            || HttpStatusCode::isRedirect($statusCode);
 
         if ($message === null) {
             $message = self::getDefaultMessageForStatusCode($statusCode);
@@ -625,19 +627,21 @@ class ApiResponse
      *
      * @param string $baseUrl
      * @param array $queryParams
-     * @param int $page
-     * @param int $perPage
+     * @param int $offset
+     * @param int $length
      * @return string
      */
     private static function buildPaginationUrl(
         string $baseUrl,
         array $queryParams,
-        int $page,
-        int $perPage
+        int $offset,
+        int $length
     ): string {
+        unset($queryParams['page'], $queryParams['per_page']);
+
         $params = array_merge($queryParams, [
-            'page' => $page,
-            'per_page' => $perPage,
+            'offset' => $offset,
+            'length' => $length,
         ]);
 
         return $baseUrl . '?' . http_build_query($params);
@@ -661,36 +665,6 @@ class ApiResponse
      */
     private static function getDefaultMessageForStatusCode(int $statusCode): string
     {
-        return match ($statusCode) {
-            // 2xx Success
-            200 => 'Request successful',
-            201 => 'Resource created successfully',
-            202 => 'Request accepted for processing',
-            204 => 'No content',
-            
-            // 3xx Redirection
-            301 => 'Resource moved permanently',
-            302 => 'Resource found at new location',
-            303 => 'See other resource',
-            304 => 'Resource not modified',
-            307 => 'Temporary redirect',
-            308 => 'Permanent redirect',
-            
-            // 4xx Client Errors
-            400 => 'Bad request',
-            401 => 'Unauthorized',
-            403 => 'Forbidden',
-            404 => 'Resource not found',
-            405 => 'Method not allowed',
-            409 => 'Conflict',
-            422 => 'Validation failed',
-            429 => 'Too many requests',
-            
-            // 5xx Server Errors
-            500 => 'Internal server error',
-            503 => 'Service unavailable',
-            
-            default => 'Request processed',
-        };
+        return HttpStatusCode::defaultMessage($statusCode);
     }
 }
