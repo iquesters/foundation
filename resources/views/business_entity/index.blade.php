@@ -298,9 +298,25 @@
             }).join('');
         }
 
+        function renderAssociationConnector(associationEntity) {
+            return renderTreeNode(
+                `Association: ${associationEntity.entity}`,
+                '',
+                renderFieldTree(
+                    associationEntity.fields || [],
+                    'No fields available'
+                ),
+                'fa-link'
+            );
+        }
+
         function renderBusinessEntityTree(mapping) {
             const mappingRelationships = mapping.relationships || [];
             const entityNodes = (mapping.entities || []).map((entity, index) => {
+                if (entity.is_association) {
+                    return '';
+                }
+
                 const entityFields = [
                     renderFieldTree(entity.fields || [], 'No fields selected'),
                     renderMetaFieldTree(entity.meta_fields || [])
@@ -315,6 +331,11 @@
 
                 if (!nextEntity) {
                     return entityNode;
+                }
+
+                if (nextEntity.is_association) {
+                    return entityNode +
+                        renderAssociationConnector(nextEntity);
                 }
 
                 return entityNode + renderTreeNode(

@@ -10,9 +10,20 @@ use Illuminate\Support\Str;
 use Iquesters\Foundation\Models\BusinessEntity;
 use Iquesters\Foundation\Models\Entity;
 use Iquesters\Foundation\Models\Module;
+use Iquesters\Foundation\Services\FormSchemaService;
+use Iquesters\Foundation\Services\TableSchemaService;
+use Iquesters\Foundation\System\Traits\Loggable;
 
 class BusinessEntityController extends Controller
 {
+    use Loggable;
+
+    public function __construct(
+        private FormSchemaService $formSchemaService,
+        private TableSchemaService $tableSchemaService
+    ) {
+    }
+
     public function index()
     {
         try {
@@ -58,21 +69,55 @@ class BusinessEntityController extends Controller
                 'field_mapping' => 'required|json',
             ]);
 
+            $fieldMapping = json_decode($validated['field_mapping'], true);
+            $slug = $this->generateUniqueSlug($validated['business_entity_name']);
+            $tableName = $this->generateTableName($validated['business_entity_name']);
+
+            $this->logInfo('Creating business entity ' . $validated['business_entity_name']);
+
             $businessEntity = BusinessEntity::create([
                 'uid' => (string) Str::ulid(),
                 'ref_module' => $validated['ref_module'],
                 'business_entity_name' => $validated['business_entity_name'],
-                'slug' => $this->generateUniqueSlug($validated['business_entity_name']),
+                'slug' => $slug,
                 'desc' => $validated['desc'] ?? null,
-                'field_mapping' => json_decode($validated['field_mapping'], true),
+                'field_mapping' => $fieldMapping,
                 'status' => 'active',
                 'created_by' => auth()->id() ?? 0,
                 'updated_by' => auth()->id() ?? 0,
             ]);
 
+            [$customFields, $metaFields] = $this->buildSchemaFieldsFromMapping($fieldMapping);
+            $this->saveBusinessEntityMeta($businessEntity, 'table_name', $tableName);
+
+            $this->logInfo('Generating schemas for business entity ' . $businessEntity->business_entity_name);
+
+            $schemaOptions = ['is_business_entity' => true];
+            $formSchemaUid = $this->formSchemaService->createAndAttach(
+                $businessEntity,
+                $slug,
+                $customFields,
+                $metaFields,
+                $schemaOptions
+            );
+            $tableSchemaUid = $this->tableSchemaService->createAndAttach(
+                $businessEntity,
+                $slug,
+                $customFields,
+                $formSchemaUid,
+                $metaFields,
+                $schemaOptions
+            );
+
+            Log::info('Business entity created with schemas', [
+                'business_entity_uid' => $businessEntity->uid,
+                'form_schema_uid' => $formSchemaUid,
+                'table_schema_uid' => $tableSchemaUid,
+            ]);
+
             return redirect()
                 ->route('business-entities.edit', $businessEntity->uid)
-                ->with('success', 'Business Entity created successfully.');
+                ->with('success', 'Business Entity created successfully with form and table schemas.');
         } catch (Exception $e) {
             Log::error('Error creating business entity', [
                 'error' => $e->getMessage(),
@@ -132,6 +177,25 @@ class BusinessEntityController extends Controller
                 'field_mapping' => json_decode($validated['field_mapping'], true),
                 'updated_by' => auth()->id() ?? 0,
             ]);
+
+            [$customFields, $metaFields] = $this->buildSchemaFieldsFromMapping($validated['field_mapping']);
+            $schemaOptions = ['is_business_entity' => true];
+
+            $formSchemaUid = $this->formSchemaService->ensureGenerated(
+                $businessEntity,
+                $customFields,
+                $metaFields,
+                $schemaOptions
+            );
+
+            $this->tableSchemaService->ensureGenerated(
+                $businessEntity,
+                $businessEntity->slug,
+                $customFields,
+                $formSchemaUid,
+                $metaFields,
+                $schemaOptions
+            );
 
             return redirect()
                 ->route('business-entities.edit', $businessEntity->uid)
@@ -193,6 +257,143 @@ class BusinessEntityController extends Controller
         ]);
     }
 
+    public function buildSchemaFieldsFromMapping(mixed $fieldMapping): array
+    {
+        if (is_string($fieldMapping)) {
+            $fieldMapping = json_decode($fieldMapping, true) ?: [];
+        }
+
+        $customFields = [];
+        $metaFields = [];
+        $entities = $fieldMapping['entities'] ?? [];
+
+        if (! is_array($entities)) {
+            return [$customFields, $metaFields];
+        }
+
+        usort($entities, function ($left, $right) {
+            return ($left['sort_order'] ?? 0) <=> ($right['sort_order'] ?? 0);
+        });
+
+        foreach ($entities as $mappedEntity) {
+            if (! is_array($mappedEntity)) {
+                continue;
+            }
+
+            $prefix = $this->resolveMappingPrefix($mappedEntity);
+            $entityLabel = $mappedEntity['entity'] ?? $prefix;
+
+            foreach (($mappedEntity['fields'] ?? []) as $field) {
+                if (! is_array($field)) {
+                    continue;
+                }
+
+                $fieldName = $field['field'] ?? $field['name'] ?? null;
+
+                if (! $fieldName) {
+                    continue;
+                }
+
+                $schemaFieldName = $this->normalizeSchemaFieldName($prefix . '_' . $fieldName);
+                $fieldType = $field['type'] ?? 'string';
+
+                $customFields[$schemaFieldName] = [
+                    'name' => $schemaFieldName,
+                    'type' => $fieldType,
+                    'label' => trim(($entityLabel ? $entityLabel . ' ' : '') . ($field['label'] ?? Str::headline($fieldName))),
+                    'required' => $field['required'] ?? false,
+                    'nullable' => $field['nullable'] ?? true,
+                    'input_type' => $field['input_type'] ?? $this->resolveInputType($fieldType),
+                    'maxlength' => $field['maxlength'] ?? null,
+                    'default' => $field['default'] ?? null,
+                    'source_entity' => $mappedEntity['entity'] ?? null,
+                    'source_field' => $fieldName,
+                ];
+            }
+
+            foreach (($mappedEntity['meta_fields'] ?? []) as $field) {
+                if (! is_array($field)) {
+                    continue;
+                }
+
+                $metaKey = $field['meta_key'] ?? $field['field'] ?? $field['name'] ?? null;
+
+                if (! $metaKey) {
+                    continue;
+                }
+
+                $schemaMetaKey = $this->normalizeSchemaFieldName($prefix . '_m_' . $metaKey);
+                $fieldType = $field['type'] ?? 'string';
+
+                $metaFields[] = [
+                    'meta_key' => $schemaMetaKey,
+                    'label' => trim(($entityLabel ? $entityLabel . ' ' : '') . ($field['label'] ?? Str::headline($metaKey))),
+                    'type' => $fieldType,
+                    'input_type' => $field['input_type'] ?? $this->resolveInputType($fieldType),
+                    'required' => $field['required'] ?? false,
+                    'nullable' => $field['nullable'] ?? true,
+                    'display' => $field['display'] ?? true,
+                    'source_entity' => $mappedEntity['entity'] ?? null,
+                    'source_meta_key' => $metaKey,
+                ];
+            }
+        }
+
+        return [$customFields, $metaFields];
+    }
+
+    private function resolveMappingPrefix(array $mappedEntity): string
+    {
+        return $this->normalizeSchemaFieldName(
+            $mappedEntity['slug']
+            ?? $mappedEntity['entity']
+            ?? $mappedEntity['entity_uid']
+            ?? 'entity'
+        );
+    }
+
+    private function normalizeSchemaFieldName(string $fieldName): string
+    {
+        $fieldName = strtolower($fieldName);
+        $fieldName = preg_replace('/[^a-z0-9]+/', '_', $fieldName);
+
+        return trim($fieldName, '_');
+    }
+
+    private function resolveInputType(string $fieldType): string
+    {
+        return match ($fieldType) {
+            'text', 'longtext' => 'textarea',
+            'integer', 'bigint', 'decimal' => 'number',
+            'date' => 'date',
+            'datetime', 'timestamp' => 'datetime-local',
+            'time' => 'time',
+            'boolean' => 'checkbox',
+            default => 'text',
+        };
+    }
+
+    private function saveBusinessEntityMeta(BusinessEntity $businessEntity, string $metaKey, mixed $metaValue): void
+    {
+        $businessEntity->metas()->updateOrCreate(
+            ['meta_key' => $metaKey],
+            [
+                'meta_value' => $metaValue,
+                'status' => 'active',
+                'created_by' => auth()->id(),
+                'updated_by' => auth()->id(),
+            ]
+        );
+    }
+
+    private function generateTableName(string $businessEntityName): string
+    {
+        $tableName = strtolower($businessEntityName);
+        $tableName = preg_replace('/[^a-z0-9]+/', '_', $tableName);
+
+        return trim($tableName, '_');
+    }
+
     private function generateUniqueSlug(string $businessEntityName): string
     {
         $baseSlug = strtolower($businessEntityName);
@@ -209,4 +410,5 @@ class BusinessEntityController extends Controller
 
         return $slug;
     }
+
 }

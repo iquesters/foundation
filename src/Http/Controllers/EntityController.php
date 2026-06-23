@@ -3,20 +3,25 @@
 namespace Iquesters\Foundation\Http\Controllers;
 
 use Illuminate\Routing\Controller;
-use Iquesters\Foundation\Constants\EntityStatus;
 use Iquesters\Foundation\Models\Entity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
-use Iquesters\UserInterface\Models\FormSchema;
-use Iquesters\UserInterface\Models\TableSchema;
 use Illuminate\Database\Schema\Blueprint;
 use Iquesters\Foundation\Models\Module;
+use Iquesters\Foundation\Services\FormSchemaService;
+use Iquesters\Foundation\Services\TableSchemaService;
 use Illuminate\Support\Facades\Schema;
 use Exception;
 
 class EntityController extends Controller
 {
+    public function __construct(
+        private FormSchemaService $formSchemaService,
+        private TableSchemaService $tableSchemaService
+    ) {
+    }
+
     private const SUPPORTED_PRIMARY_FIELD_TYPES = [
         'string',
         'text',
@@ -155,10 +160,8 @@ class EntityController extends Controller
 
             // Save metadata and generate schemas
             $this->saveEntityMeta($entity, 'table_name', $tableName);
-            $formSchemaUid = $this->createFormSchema($entity, $slug, $processedCustomFields, $metaFieldsData);
-            $this->saveEntityMeta($entity, 'form_schema_uid', $formSchemaUid);
-            $tableSchemaUid = $this->createTableSchema($entity, $slug, $processedCustomFields, $formSchemaUid);
-            $this->saveEntityMeta($entity, 'table_schema_uid', $tableSchemaUid);
+            $formSchemaUid = $this->formSchemaService->createAndAttach($entity, $slug, $processedCustomFields, $metaFieldsData);
+            $tableSchemaUid = $this->tableSchemaService->createAndAttach($entity, $slug, $processedCustomFields, $formSchemaUid);
 
             Log::info('Entity created with schemas', [
                 'entity' => $entity->toArray(),
@@ -229,7 +232,7 @@ class EntityController extends Controller
                 ? $this->extractCustomFieldsFromEntityFields($allFields)
                 : ($processedCustomFields ?? []);
 
-            $this->ensureGeneratedFormSchema($entity, $customFieldsForSchema, $metaFieldsData);
+            $this->formSchemaService->ensureGenerated($entity, $customFieldsForSchema, $metaFieldsData);
 
             Log::info('Entity updated', [
                 'entity_uid' => $entity->uid,
@@ -520,197 +523,6 @@ class EntityController extends Controller
         );
     }
 
-    /**
-     * Create form schema and return its UID
-     */
-    private function createFormSchema($entity, $slug, $customFields, $metaFields = [])
-    {
-        $formSchema = $this->generateFormSchema($entity, $customFields, $metaFields);
-        $formSchemaRecord = FormSchema::create([
-            'uid' => Str::ulid(),
-            'slug' => $slug . '-form',
-            'name' => $entity->entity_name . ' Form',
-            'description' => 'Auto-generated form for ' . $entity->entity_name,
-            'schema' => $formSchema,
-            'extra_info' => [],
-            'status' => EntityStatus::ACTIVE,
-            'created_by' => auth()->id(),
-            'updated_by' => auth()->id(),
-        ]);
-
-        return $formSchemaRecord->uid;
-    }
-
-    private function ensureGeneratedFormSchema($entity, $customFields, $metaFields): void
-    {
-        $formSchemaUid = $entity->getMeta('form_schema_uid');
-        $formSchemaSlug = $entity->slug . '-form';
-
-        if (! $formSchemaUid) {
-            $newFormSchemaUid = $this->createFormSchema($entity, $entity->slug, $customFields, $metaFields);
-            $this->saveEntityMeta($entity, 'form_schema_uid', $newFormSchemaUid, false);
-
-            Log::info('Generated form schema recreated because form_schema_uid was missing', [
-                'entity_uid' => $entity->uid,
-                'form_schema_uid' => $newFormSchemaUid,
-            ]);
-
-            return;
-        }
-
-        $formSchemaRecord = FormSchema::where('uid', $formSchemaUid)->first();
-
-        if (! $formSchemaRecord) {
-            $formSchemaRecord = FormSchema::where('slug', $formSchemaSlug)->first();
-        }
-
-        if (! $formSchemaRecord) {
-            $newFormSchemaUid = $this->createFormSchema($entity, $entity->slug, $customFields, $metaFields);
-            $this->saveEntityMeta($entity, 'form_schema_uid', $newFormSchemaUid, false);
-
-            Log::info('Generated form schema recreated because stored schema record was missing', [
-                'entity_uid' => $entity->uid,
-                'missing_form_schema_uid' => $formSchemaUid,
-                'new_form_schema_uid' => $newFormSchemaUid,
-            ]);
-
-            return;
-        }
-
-        $formSchemaRecord->update([
-            'name' => $entity->entity_name . ' Form',
-            'description' => 'Auto-generated form for ' . $entity->entity_name,
-            'schema' => $this->generateFormSchema($entity, $customFields, $metaFields),
-            'updated_by' => auth()->id(),
-        ]);
-
-        if ($formSchemaRecord->uid !== $formSchemaUid) {
-            $this->saveEntityMeta($entity, 'form_schema_uid', $formSchemaRecord->uid, false);
-        }
-    }
-
-    /**
-     * Create table schema and return its UID
-     */
-    private function createTableSchema($entity, $slug, $customFields, $formSchemaUid)
-    {
-        $tableSchema = $this->generateTableSchema($entity, $customFields, $formSchemaUid);
-        $tableSchemaRecord = TableSchema::create([
-            'uid' => Str::ulid(),
-            'slug' => $slug . '-table',
-            'name' => $entity->entity_name . ' Table',
-            'description' => 'Auto-generated table for ' . $entity->entity_name,
-            'schema' => $tableSchema,
-            'extra_info' => [],
-            'status' => 'active',
-            'created_by' => auth()->id(),
-            'updated_by' => auth()->id(),
-        ]);
-
-        return $tableSchemaRecord->uid;
-    }
-
-    /**
-     * Generate form schema from custom fields
-     */
-    private function generateFormSchema($entity, $customFields, $metaFields = [])
-    {
-        $fields = array_merge(
-            $this->buildFormSchemaFields($customFields, false),
-            $this->buildFormSchemaFields($this->filterDisplayableMetaFields($metaFields), true)
-        );
-
-        return [
-            'info' => [
-                'icon' => 'far fa-lightbulb',
-                'innerHTML' => 'You are creating a new ' . $entity->entity_name
-            ],
-            'entity' => $this->generateTableName($entity->entity_name),
-            'method' => 'POST',
-            'endpoint' => url('/api/entity/store/' . $this->generateTableName($entity->entity_name)),
-            'floatinglabel' => false,
-            'enctype' => 'multipart/form-data',
-            'header' => [
-                'icon' => 'fas fa-database',
-                'text' => 'Create ' . $entity->entity_name
-            ],
-            'fields' => $fields,
-            'actions' => [
-                [
-                    'icon' => 'far fa-save',
-                    'type' => 'submit',
-                    'route' => '#',
-                    'element' => [
-                        'type' => 'button',
-                        'color' => 'success'
-                    ]
-                ]
-            ]
-        ];
-    }
-
-    private function buildFormSchemaFields(array $fields, bool $isMetaField): array
-    {
-        $schemaFields = [];
-        $inputTypeMapping = [
-            'text' => 'text',
-            'textarea' => 'textarea',
-            'number' => 'number',
-            'email' => 'email',
-            'datetime-local' => 'datetime-local',
-            'date' => 'date',
-            'time' => 'time',
-            'checkbox' => 'checkbox',
-            'select' => 'select',
-        ];
-
-        foreach ($fields as $field) {
-            $fieldId = $isMetaField ? ($field['meta_key'] ?? null) : ($field['name'] ?? null);
-            $fieldLabel = $field['label'] ?? Str::headline((string) $fieldId);
-
-            if (! $fieldId) {
-                continue;
-            }
-
-            $formField = [
-                'id' => $fieldId,
-                'type' => $inputTypeMapping[$field['input_type']] ?? 'text',
-                'label' => $fieldLabel,
-                'placeholder' => 'Enter ' . strtolower($fieldLabel),
-                'helpertext' => $fieldLabel . ' field',
-                'required' => ! empty($field['required']),
-                'size' => [
-                    'md' => 12
-                ]
-            ];
-
-            if (! empty($field['maxlength'])) {
-                $formField['maxLength'] = $field['maxlength'];
-            }
-
-            if (! empty($field['required'])) {
-                $formField['messages'] = [
-                    'required' => $fieldLabel . ' is required'
-                ];
-            }
-
-            if ($isMetaField) {
-                $formField['meta'] = true;
-            }
-
-            $schemaFields[] = $formField;
-        }
-
-        return $schemaFields;
-    }
-
-    private function filterDisplayableMetaFields(array $metaFields): array
-    {
-        return array_values(array_filter($metaFields, function ($field) {
-            return ($field['display'] ?? true) === true || ($field['display'] ?? 1) === 1;
-        }));
-    }
-
     private function extractCustomFieldsFromEntityFields(array $fields): array
     {
         $systemFieldNames = array_keys($this->getSystemFields());
@@ -718,59 +530,6 @@ class EntityController extends Controller
         return array_filter($fields, function ($field) use ($systemFieldNames) {
             return ! in_array($field['name'] ?? null, $systemFieldNames, true);
         });
-    }
-
-    /**
-     * Generate table schema with system fields and first 2 custom fields
-     */
-    private function generateTableSchema($entity, $customFields, $formSchemaUid)
-    {
-        $columns = [];
-        
-        $columns[] = [
-            'data' => 'id',
-            'title' => 'ID',
-            'visible' => true
-        ];
-
-        $customFieldArray = array_values($customFields);
-        $fieldsToShow = array_slice($customFieldArray, 0, 2);
-        
-        foreach ($fieldsToShow as $field) {
-            $columns[] = [
-                'data' => $field['name'],
-                'title' => $field['label'],
-                'visible' => true,
-                'link' => true,
-                'form-schema-uid' => $formSchemaUid
-            ];
-        }
-
-        $columns[] = [
-            'data' => 'status',
-            'title' => 'Status',
-            'visible' => true
-        ];
-        
-        $tableMeta = $entity->metas()
-        ->where('meta_key', 'table_name')
-        ->first();
-
-        $baseTableName = $tableMeta?->meta_value ?? $this->generateTableName($entity->entity_name);
-        
-
-        return [
-            'entity' => $this->pluralizeTableName($baseTableName),
-            'dt-options' => [
-                'columns' => $columns,
-                'options' => [
-                    'pageLength' => 10,
-                    'order' => [[0, 'desc']],
-                    'responsive' => true
-                ]
-            ],
-            'default_view_mode' => 'inbox'
-        ];
     }
 
     public function show($entityUid)

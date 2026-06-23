@@ -45,7 +45,7 @@ Route::middleware('web')->group(function () {
             Route::put('/{businessEntityUid}', [BusinessEntityController::class, 'update'])->name('update');
             Route::delete('/{businessEntityUid}', [BusinessEntityController::class, 'destroy'])->name('destroy');
         });
-        
+
         // Module-Role assignment routes
         Route::get('/modules/assign-to-role', [ModuleController::class, 'assignToRole'])->name('modules.assign-to-role');
         Route::put('/modules/{role}/assign', [ModuleController::class, 'updateRoleModules'])->name('modules.update-role-modules');
