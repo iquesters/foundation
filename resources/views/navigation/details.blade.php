@@ -1,89 +1,142 @@
 @extends('userinterface::layouts.app')
 
+@php
+    $sections = $editorPayload['sections'] ?? ['sidebar', 'minibar', 'tabs'];
+    $moduleNavigationGroups = $editorPayload['module_navigation'] ?? [];
+    $foundationNavigationGroups = $editorPayload['foundation_navigation'] ?? [];
+@endphp
+
 @section('content')
 <form method="POST" id="navigationForm" action="{{ route('navigation.save-order') }}">
     @csrf
 
-    {{-- PRIMARY NAV --}}
-    <input type="hidden" name="order" id="navigationOrderInput">
-
-    <div class="row d-flex align-items-start justify-content-between">
-        <div class="col-md-5">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-                <h5 class="fs-6 text-muted mb-0">Primary Navigation Order</h5>
-                <button type="button" id="savePrimaryNav" class="btn btn-sm btn-outline-primary">
-                    Update Primary
-                </button>
-            </div>
-
-            <small class="text-muted small">
-                Drag and drop modules to reorder navigation
-            </small>
-
-            <div id="unsavedPrimary" class="alert alert-warning py-2 px-3 small mt-2 d-none">
-                <i class="fas fa-exclamation-triangle me-1"></i>
-                You have unsaved changes.
-            </div>
-
-            <div class="p-2">
-                <ul id="navigationOrder" class="list-group">
-                    @foreach($orderedModules as $module)
-                        <li class="list-group-item d-flex justify-content-between align-items-center"
-                            draggable="true"
-                            data-id="{{ $module->id }}">
-                            {{ $module->name }}
-                            <i class="fas fa-grip-lines"></i>
-                        </li>
-                    @endforeach
-                </ul>
+    <div class="row g-4">
+        <div class="col-12 col-xl-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="mb-1">Module Navigation</h5>
+                    <p class="text-muted small mb-3">Rendered from the saved navigation JSON and grouped by placement.</p>
+                    <div class="nav-editor" data-navigation-editor="module_navigation">
+                        @foreach($sections as $section)
+                            <div class="nav-editor-section mb-4" data-section="{{ $section }}">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0 text-uppercase small text-muted">{{ $section }}</h6>
+                                    <span class="badge bg-light text-dark">{{ count($moduleNavigationGroups[$section] ?? []) }}</span>
+                                </div>
+                                <ul class="list-group navigation-list" data-list="{{ $section }}">
+                                    @forelse($moduleNavigationGroups[$section] ?? [] as $item)
+                                        <li class="list-group-item d-flex justify-content-between align-items-center"
+                                            draggable="true"
+                                            data-id="{{ $item['id'] }}"
+                                            data-label="{{ $item['label'] }}"
+                                            data-icon="{{ $item['icon'] ?? '' }}"
+                                            data-placement="{{ $item['placement'] ?? $section }}"
+                                            data-module-uid="{{ $item['module_uid'] ?? '' }}"
+                                            data-target-module-uid="{{ $item['target_module_uid'] ?? '' }}">
+                                            <span>
+                                                <i class="{{ $item['icon'] ?? 'fas fa-circle' }} me-2"></i>
+                                                {{ $item['label'] }}
+                                            </span>
+                                            <small class="text-muted">{{ $item['placement'] ?? $section }}</small>
+                                        </li>
+                                    @empty
+                                        <li class="list-group-item text-muted small" data-empty="true">No items in this section.</li>
+                                    @endforelse
+                                </ul>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
             </div>
         </div>
 
-        {{-- SUB MENU --}}
-        <div class="col-md-5 offset-md-1">
-            <h5 class="fs-6 text-muted">Module Sub Menu Ordering</h5>
-
-            <div class="d-flex align-items-center justify-content-between gap-2 mb-4">
-                <select id="moduleSelect" class="form-select form-select-sm">
-                    <option value="">-- Select Module --</option>
-                    @foreach($orderedModules as $module)
-                        <option value="{{ $module->uid }}">{{ $module->name }}</option>
-                    @endforeach
-                </select>
-
-                <button type="button" id="loadSubMenu" class="btn btn-sm btn-outline-secondary">
-                    Display
-                </button>
+        <div class="col-12 col-xl-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="mb-1">Foundation Navigation</h5>
+                    <p class="text-muted small mb-3">Foundation items are also driven by the same JSON model.</p>
+                    <div class="nav-editor" data-navigation-editor="foundation_navigation">
+                        @foreach($sections as $section)
+                            <div class="nav-editor-section mb-4" data-section="{{ $section }}">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0 text-uppercase small text-muted">{{ $section }}</h6>
+                                    <span class="badge bg-light text-dark">{{ count($foundationNavigationGroups[$section] ?? []) }}</span>
+                                </div>
+                                <ul class="list-group navigation-list" data-list="{{ $section }}">
+                                    @forelse($foundationNavigationGroups[$section] ?? [] as $item)
+                                        <li class="list-group-item d-flex justify-content-between align-items-center"
+                                            draggable="true"
+                                            data-id="{{ $item['id'] }}"
+                                            data-label="{{ $item['label'] }}"
+                                            data-icon="{{ $item['icon'] ?? '' }}"
+                                            data-placement="{{ $item['placement'] ?? $section }}"
+                                            data-module-uid="{{ $item['module_uid'] ?? '' }}"
+                                            data-target-module-uid="{{ $item['target_module_uid'] ?? '' }}">
+                                            <span>
+                                                <i class="{{ $item['icon'] ?? 'fas fa-circle' }} me-2"></i>
+                                                {{ $item['label'] }}
+                                            </span>
+                                            <small class="text-muted">{{ $item['placement'] ?? $section }}</small>
+                                        </li>
+                                    @empty
+                                        <li class="list-group-item text-muted small" data-empty="true">No items in this section.</li>
+                                    @endforelse
+                                </ul>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
             </div>
-            <div class="d-flex align-items-center justify-content-between gap-2">
-                <p>Sub menu of {{ $orderedModules->first()->name ?? '' }}</p>
-                <button type="button" id="saveSubMenu" class="btn btn-sm btn-outline-primary text-nowrap">
-                    Update SubMenu
-                </button>
-            </div>
-
-            <input type="hidden" name="submenu_order" id="submenuOrderInput">
-            <input type="hidden" name="submenu_module_id" id="submenuModuleId">
-
-            <div id="unsavedSubmenu" class="alert alert-warning py-2 px-3 small d-none">
-                <i class="fas fa-exclamation-triangle me-1"></i>
-                Sub menu order changed. Click Update to save.
-            </div>
-
-            <ul id="submenuList" class="list-group mt-2"></ul>
         </div>
+
+        <div class="col-12 col-xl-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="mb-1">Saved Payload</h5>
+                    <p class="text-muted small mb-3">This is the JSON that will be posted back to the server.</p>
+                    <pre class="bg-light rounded p-3 small mb-0" id="navigationPreview" style="min-height: 420px; white-space: pre-wrap;"></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="mb-1">Rendered Navigation</h5>
+                    <p class="text-muted small mb-3">This preview uses the same JSON payload that will drive the live sidebar, minibar, and tabs.</p>
+                    @include('foundation::navigation.partials.rendered-navigation', [
+                        'sections' => $sections,
+                        'moduleGroups' => $moduleNavigationGroups,
+                        'foundationGroups' => $foundationNavigationGroups,
+                    ])
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="hidden" name="module_navigation" id="moduleNavigationInput">
+    <input type="hidden" name="foundation_navigation" id="foundationNavigationInput">
+
+    <div class="mt-4 d-flex justify-content-end gap-2">
+        <button type="submit" class="btn btn-primary">Save Navigation</button>
     </div>
 </form>
 @endsection
 
 @push('styles')
 <style>
-.list-group li {
+.navigation-list li {
     cursor: grab;
 }
-.list-group li.dragging {
-    border: 1px solid var(--bs-primary);
-    color: var(--bs-primary);
+
+.navigation-list li.dragging {
+    opacity: 0.6;
+    border-color: var(--bs-primary);
+}
+
+.nav-editor-section:not(:last-child) {
+    border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+    padding-bottom: 1rem;
 }
 </style>
 @endpush
@@ -91,92 +144,89 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const sections = @json($sections);
 
-    const navigationForm = document.getElementById('navigationForm');
-    const moduleSelect = document.getElementById('moduleSelect');
+    function makeDraggable(listEl) {
+        if (!listEl) {
+            return;
+        }
 
-    /**
-     * Reusable Drag-and-Drop Function
-     * @param {HTMLElement} listEl
-     * @param {HTMLElement} warningEl
-     * @param {string} dataAttr
-     * @returns {Function} getCurrentOrder
-     */
-    function makeDraggable(listEl, warningEl, dataAttr = 'id') {
-        let dragged;
-        const initialOrder = Array.from(listEl.children).map(li => li.dataset[dataAttr]).join(',');
+        let dragged = null;
 
-        listEl.addEventListener('dragstart', e => {
-            dragged = e.target;
-            dragged.classList.add('dragging');
+        listEl.addEventListener('dragstart', function (e) {
+            dragged = e.target.closest('li[data-id]');
+            if (dragged) {
+                dragged.classList.add('dragging');
+            }
         });
 
-        listEl.addEventListener('dragover', e => {
+        listEl.addEventListener('dragover', function (e) {
             e.preventDefault();
-            const target = e.target.closest('li');
-            if (!target || target === dragged) return;
+            const target = e.target.closest('li[data-id]');
+            if (!target || !dragged || target === dragged) {
+                return;
+            }
+
             listEl.insertBefore(dragged, target.nextSibling);
         });
 
-        listEl.addEventListener('dragend', () => {
-            dragged.classList.remove('dragging');
-            const current = Array.from(listEl.children).map(li => li.dataset[dataAttr]).join(',');
-            warningEl.classList.toggle('d-none', current === initialOrder);
+        listEl.addEventListener('dragend', function () {
+            if (dragged) {
+                dragged.classList.remove('dragging');
+            }
+            dragged = null;
+            syncPayload();
         });
-
-        return () => Array.from(listEl.children).map(li => li.dataset[dataAttr]);
     }
 
-    /* ---------------- PRIMARY NAV ---------------- */
-    const navList = document.getElementById('navigationOrder');
-    const navInput = document.getElementById('navigationOrderInput');
-    const navWarning = document.getElementById('unsavedPrimary');
-    const getNavOrder = makeDraggable(navList, navWarning, 'id');
+    function readSection(listEl, section) {
+        return Array.from(listEl.querySelectorAll('li[data-id]')).map((li, index) => ({
+            id: li.dataset.id,
+            label: li.dataset.label,
+            icon: li.dataset.icon || null,
+            placement: section,
+            module_uid: li.dataset.moduleUid || null,
+            target_module_uid: li.dataset.targetModuleUid || null,
+            sort_order: (index + 1) * 10,
+            visible: true,
+            enabled: true,
+            locked: false,
+        }));
+    }
 
-    document.getElementById('savePrimaryNav').addEventListener('click', () => {
-        navInput.value = JSON.stringify(getNavOrder());
-        navigationForm.submit();
+    function readNavigation(editorName) {
+        const editor = document.querySelector('[data-navigation-editor="' + editorName + '"]');
+        const payload = [];
+
+        sections.forEach(function (section) {
+            const list = editor ? editor.querySelector('[data-list="' + section + '"]') : null;
+            if (!list) {
+                return;
+            }
+            payload.push(...readSection(list, section));
+        });
+
+        return payload;
+    }
+
+    function syncPayload() {
+        const modulePayload = readNavigation('module_navigation');
+        const foundationPayload = readNavigation('foundation_navigation');
+
+        document.getElementById('moduleNavigationInput').value = JSON.stringify(modulePayload);
+        document.getElementById('foundationNavigationInput').value = JSON.stringify(foundationPayload);
+        document.getElementById('navigationPreview').textContent = JSON.stringify({
+            module_navigation: modulePayload,
+            foundation_navigation: foundationPayload,
+        }, null, 2);
+    }
+
+    document.querySelectorAll('.navigation-list').forEach(makeDraggable);
+    syncPayload();
+
+    document.getElementById('navigationForm').addEventListener('submit', function () {
+        syncPayload();
     });
-
-    /* ---------------- SUB MENU ---------------- */
-    const submenuList = document.getElementById('submenuList');
-    const submenuInput = document.getElementById('submenuOrderInput');
-    const submenuModuleId = document.getElementById('submenuModuleId');
-    const submenuWarning = document.getElementById('unsavedSubmenu');
-    let getSubmenuOrder;
-
-    document.getElementById('loadSubMenu').addEventListener('click', function () {
-        if (!moduleSelect.value) return;
-
-        fetch(`/navigations/module/${moduleSelect.value}/sub-menu`)
-            .then(res => res.json())
-            .then(res => {
-                submenuList.innerHTML = '';
-                submenuModuleId.value = moduleSelect.value;
-
-                res.submenu.forEach(item => {
-                    submenuList.insertAdjacentHTML('beforeend', `
-                        <li class="list-group-item d-flex justify-content-between"
-                            draggable="true"
-                            data-route="${item.route}">
-                            <span><i class="${item.icon} me-2"></i>${item.label}</span>
-                            <i class="fas fa-grip-lines"></i>
-                        </li>
-                    `);
-                });
-
-                getSubmenuOrder = makeDraggable(submenuList, submenuWarning, 'route');
-                submenuWarning.classList.add('d-none');
-            });
-    });
-
-    document.getElementById('saveSubMenu').addEventListener('click', () => {
-        if (!getSubmenuOrder) return;
-
-        submenuInput.value = JSON.stringify(getSubmenuOrder());
-        navigationForm.submit();
-    });
-
 });
 </script>
 @endpush

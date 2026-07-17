@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Navigation extends Model
 {
@@ -34,6 +35,14 @@ class Navigation extends Model
     public function module(): BelongsTo
     {
         return $this->belongsTo(Module::class, 'ref_parent');
+    }
+
+    public function modules(): BelongsToMany
+    {
+        return $this->belongsToMany(Module::class, 'module_has_navigations', 'navigation_id', 'module_id')
+            ->withPivot(['label', 'icon', 'sort_order', 'visible', 'enabled'])
+            ->withTimestamps()
+            ->orderBy('module_has_navigations.sort_order');
     }
 
     public function getMeta(string $key)
