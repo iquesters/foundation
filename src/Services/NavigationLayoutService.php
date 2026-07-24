@@ -18,6 +18,8 @@ class NavigationLayoutService
 
     public function getNavigationRows(): array
     {
+        $this->syncFoundationNavigationStructure();
+
         return [
             'module_navigation' => $this->ensureModuleNavigation(),
             'foundation_navigation' => $this->ensureFoundationNavigation(),
@@ -45,6 +47,126 @@ class NavigationLayoutService
             'module_navigation' => $this->groupNavigationItems($this->getNavigationItems('module_navigation')),
             'foundation_navigation' => $this->groupNavigationItems($this->getNavigationItems('foundation_navigation')),
         ];
+    }
+
+    public function getTabsForCurrentRoute(?string $routeName = null): array
+    {
+        $routeName ??= request()->route()?->getName();
+        $currentPath = trim(parse_url((string) request()->getRequestUri(), PHP_URL_PATH) ?? '', '/');
+
+        if (!$routeName) {
+            return [];
+        }
+
+        $foundationModule = Module::where('name', 'foundation')->first();
+        if (!$foundationModule) {
+            return [];
+        }
+
+        $tabItems = Navigation::query()
+            ->where('ref_parent', $foundationModule->id)
+            ->with(['metas' => function ($query) {
+                $query->where('meta_key', 'navigation_items');
+            }])
+            ->get()
+            ->flatMap(function (Navigation $navigation) {
+                $items = json_decode($navigation->getMeta('navigation_items') ?? '[]', true);
+                $items = is_array($items) ? $items : [];
+
+                return collect($items)
+                    ->filter(function (array $item) {
+                        $placement = $item['placement'] ?? $item['section'] ?? null;
+                        return $placement === self::NAVIGATION_SECTION_TABS;
+                    })
+                    ->map(function (array $item) {
+                        return [
+                            'route' => $item['route'] ?? '#',
+                            'params' => $item['params'] ?? [],
+                            'icon' => $item['icon'] ?? null,
+                            'label' => $item['label'] ?? '',
+                            'parent_id' => $item['parent_id'] ?? null,
+                            'family_route' => $item['family_route'] ?? ($item['route'] ?? null),
+                            'sidebar_route' => $item['sidebar_route'] ?? null,
+                            'sort_order' => $item['sort_order'] ?? PHP_INT_MAX,
+                            'visible' => $item['visible'] ?? true,
+                    'enabled' => $item['enabled'] ?? true,
+                            'locked' => $item['locked'] ?? false,
+                        ];
+                    });
+            })
+            ->sortBy(fn ($item) => is_numeric($item['sort_order'] ?? null) ? (int) $item['sort_order'] : PHP_INT_MAX)
+            ->values()
+            ->all();
+
+        if (empty($tabItems)) {
+            return [];
+        }
+
+        $normalizeKey = function ($value): ?string {
+            if (!is_string($value) && !is_numeric($value)) {
+                return null;
+            }
+
+            $value = trim((string) $value);
+            if ($value === '') {
+                return null;
+            }
+
+            return trim(preg_replace('/^foundation[-_]/', '', $value), '-_');
+        };
+
+        $matchedTabs = collect($tabItems)->filter(function (array $item) use ($routeName, $currentPath) {
+            $route = $item['route'] ?? null;
+            if (!$route || !($item['visible'] ?? true) || !($item['enabled'] ?? true)) {
+                return false;
+            }
+
+            if ($route === $routeName) {
+                return true;
+            }
+
+            try {
+                $resolvedPath = trim(parse_url(route($route, $item['params'] ?? []), PHP_URL_PATH) ?? '', '/');
+                return $resolvedPath !== '' && $resolvedPath === $currentPath;
+            } catch (\Throwable $e) {
+                return false;
+            }
+        })->values();
+
+        if ($matchedTabs->isEmpty()) {
+            return [];
+        }
+
+        $parentKeys = $matchedTabs->pluck('parent_id')
+            ->flatMap(function ($value) use ($normalizeKey) {
+                return array_filter([
+                    $value,
+                    $normalizeKey($value),
+                ]);
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($parentKeys->isEmpty()) {
+            return $matchedTabs->all();
+        }
+
+        $filteredTabs = collect($tabItems)
+            ->filter(function (array $item) use ($parentKeys, $normalizeKey) {
+                if (!($item['visible'] ?? true) || !($item['enabled'] ?? true)) {
+                    return false;
+                }
+
+                $itemParent = $item['parent_id'] ?? null;
+                return in_array($itemParent, $parentKeys->all(), true)
+                    || in_array($normalizeKey($itemParent), $parentKeys->all(), true);
+            })
+            ->sortBy(fn ($item) => is_numeric($item['sort_order'] ?? null) ? (int) $item['sort_order'] : PHP_INT_MAX)
+            ->values()
+            ->all();
+
+        return $filteredTabs;
     }
 
     public function getModuleNavigationByUid(string $moduleUid): ?array
@@ -110,6 +232,8 @@ class NavigationLayoutService
 
     protected function ensureFoundationNavigation(): array
     {
+        $this->syncFoundationNavigationStructure();
+
         $navigation = $this->resolveNavigation(self::FOUNDATION_NAVIGATION_NAME);
         $items = $navigation->getMeta('navigation_items');
 
@@ -141,6 +265,76 @@ class NavigationLayoutService
         }
 
         return json_decode($items, true) ?: [];
+    }
+
+    protected function resolveSidebarNavigationForRoute(string $routeName): ?Navigation
+    {
+        $sidebarRows = Navigation::query()
+            ->where('name', 'not like', 'foundation\\_%')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($sidebarRows as $navigation) {
+            $item = $this->firstNavigationItem($navigation);
+            if (!$item) {
+                continue;
+            }
+
+            if (($item['route'] ?? null) === $routeName) {
+                $placement = $item['placement'] ?? $item['section'] ?? self::NAVIGATION_SECTION_SIDEBAR;
+
+                if ($placement === self::NAVIGATION_SECTION_SIDEBAR) {
+                    return $navigation;
+                }
+            }
+        }
+
+        foreach ($sidebarRows as $navigation) {
+            $item = $this->firstNavigationItem($navigation);
+            if (!$item) {
+                continue;
+            }
+
+            if (($item['route'] ?? null) !== $routeName) {
+                continue;
+            }
+
+            $placement = $item['placement'] ?? $item['section'] ?? self::NAVIGATION_SECTION_SIDEBAR;
+            if ($placement !== self::NAVIGATION_SECTION_TABS) {
+                continue;
+            }
+
+            if ($navigation->ref_parent) {
+                $parentNavigation = Navigation::find($navigation->ref_parent);
+                if ($parentNavigation) {
+                    return $parentNavigation;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    protected function firstNavigationItem(Navigation $navigation): ?array
+    {
+        $items = $navigation->getMeta('navigation_items');
+        if (!$items) {
+            return null;
+        }
+
+        $decoded = json_decode($items, true);
+        if (!is_array($decoded) || empty($decoded)) {
+            return null;
+        }
+
+        return $decoded[0];
+    }
+
+    protected function sidebarRouteFromNavigation(Navigation $navigation): ?string
+    {
+        $item = $this->firstNavigationItem($navigation);
+
+        return $item['route'] ?? null;
     }
 
     protected function refreshModuleNavigationItems(string $items): string
@@ -414,6 +608,7 @@ class NavigationLayoutService
                 'original_label' => 'All Masterdatas',
                 'slug' => 'all-masterdatas',
                 'placement' => self::NAVIGATION_SECTION_SIDEBAR,
+                'route' => 'master-data.index',
                 'module_uid' => $foundationModule->uid,
                 'target_module_uid' => $foundationModule->uid,
                 'icon' => 'fas fa-list-ul',
@@ -431,6 +626,7 @@ class NavigationLayoutService
                 'label' => 'Modules',
                 'original_label' => 'Modules',
                 'slug' => 'modules',
+                'route' => 'modules.assign-to-role',
                 'module_uid' => $foundationModule->uid,
                 'target_module_uid' => $foundationModule->uid,
                 'icon' => 'fas fa-cubes',
@@ -448,6 +644,7 @@ class NavigationLayoutService
                 'label' => 'Entities',
                 'original_label' => 'Entities',
                 'slug' => 'entities',
+                'route' => 'entities.index',
                 'module_uid' => $foundationModule->uid,
                 'target_module_uid' => $foundationModule->uid,
                 'icon' => 'fas fa-database',
@@ -465,6 +662,7 @@ class NavigationLayoutService
                 'label' => 'Queue OLD',
                 'original_label' => 'Queue OLD',
                 'slug' => 'queue-old',
+                'route' => 'smart-messenger.queue-management',
                 'module_uid' => $foundationModule->uid,
                 'target_module_uid' => $foundationModule->uid,
                 'icon' => 'fas fa-layer-group',
@@ -482,6 +680,7 @@ class NavigationLayoutService
                 'label' => 'Queue',
                 'original_label' => 'Queue',
                 'slug' => 'queue',
+                'route' => 'ui.list',
                 'module_uid' => $foundationModule->uid,
                 'target_module_uid' => $foundationModule->uid,
                 'icon' => 'fas fa-tasks',
@@ -499,6 +698,7 @@ class NavigationLayoutService
                 'label' => 'Job OLD',
                 'original_label' => 'Job OLD',
                 'slug' => 'job-old',
+                'route' => 'jobs.index',
                 'module_uid' => $foundationModule->uid,
                 'target_module_uid' => $foundationModule->uid,
                 'icon' => 'fas fa-sync-alt',
@@ -516,6 +716,7 @@ class NavigationLayoutService
                 'label' => 'Jobs',
                 'original_label' => 'Jobs',
                 'slug' => 'jobs',
+                'route' => 'ui.list',
                 'module_uid' => $foundationModule->uid,
                 'target_module_uid' => $foundationModule->uid,
                 'icon' => 'fas fa-tasks',
@@ -533,6 +734,7 @@ class NavigationLayoutService
                 'label' => 'Failed Jobs',
                 'original_label' => 'Failed Jobs',
                 'slug' => 'failed-jobs',
+                'route' => 'ui.list',
                 'module_uid' => $foundationModule->uid,
                 'target_module_uid' => $foundationModule->uid,
                 'icon' => 'fas fa-times-circle',
@@ -550,6 +752,7 @@ class NavigationLayoutService
                 'label' => 'Completed Jobs',
                 'original_label' => 'Completed Jobs',
                 'slug' => 'completed-jobs',
+                'route' => 'ui.list',
                 'module_uid' => $foundationModule->uid,
                 'target_module_uid' => $foundationModule->uid,
                 'icon' => 'fas fa-check-circle',
@@ -560,6 +763,208 @@ class NavigationLayoutService
                 'source' => [
                     'table' => 'module_metas',
                     'meta_key' => 'module_sidebar_menu',
+                ],
+            ],
+        ];
+    }
+
+    protected function syncFoundationNavigationStructure(): void
+    {
+        $foundationModule = Module::where('name', 'foundation')->first();
+        if (!$foundationModule) {
+            return;
+        }
+
+        $sidebarDefinitions = $this->foundationSidebarItems();
+        $tabDefinitions = $this->foundationTabDefinitions();
+
+        foreach ($sidebarDefinitions as $sidebar) {
+            $sidebarNavigation = Navigation::firstOrCreate(
+                ['name' => $sidebar['id']],
+                [
+                    'uid' => (string) Str::ulid(),
+                    'ref_parent' => $foundationModule->id,
+                    'status' => 'active',
+                    'created_by' => auth()->id() ?? 0,
+                ]
+            );
+
+            $sidebarPayload = [[
+                'id' => $sidebar['id'],
+                'label' => $sidebar['label'],
+                'original_label' => $sidebar['original_label'],
+                'slug' => $sidebar['slug'],
+                'route' => $sidebar['route'] ?? null,
+                'icon' => $sidebar['icon'],
+                'placement' => self::NAVIGATION_SECTION_SIDEBAR,
+                'module_uid' => $foundationModule->uid,
+                'target_module_uid' => $foundationModule->uid,
+                'module_name' => $foundationModule->name,
+                'sort_order' => $sidebar['sort_order'],
+                'visible' => true,
+                'enabled' => true,
+                'locked' => false,
+                'source' => [
+                    'table' => 'module_metas',
+                    'meta_key' => 'module_sidebar_menu',
+                ],
+            ]];
+
+            if (!$sidebarNavigation->getMeta('navigation_items')) {
+                $sidebarNavigation->metas()->updateOrCreate(
+                    ['meta_key' => 'navigation_items'],
+                    [
+                        'meta_value' => json_encode($sidebarPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        'status' => 'active',
+                        'created_by' => auth()->id() ?? 0,
+                        'updated_by' => auth()->id() ?? 0,
+                    ]
+                );
+            }
+
+            DB::table('module_has_navigations')->updateOrInsert(
+                [
+                    'module_id' => $foundationModule->id,
+                    'navigation_id' => $sidebarNavigation->id,
+                ],
+                [
+                    'label' => $sidebar['label'],
+                    'icon' => $sidebar['icon'],
+                    'sort_order' => $sidebar['sort_order'],
+                    'visible' => 1,
+                    'enabled' => 1,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+
+            $tabs = $tabDefinitions[$sidebar['id']] ?? [];
+
+            foreach ($tabs as $index => $tab) {
+                $tabNavigation = Navigation::firstOrCreate(
+                    ['name' => $tab['name']],
+                    [
+                        'uid' => (string) Str::ulid(),
+                        'ref_parent' => $foundationModule->id,
+                        'status' => 'active',
+                        'created_by' => auth()->id() ?? 0,
+                    ]
+                );
+
+                $tabPayload = [[
+                    'id' => $tab['id'],
+                    'label' => $tab['label'],
+                    'original_label' => $tab['original_label'],
+                    'slug' => $tab['slug'],
+                    'route' => $tab['route'],
+                    'icon' => $tab['icon'],
+                    'placement' => self::NAVIGATION_SECTION_TABS,
+                    'parent_id' => $sidebar['id'],
+                    'module_uid' => $foundationModule->uid,
+                    'target_module_uid' => $foundationModule->uid,
+                    'module_name' => $foundationModule->name,
+                    'sort_order' => ($index + 1) * 10,
+                    'visible' => true,
+                    'enabled' => true,
+                    'locked' => false,
+                    'source' => [
+                        'table' => 'module_metas',
+                        'meta_key' => 'module_sidebar_menu',
+                    ],
+                ]];
+
+                if (!$tabNavigation->getMeta('navigation_items')) {
+                    $tabNavigation->metas()->updateOrCreate(
+                        ['meta_key' => 'navigation_items'],
+                        [
+                            'meta_value' => json_encode($tabPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                            'status' => 'active',
+                            'created_by' => auth()->id() ?? 0,
+                            'updated_by' => auth()->id() ?? 0,
+                        ]
+                    );
+                }
+
+                DB::table('module_has_navigations')->updateOrInsert(
+                    [
+                        'module_id' => $foundationModule->id,
+                        'navigation_id' => $tabNavigation->id,
+                    ],
+                    [
+                        'label' => $tab['label'],
+                        'icon' => $tab['icon'],
+                        'sort_order' => ($index + 1) * 10,
+                        'visible' => 1,
+                        'enabled' => 1,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]
+                );
+            }
+        }
+    }
+
+    protected function foundationTabDefinitions(): array
+    {
+        return [
+            'foundation-master-datas' => [
+                [
+                    'name' => 'foundation-master-datas-tab',
+                    'id' => 'masterdatas-tab',
+                    'label' => 'Master Data',
+                    'original_label' => 'Master Data',
+                    'slug' => 'master-data',
+                    'route' => 'master-data.index',
+                    'icon' => 'fas fa-fw fa-database',
+                ],
+            ],
+            'foundation-entities' => [
+                [
+                    'name' => 'foundation-entities-tab',
+                    'id' => 'entities-tab',
+                    'label' => 'Entity',
+                    'original_label' => 'Entity',
+                    'slug' => 'entity',
+                    'route' => 'entities.index',
+                    'icon' => 'fas fa-fw fa-cube',
+                ],
+            ],
+            'foundation-job-old' => [
+                [
+                    'name' => 'foundation-job-old-current',
+                    'id' => 'job-old-current-tab',
+                    'label' => 'Current',
+                    'original_label' => 'Current',
+                    'slug' => 'current',
+                    'route' => 'jobs.index',
+                    'icon' => 'fas fa-fw fa-stream',
+                ],
+                [
+                    'name' => 'foundation-job-old-completed',
+                    'id' => 'job-old-completed-tab',
+                    'label' => 'Completed',
+                    'original_label' => 'Completed',
+                    'slug' => 'completed',
+                    'route' => 'jobs.completed',
+                    'icon' => 'fas fa-fw fa-check-circle',
+                ],
+                [
+                    'name' => 'foundation-job-old-failed',
+                    'id' => 'job-old-failed-tab',
+                    'label' => 'Failed',
+                    'original_label' => 'Failed',
+                    'slug' => 'failed',
+                    'route' => 'jobs.failed',
+                    'icon' => 'fas fa-fw fa-times-circle',
+                ],
+                [
+                    'name' => 'foundation-job-old-history',
+                    'id' => 'job-old-history-tab',
+                    'label' => '',
+                    'original_label' => 'History',
+                    'slug' => 'history',
+                    'route' => '#',
+                    'icon' => 'fas fa-fw fa-clock-rotate-left',
                 ],
             ],
         ];
@@ -619,5 +1024,96 @@ class NavigationLayoutService
     protected function moduleIconFromModule(Module $module): string
     {
         return $module->getMeta('module_icon') ?: $this->moduleIcon($module->name);
+    }
+
+    public function tabNavigationTemplate(string $sidebarNavigationName): array
+    {
+        return match ($sidebarNavigationName) {
+            'masterdatas' => [
+                [
+                    'id' => 'masterdatas-tab',
+                    'label' => 'Master Data',
+                    'original_label' => 'Master Data',
+                    'slug' => 'master-data',
+                    'route' => 'master-data.index',
+                    'icon' => 'fas fa-fw fa-database',
+                    'placement' => self::NAVIGATION_SECTION_TABS,
+                    'sort_order' => 10,
+                    'visible' => true,
+                    'enabled' => true,
+                    'locked' => false,
+                ],
+            ],
+            'entities' => [
+                [
+                    'id' => 'entities-tab',
+                    'label' => 'Entity',
+                    'original_label' => 'Entity',
+                    'slug' => 'entity',
+                    'route' => 'entities.index',
+                    'icon' => 'fas fa-fw fa-cube',
+                    'placement' => self::NAVIGATION_SECTION_TABS,
+                    'sort_order' => 10,
+                    'visible' => true,
+                    'enabled' => true,
+                    'locked' => false,
+                ],
+            ],
+            'job_old' => [
+                [
+                    'id' => 'job-old-current-tab',
+                    'label' => 'Current',
+                    'original_label' => 'Current',
+                    'slug' => 'current',
+                    'route' => 'jobs.index',
+                    'icon' => 'fas fa-fw fa-stream',
+                    'placement' => self::NAVIGATION_SECTION_TABS,
+                    'sort_order' => 10,
+                    'visible' => true,
+                    'enabled' => true,
+                    'locked' => false,
+                ],
+                [
+                    'id' => 'job-old-completed-tab',
+                    'label' => 'Completed',
+                    'original_label' => 'Completed',
+                    'slug' => 'completed',
+                    'route' => 'jobs.completed',
+                    'icon' => 'fas fa-fw fa-check-circle',
+                    'placement' => self::NAVIGATION_SECTION_TABS,
+                    'sort_order' => 20,
+                    'visible' => true,
+                    'enabled' => true,
+                    'locked' => false,
+                ],
+                [
+                    'id' => 'job-old-failed-tab',
+                    'label' => 'Failed',
+                    'original_label' => 'Failed',
+                    'slug' => 'failed',
+                    'route' => 'jobs.failed',
+                    'icon' => 'fas fa-fw fa-times-circle',
+                    'placement' => self::NAVIGATION_SECTION_TABS,
+                    'sort_order' => 30,
+                    'visible' => true,
+                    'enabled' => true,
+                    'locked' => false,
+                ],
+                [
+                    'id' => 'job-old-history-tab',
+                    'label' => '',
+                    'original_label' => 'History',
+                    'slug' => 'history',
+                    'route' => '#',
+                    'icon' => 'fas fa-fw fa-clock-rotate-left',
+                    'placement' => self::NAVIGATION_SECTION_TABS,
+                    'sort_order' => 40,
+                    'visible' => true,
+                    'enabled' => true,
+                    'locked' => false,
+                ],
+            ],
+            default => [],
+        };
     }
 }

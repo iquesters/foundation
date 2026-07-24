@@ -2,8 +2,7 @@
 
 @php
     $sections = $editorPayload['sections'] ?? ['sidebar', 'minibar', 'tabs'];
-    $moduleNavigationGroups = $editorPayload['module_navigation'] ?? [];
-    $foundationNavigationGroups = $editorPayload['foundation_navigation'] ?? [];
+    $navigationGroups = $editorPayload ?? [];
 @endphp
 
 @section('content')
@@ -106,8 +105,7 @@
                     <p class="text-muted small mb-3">This preview uses the same JSON payload that will drive the live sidebar, minibar, and tabs.</p>
                     @include('foundation::navigation.partials.rendered-navigation', [
                         'sections' => $sections,
-                        'moduleGroups' => $moduleNavigationGroups,
-                        'foundationGroups' => $foundationNavigationGroups,
+                        'navigationGroups' => $navigationGroups,
                     ])
                 </div>
             </div>

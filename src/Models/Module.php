@@ -120,11 +120,21 @@ class Module extends Model
         }
 
         $userRoleIds = $user->roles->pluck('id')->toArray();
-        
-        return static::where('status', 'active')->get()->filter(function ($module) use ($userRoleIds) {
+
+        return static::with(['navigations' => function ($query) {
+            $query->where('name', 'module_navigation');
+        }])
+            ->where('status', 'active')
+            ->get()
+            ->filter(function ($module) use ($userRoleIds) {
             $assignedRoleIds = $module->getAssignedRoleIds();
             return count(array_intersect($assignedRoleIds, $userRoleIds)) > 0;
-        });
+            })
+            ->sortBy(function ($module) {
+                $navigation = $module->navigations->firstWhere('name', 'module_navigation');
+                return $navigation?->pivot?->sort_order ?? PHP_INT_MAX;
+            })
+            ->values();
     }
 
     /**

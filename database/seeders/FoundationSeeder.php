@@ -360,6 +360,11 @@ class FoundationSeeder extends BaseSeeder
         $userId = 0;
         $now = now();
 
+        \DB::table('navigations')
+            ->where('name', 'like', 'foundation\_%')
+            ->where('name', '<>', 'foundation_navigation')
+            ->delete();
+
         \DB::table('navigations')->updateOrInsert(
             ['name' => 'module_navigation'],
             [
@@ -459,15 +464,14 @@ class FoundationSeeder extends BaseSeeder
 
         $foundationItems = [
             [
-                'name' => 'foundation_masterdatas',
+                'name' => 'masterdatas',
                 'label' => 'All Masterdatas',
                 'icon' => 'fas fa-list-ul',
-                'route' => 'master-data.index',
                 'placement' => 'sidebar',
                 'sort_order' => 10,
             ],
             [
-                'name' => 'foundation_modules',
+                'name' => 'modules',
                 'label' => 'Modules',
                 'icon' => 'fas fa-cubes',
                 'route' => 'modules.assign-to-role',
@@ -475,15 +479,14 @@ class FoundationSeeder extends BaseSeeder
                 'sort_order' => 20,
             ],
             [
-                'name' => 'foundation_entities',
+                'name' => 'entities',
                 'label' => 'Entities',
                 'icon' => 'fas fa-database',
-                'route' => 'entities.index',
                 'placement' => 'sidebar',
                 'sort_order' => 30,
             ],
             [
-                'name' => 'foundation_queue_old',
+                'name' => 'queue_old',
                 'label' => 'Queue OLD',
                 'icon' => 'fas fa-layer-group',
                 'route' => 'smart-messenger.queue-management',
@@ -491,7 +494,7 @@ class FoundationSeeder extends BaseSeeder
                 'sort_order' => 40,
             ],
             [
-                'name' => 'foundation_queue',
+                'name' => 'queue',
                 'label' => 'Queue',
                 'icon' => 'fas fa-tasks',
                 'route' => 'ui.list',
@@ -499,15 +502,14 @@ class FoundationSeeder extends BaseSeeder
                 'sort_order' => 50,
             ],
             [
-                'name' => 'foundation_job_old',
+                'name' => 'job_old',
                 'label' => 'Job OLD',
                 'icon' => 'fas fa-sync-alt',
-                'route' => 'jobs.index',
                 'placement' => 'sidebar',
                 'sort_order' => 60,
             ],
             [
-                'name' => 'foundation_jobs',
+                'name' => 'jobs',
                 'label' => 'Jobs',
                 'icon' => 'fas fa-tasks',
                 'route' => 'ui.list',
@@ -515,7 +517,7 @@ class FoundationSeeder extends BaseSeeder
                 'sort_order' => 70,
             ],
             [
-                'name' => 'foundation_failed_jobs',
+                'name' => 'failed_jobs',
                 'label' => 'Failed Jobs',
                 'icon' => 'fas fa-times-circle',
                 'route' => 'ui.list',
@@ -523,7 +525,7 @@ class FoundationSeeder extends BaseSeeder
                 'sort_order' => 80,
             ],
             [
-                'name' => 'foundation_completed_jobs',
+                'name' => 'completed_jobs',
                 'label' => 'Completed Jobs',
                 'icon' => 'fas fa-check-circle',
                 'route' => 'ui.list',
@@ -537,7 +539,7 @@ class FoundationSeeder extends BaseSeeder
                 ['name' => $item['name']],
                 [
                     'uid' => (string) \Illuminate\Support\Str::ulid(),
-                    'ref_parent' => null,
+                    'ref_parent' => $foundationModuleId,
                     'status' => 'active',
                     'created_by' => $userId,
                     'updated_by' => $userId,
@@ -566,7 +568,7 @@ class FoundationSeeder extends BaseSeeder
                             'label' => $item['label'],
                             'original_label' => $item['label'],
                             'slug' => \Illuminate\Support\Str::slug($item['label']),
-                            'route' => $item['route'],
+                            'route' => $item['route'] ?? null,
                             'icon' => $item['icon'],
                             'placement' => $item['placement'] ?? 'sidebar',
                             'module_uid' => $foundationModuleUid,
@@ -605,6 +607,149 @@ class FoundationSeeder extends BaseSeeder
                     'updated_at' => $now,
                 ]
             );
+        }
+
+        $foundationTabs = [
+            'masterdatas' => [
+                [
+                    'name' => 'masterdatas_master_data',
+                    'id' => 'masterdatas-tab',
+                    'label' => 'Master Data',
+                    'icon' => 'fas fa-fw fa-database',
+                    'route' => 'master-data.index',
+                    'parent_id' => 'masterdatas',
+                ],
+            ],
+            'entities' => [
+                [
+                    'name' => 'entities_entity',
+                    'id' => 'entities-tab',
+                    'label' => 'Entity',
+                    'icon' => 'fas fa-fw fa-cube',
+                    'route' => 'entities.index',
+                    'parent_id' => 'entities',
+                ],
+            ],
+            'job_old' => [
+                [
+                    'name' => 'job_old_current',
+                    'id' => 'job-old-current-tab',
+                    'label' => 'Current',
+                    'icon' => 'fas fa-fw fa-stream',
+                    'route' => 'jobs.index',
+                    'parent_id' => 'job_old',
+                ],
+                [
+                    'name' => 'job_old_completed',
+                    'id' => 'job-old-completed-tab',
+                    'label' => 'Completed',
+                    'icon' => 'fas fa-fw fa-check-circle',
+                    'route' => 'jobs.completed',
+                    'parent_id' => 'job_old',
+                ],
+                [
+                    'name' => 'job_old_failed',
+                    'id' => 'job-old-failed-tab',
+                    'label' => 'Failed',
+                    'icon' => 'fas fa-fw fa-times-circle',
+                    'route' => 'jobs.failed',
+                    'parent_id' => 'job_old',
+                ],
+                [
+                    'name' => 'job_old_history',
+                    'id' => 'job-old-history-tab',
+                    'label' => '',
+                    'icon' => 'fas fa-fw fa-clock-rotate-left',
+                    'route' => '#',
+                    'parent_id' => 'job_old',
+                ],
+            ],
+        ];
+
+        foreach ($foundationTabs as $sidebarName => $tabs) {
+            $sidebarNavigation = \DB::table('navigations')
+                ->where('name', $sidebarName)
+                ->first();
+
+            if (!$sidebarNavigation) {
+                continue;
+            }
+
+            foreach ($tabs as $index => $tab) {
+                \DB::table('navigations')->updateOrInsert(
+                    ['name' => $tab['name']],
+                    [
+                        'uid' => (string) \Illuminate\Support\Str::ulid(),
+                        'ref_parent' => $foundationModuleId,
+                        'status' => 'active',
+                        'created_by' => $userId,
+                        'updated_by' => $userId,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]
+                );
+
+                $tabNavigation = \DB::table('navigations')
+                    ->where('name', $tab['name'])
+                    ->first();
+
+                if (!$tabNavigation) {
+                    continue;
+                }
+
+                \DB::table('navigation_metas')->updateOrInsert(
+                    [
+                        'ref_parent' => $tabNavigation->id,
+                        'meta_key' => 'navigation_items',
+                    ],
+                    [
+                        'meta_value' => json_encode([
+                            [
+                                'id' => $tab['id'],
+                                'label' => $tab['label'],
+                                'original_label' => $tab['label'],
+                                'slug' => \Illuminate\Support\Str::slug($tab['label'] ?: $tab['name']),
+                                'route' => $tab['route'],
+                                'icon' => $tab['icon'],
+                                'placement' => 'tabs',
+                                'parent_id' => $tab['parent_id'],
+                                'module_uid' => $foundationModuleUid,
+                                'target_module_uid' => $foundationModuleUid,
+                                'module_name' => $foundationModule->name,
+                                'sort_order' => ($index + 1) * 10,
+                                'visible' => true,
+                                'enabled' => true,
+                                'locked' => false,
+                                'source' => [
+                                    'table' => 'module_metas',
+                                    'meta_key' => 'module_sidebar_menu',
+                                ],
+                            ],
+                        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        'status' => 'active',
+                        'created_by' => $userId,
+                        'updated_by' => $userId,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]
+                );
+
+                \DB::table('module_has_navigations')->updateOrInsert(
+                    [
+                        'module_id' => $foundationModuleId,
+                        'navigation_id' => $tabNavigation->id,
+                    ],
+                    [
+                        'label' => $tab['label'] ?: $tab['id'],
+                        'icon' => $tab['icon'],
+                        'sort_order' => ($index + 1) * 10,
+                        'visible' => 1,
+                        'enabled' => 1,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]
+                );
+            }
         }
     }
 }
