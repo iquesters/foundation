@@ -4,7 +4,7 @@
   "type": "library",
   "require": {
     "php": ">=8.1",
-    "laravel/framework": "^10.0|^11.0|^12.0"
+    "laravel/framework": "^10.0|^11.0|^12.0|^13.0"
   },
   "license": "MIT",
   "autoload": {
@@ -24,6 +24,14 @@
       "providers": [
         "Iquesters\\Foundation\\FoundationServiceProvider"
       ]
+    },
+    "platform": {
+      "api": {
+        "prefix": "foundation",
+        "versions": {
+          "v1": "routes/api.php"
+        }
+      }
     }
   },
   "minimum-stability": "dev",
