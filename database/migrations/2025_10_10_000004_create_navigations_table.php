@@ -20,7 +20,6 @@ return new class extends Migration
             $table->bigInteger('created_by')->default(0);
             $table->bigInteger('updated_by')->default(0);
             $table->timestamps();
-            $table->foreign('ref_parent')->references('id')->on('modules')->onDelete('cascade')->onUpdate('cascade');
         });
         Schema::create('navigation_metas', function (Blueprint $table) {
             $table->id();
@@ -33,6 +32,21 @@ return new class extends Migration
             $table->timestamps();
             $table->foreign('ref_parent')->references('id')->on('navigations')->onDelete('cascade')->onUpdate('cascade');
         });
+        Schema::create('module_has_navigations', function (Blueprint $table) {
+            $table->id();
+            $table->bigInteger('module_id')->unsigned();
+            $table->bigInteger('navigation_id')->unsigned();
+            $table->string('label')->nullable();
+            $table->string('icon')->nullable();
+            $table->integer('sort_order')->default(0);
+            $table->boolean('visible')->default(true);
+            $table->boolean('enabled')->default(true);
+            $table->timestamps();
+
+            $table->foreign('module_id')->references('id')->on('modules')->onDelete('cascade')->onUpdate('cascade');
+            $table->foreign('navigation_id')->references('id')->on('navigations')->onDelete('cascade')->onUpdate('cascade');
+            $table->unique(['module_id', 'navigation_id']);
+        });
     }
 
     /**
@@ -40,6 +54,7 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::dropIfExists('module_has_navigations');
         Schema::dropIfExists('navigation_metas');
         Schema::dropIfExists('navigations');
     }

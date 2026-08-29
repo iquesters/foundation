@@ -5,6 +5,7 @@ namespace Iquesters\Foundation\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Spatie\Permission\Models\Role;
 
 class Module extends Model
@@ -29,6 +30,14 @@ class Module extends Model
     public function metas(): HasMany
     {
         return $this->hasMany(ModuleMeta::class, 'ref_parent');
+    }
+
+    public function navigations(): BelongsToMany
+    {
+        return $this->belongsToMany(Navigation::class, 'module_has_navigations', 'module_id', 'navigation_id')
+            ->withPivot(['label', 'icon', 'sort_order', 'visible', 'enabled'])
+            ->withTimestamps()
+            ->orderBy('module_has_navigations.sort_order');
     }
 
     public function getMeta(string $key)
@@ -111,11 +120,21 @@ class Module extends Model
         }
 
         $userRoleIds = $user->roles->pluck('id')->toArray();
-        
-        return static::where('status', 'active')->get()->filter(function ($module) use ($userRoleIds) {
+
+        return static::with(['navigations' => function ($query) {
+            $query->where('name', 'module_navigation');
+        }])
+            ->where('status', 'active')
+            ->get()
+            ->filter(function ($module) use ($userRoleIds) {
             $assignedRoleIds = $module->getAssignedRoleIds();
             return count(array_intersect($assignedRoleIds, $userRoleIds)) > 0;
-        });
+            })
+            ->sortBy(function ($module) {
+                $navigation = $module->navigations->firstWhere('name', 'module_navigation');
+                return $navigation?->pivot?->sort_order ?? PHP_INT_MAX;
+            })
+            ->values();
     }
 
     /**
