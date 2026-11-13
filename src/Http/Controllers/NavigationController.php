@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\Models\Navigation;
 use Iquesters\Foundation\Models\Module;
-use Iquesters\UserInterface\Models\TableSchema;
 
 class NavigationController extends Controller
 {

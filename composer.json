@@ -4,7 +4,13 @@
   "type": "library",
   "require": {
     "php": ">=8.1",
-    "laravel/framework": "^10.0|^11.0|^12.0|^13.0"
+    "laravel/framework": "^10.0|^11.0|^12.0|^13.0",
+    "spatie/laravel-permission": "^6.16"
+  },
+  "suggest": {
+    "iquesters/user-interface": "Stores generated form/table schemas (binds Foundation\\Contracts\\SchemaModels) and provides the UI",
+    "iquesters/smart-messenger": "Required, with iquesters/integration, for the /api/dispatch-queue endpoint",
+    "iquesters/integration": "Required, with iquesters/smart-messenger, for the /api/dispatch-queue endpoint"
   },
   "license": "MIT",
   "autoload": {

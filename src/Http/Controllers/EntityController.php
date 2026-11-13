@@ -10,8 +10,8 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Iquesters\Foundation\Services\FormSchemaGenerator;
 use Iquesters\Foundation\Services\TableSchemaGenerator;
-use Iquesters\UserInterface\Models\FormSchema;
-use Iquesters\UserInterface\Models\TableSchema;
+use Illuminate\Database\Eloquent\Model;
+use Iquesters\Foundation\Contracts\SchemaModels;
 use Illuminate\Database\Schema\Blueprint;
 use Iquesters\Foundation\Models\Module;
 use Illuminate\Support\Facades\Schema;
@@ -567,13 +567,25 @@ class EntityController extends Controller
         );
     }
 
+    /** @return class-string<Model> */
+    private function formSchemaModel(): string
+    {
+        return app(SchemaModels::class)->formSchemaModel();
+    }
+
+    /** @return class-string<Model> */
+    private function tableSchemaModel(): string
+    {
+        return app(SchemaModels::class)->tableSchemaModel();
+    }
+
     /**
      * Create form schema and return its UID
      */
     private function createFormSchema($entity, $slug, $customFields, $metaFields = [])
     {
         $formSchema = $this->formSchemaGenerator->generate($entity, $customFields, $metaFields);
-        $formSchemaRecord = FormSchema::create([
+        $formSchemaRecord = $this->formSchemaModel()::create([
             'uid' => Str::ulid(),
             'slug' => $slug . '-form',
             'name' => $entity->entity_name . ' Form',
@@ -625,7 +637,7 @@ class EntityController extends Controller
     private function createTableSchema($entity, $slug, $customFields, $formSchemaUid)
     {
         $tableSchema = $this->tableSchemaGenerator->generate($entity, $customFields, $formSchemaUid);
-        $tableSchemaRecord = TableSchema::create([
+        $tableSchemaRecord = $this->tableSchemaModel()::create([
             'uid' => Str::ulid(),
             'slug' => $slug . '-table',
             'name' => $entity->entity_name . ' Table',
@@ -671,10 +683,10 @@ class EntityController extends Controller
         }
     }
 
-    private function findExistingFormSchemaRecord(Entity $entity, ?string $formSchemaUid, string $entitySlug): ?FormSchema
+    private function findExistingFormSchemaRecord(Entity $entity, ?string $formSchemaUid, string $entitySlug): ?Model
     {
         if ($formSchemaUid) {
-            $formSchemaRecord = FormSchema::where('uid', $formSchemaUid)->first();
+            $formSchemaRecord = $this->formSchemaModel()::where('uid', $formSchemaUid)->first();
 
             if ($formSchemaRecord) {
                 return $formSchemaRecord;
@@ -682,7 +694,7 @@ class EntityController extends Controller
         }
 
         foreach ($this->buildSchemaSlugCandidates($entitySlug, 'form') as $candidateSlug) {
-            $formSchemaRecord = FormSchema::where('slug', $candidateSlug)->first();
+            $formSchemaRecord = $this->formSchemaModel()::where('slug', $candidateSlug)->first();
 
             if ($formSchemaRecord) {
                 return $formSchemaRecord;
@@ -692,7 +704,7 @@ class EntityController extends Controller
         $entityTableNames = $this->buildEntityTableNameCandidates($entity);
 
         foreach ($entityTableNames as $entityTableName) {
-            $formSchemaRecord = FormSchema::where('schema->entity', $entityTableName)->first();
+            $formSchemaRecord = $this->formSchemaModel()::where('schema->entity', $entityTableName)->first();
 
             if ($formSchemaRecord) {
                 return $formSchemaRecord;
@@ -702,10 +714,10 @@ class EntityController extends Controller
         return null;
     }
 
-    private function findExistingTableSchemaRecord(Entity $entity, ?string $tableSchemaUid, string $entitySlug): ?TableSchema
+    private function findExistingTableSchemaRecord(Entity $entity, ?string $tableSchemaUid, string $entitySlug): ?Model
     {
         if ($tableSchemaUid) {
-            $tableSchemaRecord = TableSchema::where('uid', $tableSchemaUid)->first();
+            $tableSchemaRecord = $this->tableSchemaModel()::where('uid', $tableSchemaUid)->first();
 
             if ($tableSchemaRecord) {
                 return $tableSchemaRecord;
@@ -713,7 +725,7 @@ class EntityController extends Controller
         }
 
         foreach ($this->buildSchemaSlugCandidates($entitySlug, 'table') as $candidateSlug) {
-            $tableSchemaRecord = TableSchema::where('slug', $candidateSlug)->first();
+            $tableSchemaRecord = $this->tableSchemaModel()::where('slug', $candidateSlug)->first();
 
             if ($tableSchemaRecord) {
                 return $tableSchemaRecord;
@@ -723,7 +735,7 @@ class EntityController extends Controller
         $entityTableNames = $this->buildEntityTableNameCandidates($entity);
 
         foreach ($entityTableNames as $entityTableName) {
-            $tableSchemaRecord = TableSchema::where('schema->entity', $entityTableName)->first();
+            $tableSchemaRecord = $this->tableSchemaModel()::where('schema->entity', $entityTableName)->first();
 
             if ($tableSchemaRecord) {
                 return $tableSchemaRecord;
