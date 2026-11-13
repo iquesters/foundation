@@ -29,8 +29,6 @@ class ResponseMiddleware
         $request->headers->set('X-Request-ID', $requestId);
         
         $response = $next($request);
-        
-        $startTime = LARAVEL_START;
 
         $this->logDebug("Processing response...");
 
@@ -86,7 +84,10 @@ class ResponseMiddleware
         $content['timestamp'] = now()->toIso8601String();
 
         $content['trace'] = app()->environment('production') ? null : [
-            'execution_time_ms' => round((microtime(true) - LARAVEL_START) * 1000),
+            // LARAVEL_START is only defined by public/index.php (not in CLI, queue or tests).
+            'execution_time_ms' => round((microtime(true) - (defined('LARAVEL_START')
+                ? LARAVEL_START
+                : (float) $request->server('REQUEST_TIME_FLOAT', microtime(true)))) * 1000),
             'cache_hit' => false,
         ];
 
