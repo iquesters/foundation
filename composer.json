@@ -12,12 +12,23 @@
     "iquesters/smart-messenger": "Required, with iquesters/integration, for the /api/dispatch-queue endpoint",
     "iquesters/integration": "Required, with iquesters/smart-messenger, for the /api/dispatch-queue endpoint"
   },
+  "require-dev": {
+    "orchestra/testbench": "^10.0|^11.0"
+  },
   "license": "MIT",
   "autoload": {
     "psr-4": {
       "Iquesters\\Foundation\\": "src/",
       "Iquesters\\Foundation\\Database\\Seeders\\": "database/seeders/"
     }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Iquesters\\Foundation\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit"
   },
   "authors": [
     {
