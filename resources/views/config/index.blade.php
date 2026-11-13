@@ -63,10 +63,19 @@
                                         <input type="hidden" name="config_keys[]" value="{{ $conf->meta_key }}">
                                     </td>
                                     <td>
-                                        <input type="text" 
-                                            name="config_values[]" 
-                                            class="form-control form-control-sm" 
+                                        @if(\Iquesters\Foundation\Support\ConfSecret::isSensitive($conf->meta_key))
+                                            <input type="password"
+                                                name="config_values[]"
+                                                class="form-control form-control-sm"
+                                                autocomplete="new-password"
+                                                value=""
+                                                placeholder="{{ $conf->meta_value !== '' && $conf->meta_value !== null ? '•••••••• (set; leave blank to keep)' : 'Not set' }}">
+                                        @else
+                                        <input type="text"
+                                            name="config_values[]"
+                                            class="form-control form-control-sm"
                                             value="{{ $conf->meta_value }}">
+                                        @endif
                                     </td>
                                 </tr>
                             @endforeach

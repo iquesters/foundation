@@ -22,8 +22,8 @@ Route::middleware('web')->group(function () {
         return response()->noContent();
     })->name('timezone.store');
     
-    Route::middleware(['auth'])->group(function () {
-        
+    Route::middleware(['auth', 'ensure.admin'])->group(function () {
+
         Route::prefix('entity')->name('entities.')->group(function () {
             Route::get('/', [EntityController::class, 'index'])->name('index');
             Route::get('/create', [EntityController::class, 'create'])->name('create');
@@ -72,7 +72,7 @@ Route::middleware('web')->group(function () {
         Route::get('/queue-management', [QueueManagementController::class, 'index'])->name('smart-messenger.queue-management');
     });
 
-    Route::prefix('api/smart-messenger/queue-management')->group(function () {
+    Route::prefix('api/smart-messenger/queue-management')->middleware(['auth', 'ensure.admin'])->group(function () {
 
     Route::get('/scheduler/status',
         [QueueManagementController::class, 'getSchedulerStatus']

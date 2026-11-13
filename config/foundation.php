@@ -17,6 +17,21 @@ return [
         'v2',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin Roles
+    |--------------------------------------------------------------------------
+    |
+    | Roles allowed through the `ensure.admin` middleware, which guards admin,
+    | entity, config, form/table builder and queue routes.
+    |
+    */
+
+    'admin_roles' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', env('FOUNDATION_ADMIN_ROLES', 'super-admin,admin'))
+    ))),
+
 
     /*
     |--------------------------------------------------------------------------

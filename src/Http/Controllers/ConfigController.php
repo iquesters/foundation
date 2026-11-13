@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Iquesters\Foundation\Models\Module;
 use Illuminate\Support\Facades\Log;
 use Iquesters\Foundation\Models\MasterData;
+use Iquesters\Foundation\Support\ConfSecret;
 
 class ConfigController extends Controller
 {
@@ -74,6 +75,14 @@ class ConfigController extends Controller
                 // optionally encode arrays to JSON
                 if (is_array($value)) {
                     $value = json_encode($value, JSON_UNESCAPED_UNICODE);
+                }
+
+                // Secrets are never sent to the browser; a blank field means "keep current".
+                if (ConfSecret::isSensitive($key)) {
+                    if ($value === '') {
+                        continue;
+                    }
+                    $value = ConfSecret::encrypt((string) $value);
                 }
 
                 // use model as-is

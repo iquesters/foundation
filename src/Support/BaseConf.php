@@ -565,6 +565,23 @@ abstract class BaseConf
         //     'cache_key' => $cacheKey
         // ]);
 
+        // Secrets stay encrypted in the cache; decrypt only in memory.
+        return array_map(function (array $pair) {
+            if (ConfSecret::isEncrypted($pair['value'])) {
+                try {
+                    $pair['value'] = ConfSecret::decrypt($pair['value']);
+                } catch (\Throwable $e) {
+                    Log::error('Failed to decrypt config secret', ['key' => $pair['key'], 'error' => $e->getMessage()]);
+                    $pair['value'] = '';
+                }
+            }
+
+            return $pair;
+        }, $this->loadRawConfigFromDB($cacheKey, $dbKey, $identifier));
+    }
+
+    private function loadRawConfigFromDB(string $cacheKey, string $dbKey, string $identifier): array
+    {
         return Cache::rememberForever($cacheKey, function () use ($dbKey, $identifier) {
             Log::info("Cache miss - querying database", [
                 'identifier' => $identifier,
