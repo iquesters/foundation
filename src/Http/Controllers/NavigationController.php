@@ -56,7 +56,7 @@ class NavigationController extends Controller
     public function details()
     {
         try {
-            $userId = auth()->id() ?? 0;
+            $userId = auth()->id();
 
             /** ---------------- PRIMARY NAV ---------------- */
             $modules = Module::active()->orderBy('id')->get();
@@ -228,7 +228,7 @@ class NavigationController extends Controller
                 [
                     'uid'        => (string) Str::ulid(),
                     'status'     => 'active',
-                    'created_by' => auth()->id() ?? 0,
+                    'created_by' => auth()->id(),
                 ]
             );
 
@@ -262,8 +262,8 @@ class NavigationController extends Controller
                     [
                         'meta_value' => json_encode($finalOrder),
                         'status'     => 'active',
-                        'created_by' => auth()->id() ?? 0,
-                        'updated_by' => auth()->id() ?? 0,
+                        'created_by' => auth()->id(),
+                        'updated_by' => auth()->id(),
                     ]
                 );
 
@@ -307,7 +307,7 @@ class NavigationController extends Controller
     public function saveOrder(Request $request)
     {
         try {
-            $userId = auth()->id() ?? 0;
+            $userId = auth()->id();
 
             /**
              * PRIMARY NAVIGATION

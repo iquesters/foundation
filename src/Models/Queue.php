@@ -56,7 +56,7 @@ class Queue extends Model
             [
                 'meta_value' => $value,
                 'status' => 'active',
-                'updated_by' => auth()->id() ?? 0,
+                'updated_by' => auth()->id(),
             ]
         );
     }

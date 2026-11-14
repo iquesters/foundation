@@ -158,7 +158,7 @@ class EntityController extends Controller
             $entity->fields = $allFields;
             $entity->meta_fields = $metaFieldsData;
             $entity->status = 'active';
-            $entity->created_by = auth()->id() ?? 0;
+            $entity->created_by = auth()->id();
             $entity->save();
 
             // Save metadata and generate schemas
@@ -1007,16 +1007,16 @@ class EntityController extends Controller
                 $table->longText('meta_value')->nullable();
                 $table->string('status')->default('unknown');
 
-                $table->bigInteger('created_by')->default(0);
-                $table->bigInteger('updated_by')->default(0);
-                $table->bigInteger('deleted_by')->nullable();
+                $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->foreignId('deleted_by')->nullable()->constrained('users')->nullOnDelete();
 
                 // DB-level timestamps (AUTO)
                 $table->timestamp('created_at')->useCurrent();
                 $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
                 $table->timestamp('deleted_at')->nullable();
 
-                $table->index(['ref_parent', 'meta_key']);
+                $table->unique(['ref_parent', 'meta_key']);
 
                 $table->foreign('ref_parent')
                     ->references('id')

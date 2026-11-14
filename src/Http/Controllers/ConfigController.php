@@ -62,7 +62,7 @@ class ConfigController extends Controller
 
             $keys = $validated['config_keys'];
             $values = $validated['config_values'];
-            $userId = auth()->id() ?? 1;
+            $userId = auth()->id();
 
             foreach ($keys as $i => $key) {
                 $value = $values[$i] ?? '';

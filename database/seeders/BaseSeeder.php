@@ -483,8 +483,8 @@ abstract class BaseSeeder extends Seeder
                     'description' => $schemaDef['description'] ?? null,
                     'schema' => json_encode($schemaDef['schema'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     'status' => 'active',
-                    'created_by' => 0,
-                    'updated_by' => 0,
+                    'created_by' => null,
+                    'updated_by' => null,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
@@ -609,8 +609,8 @@ abstract class BaseSeeder extends Seeder
                         'uid'         => (string) Str::ulid(),
                         'description' => ucfirst($queueName),
                         'status'      => 'active',
-                        'created_by'  => 0,
-                        'updated_by'  => 0,
+                        'created_by'  => null,
+                        'updated_by'  => null,
                         'created_at'  => $now,
                         'updated_at'  => $now,
                     ]
@@ -636,8 +636,8 @@ abstract class BaseSeeder extends Seeder
                         [
                             'meta_value' => $value,
                             'status'     => 'active',
-                            'created_by' => 0,
-                            'updated_by' => 0,
+                            'created_by' => null,
+                            'updated_by' => null,
                             'created_at' => $now,
                             'updated_at' => $now,
                         ]
