@@ -7,7 +7,7 @@ use Iquesters\Foundation\Constants\EntityStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\User;
+use Iquesters\Foundation\Support\UserModel;
 
 class MasterData extends Model
 {
@@ -43,11 +43,11 @@ class MasterData extends Model
 
     public function refCreatedBy()
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(UserModel::name(), 'created_by');
     }
     public function refUpdatedBy()
     {
-        return $this->belongsTo(User::class, 'updated_by');
+        return $this->belongsTo(UserModel::name(), 'updated_by');
     }
 
     public function metas(): HasMany
