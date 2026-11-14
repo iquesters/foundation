@@ -2,12 +2,12 @@
 
 namespace Iquesters\Foundation\Http\Controllers;
 
+use Iquesters\Foundation\System\Traits\Loggable;
 use Illuminate\Routing\Controller;
 use Iquesters\Foundation\Constants\EntityStatus;
 use Iquesters\Foundation\Models\Entity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Log;
 use Iquesters\Foundation\Services\FormSchemaGenerator;
 use Iquesters\Foundation\Services\TableSchemaGenerator;
 use Illuminate\Database\Eloquent\Model;
@@ -20,6 +20,8 @@ use Exception;
 
 class EntityController extends Controller
 {
+    use Loggable;
+
     public function __construct(
         private readonly FormSchemaGenerator $formSchemaGenerator,
         private readonly TableSchemaGenerator $tableSchemaGenerator
@@ -65,17 +67,17 @@ class EntityController extends Controller
     public function index()
     {
         try {
-            Log::info('Fetching all entity');
+            static::logInfo('Fetching all entity');
 
             $entities = Entity::with('metas')
                 ->get();
-            Log::info('Displaying entities', ['entities' => $entities->toArray()]);
+            static::logInfo('Displaying entities', ['entities' => $entities->toArray()]);
 
             return view('foundation::entity.index', [
                 'entities' => $entities
             ]);
         } catch (Exception $e) {
-            Log::error('Error fetching entity', [
+            static::logError('Error fetching entity', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -88,7 +90,7 @@ class EntityController extends Controller
     public function create()
     {
         try {
-            Log::info('Creating new entity');
+            static::logInfo('Creating new entity');
             $modules = Module::where('status', 'active')->get();
             
             return view('foundation::entity.create-edit', [
@@ -97,7 +99,7 @@ class EntityController extends Controller
                 'modules'    => $modules,
             ]);
         } catch (Exception $e) {
-            Log::error('Error displaying create form', [
+            static::logError('Error displaying create form', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -110,7 +112,7 @@ class EntityController extends Controller
     public function edit($uid)
     {
         try {
-            Log::info('Editing entity', ['uid' => $uid]);
+            static::logInfo('Editing entity', ['uid' => $uid]);
 
             $entity = Entity::where('uid', $uid)->firstOrFail();
             $modules = Module::where('status', 'active')->get();
@@ -121,7 +123,7 @@ class EntityController extends Controller
                 'modules'    => $modules,
             ]);
         } catch (Exception $e) {
-            Log::error('Error displaying edit form', [
+            static::logError('Error displaying edit form', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'uid' => $uid
@@ -169,7 +171,7 @@ class EntityController extends Controller
             $tableSchemaUid = $this->createTableSchema($entity, $slug, $processedCustomFields, $formSchemaUid);
             $this->saveEntityMeta($entity, 'table_schema_uid', $tableSchemaUid);
 
-            Log::info('Entity created with schemas', [
+            static::logInfo('Entity created with schemas', [
                 'entity' => $entity->toArray(),
                 'table_name' => $tableName,
                 'form_schema_uid' => $formSchemaUid,
@@ -181,7 +183,7 @@ class EntityController extends Controller
                 ->with('success', 'Entity created successfully with form and table schemas.');
                 
         } catch (Exception $e) {
-            Log::error('Error creating entity', [
+            static::logError('Error creating entity', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -240,7 +242,7 @@ class EntityController extends Controller
 
             $this->ensureGeneratedFormSchema($entity, $customFieldsForSchema, $metaFieldsData);
 
-            Log::info('Entity updated', [
+            static::logInfo('Entity updated', [
                 'entity_uid' => $entity->uid,
                 'published' => $isPublished
             ]);
@@ -250,7 +252,7 @@ class EntityController extends Controller
                 ->with('success', 'Entity updated successfully.');
 
         } catch (Exception $e) {
-            Log::error('Error updating entity', [
+            static::logError('Error updating entity', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -323,7 +325,7 @@ class EntityController extends Controller
 
             return $tableName . 's';
         } catch (\Throwable $th) {
-            Log::error('Error pluralizing table name', [
+            static::logError('Error pluralizing table name', [
                 'table_name' => $tableName,
                 'error' => $th->getMessage(),
                 'trace' => $th->getTraceAsString(),
@@ -616,7 +618,7 @@ class EntityController extends Controller
             $newFormSchemaUid = $this->createFormSchema($entity, $entitySlug, $customFields, $metaFields);
             $this->saveEntityMeta($entity, 'form_schema_uid', $newFormSchemaUid, false);
 
-            Log::info('Generated form schema created because no existing schema record could be resolved', [
+            static::logInfo('Generated form schema created because no existing schema record could be resolved', [
                 'entity_uid' => $entity->uid,
                 'missing_form_schema_uid' => $formSchemaUid,
                 'form_schema_uid' => $newFormSchemaUid,
@@ -668,7 +670,7 @@ class EntityController extends Controller
             $newTableSchemaUid = $this->createTableSchema($entity, $entitySlug, $customFields, $formSchemaUid);
             $this->saveEntityMeta($entity, 'table_schema_uid', $newTableSchemaUid, false);
 
-            Log::info('Generated table schema created because no existing schema record could be resolved', [
+            static::logInfo('Generated table schema created because no existing schema record could be resolved', [
                 'entity_uid' => $entity->uid,
                 'missing_table_schema_uid' => $tableSchemaUid,
                 'table_schema_uid' => $newTableSchemaUid,
@@ -843,7 +845,7 @@ class EntityController extends Controller
             ]);
 
         } catch (\Throwable $th) {
-            Log::error('Error fetching entity', [
+            static::logError('Error fetching entity', [
                 'entity_uid' => $entityUid,
                 'error' => $th->getMessage(),
                 'trace' => $th->getTraceAsString()
@@ -868,7 +870,7 @@ class EntityController extends Controller
                 ->route('entities.show', $entity->uid)
                 ->with('success', 'Form schema generated successfully.');
         } catch (Exception $e) {
-            Log::error('Error generating form schema from entity', [
+            static::logError('Error generating form schema from entity', [
                 'entity_uid' => $entityUid,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -900,7 +902,7 @@ class EntityController extends Controller
                 ->route('entities.show', $entity->uid)
                 ->with('success', 'Table schema generated successfully.');
         } catch (Exception $e) {
-            Log::error('Error generating table schema from entity', [
+            static::logError('Error generating table schema from entity', [
                 'entity_uid' => $entityUid,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -923,7 +925,7 @@ class EntityController extends Controller
                 'updated_at' => now(),
             ]);
 
-            Log::info('Entity marked as deleted', [
+            static::logInfo('Entity marked as deleted', [
                 'entity' => $entity->toArray()
             ]);
 
@@ -932,7 +934,7 @@ class EntityController extends Controller
                 ->with('success', 'Entity deleted successfully.');
 
         } catch (Exception $e) {
-            Log::error('Error deleting entity', [
+            static::logError('Error deleting entity', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -946,7 +948,7 @@ class EntityController extends Controller
     public function publish($entityUid)
     {
         try {
-            Log::debug('Publishing entity', [
+            static::logDebug('Publishing entity', [
                 'entityUid' => $entityUid
             ]);
             $entity = Entity::where('uid', $entityUid)->firstOrFail();
@@ -1000,7 +1002,7 @@ class EntityController extends Controller
                 }
             });
 
-            Log::info("Table '{$tableName}' created successfully", [
+            static::logInfo("Table '{$tableName}' created successfully", [
                 'fields' => $orderedFields
             ]);
 
@@ -1031,7 +1033,7 @@ class EntityController extends Controller
                     ->onDelete('cascade');
             });
 
-            Log::info("Meta table '{$metaTableName}' created successfully");
+            static::logInfo("Meta table '{$metaTableName}' created successfully");
 
             // Per-entity permissions for the generic entity API.
             EntityPermission::ensureFor($tableName);
@@ -1079,7 +1081,7 @@ class EntityController extends Controller
                 ->with('success', "Entity published successfully. Tables '{$tableName}' and '{$metaTableName}' created.");
                 
         } catch (Exception $e) {
-            Log::error('Error publishing entity', [
+            static::logError('Error publishing entity', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);

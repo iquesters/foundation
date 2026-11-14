@@ -2,12 +2,12 @@
 
 namespace Iquesters\Foundation\Database\Seeders;
 
+use Iquesters\Foundation\System\Traits\Loggable;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
-use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Permission;
 
 /**
@@ -23,6 +23,8 @@ use Spatie\Permission\Models\Permission;
  */
 abstract class BaseSeeder extends Seeder
 {
+    use Loggable;
+
     /**
      * Unique module name (used in `modules` table)
      */
@@ -333,7 +335,7 @@ abstract class BaseSeeder extends Seeder
         $confInstance = new $moduleConfClass();
 
         $defaultConfig = $confInstance->getFlattenConfig(null, true, true);
-        Log::debug($defaultConfig);
+        static::logDebug('Default config', ['config' => $defaultConfig]);
 
         /**
          * Insert each key into master_data_metas
@@ -585,7 +587,7 @@ abstract class BaseSeeder extends Seeder
                     }
                 } catch (\ReflectionException $e) {
                     // Skip files that cause reflection errors
-                    Log::warning("Job class reflection failed", [
+                    static::logWarning("Job class reflection failed", [
                         'class' => $class,
                         'error' => $e->getMessage(),
                     ]);
@@ -652,7 +654,7 @@ abstract class BaseSeeder extends Seeder
             
         } catch (\Exception $e) {
             // Log critical errors but don't halt seeding
-            Log::error("Job seeding failed", [
+            static::logError("Job seeding failed", [
                 'module' => $this->moduleName ?? 'unknown',
                 'error' => $e->getMessage(),
             ]);

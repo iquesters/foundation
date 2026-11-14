@@ -4,6 +4,7 @@ namespace Iquesters\Foundation\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Iquesters\Foundation\System\Traits\Loggable;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -14,6 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class EnsureAdmin
 {
+    use Loggable;
+
     public const DEFAULT_ROLES = ['super-admin', 'admin'];
 
     public static function roles(): array
@@ -31,6 +34,12 @@ class EnsureAdmin
             && $user->hasAnyRole($roles);
 
         if (! $allowed) {
+            static::logWarning('Admin access denied', [
+                'user_id' => $user?->getAuthIdentifier(),
+                'path' => $request->path(),
+                'method' => $request->method(),
+            ]);
+
             abort(Response::HTTP_FORBIDDEN, 'You do not have permission to access this resource.');
         }
 

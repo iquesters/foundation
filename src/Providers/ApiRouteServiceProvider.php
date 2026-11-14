@@ -2,7 +2,6 @@
 
 namespace Iquesters\Foundation\Providers;
 
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Iquesters\Foundation\Routing\PackageDiscovery;
@@ -19,9 +18,8 @@ class ApiRouteServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->logMethodStart();
-
-        $this->logInfo("Creating API Route...");
+        // Runs on every request (route registration), so keep it at debug level.
+        static::logDebug('Registering platform API routes');
         Route::prefix('api')
             ->middleware(['api', RequestMiddleware::class, ResponseMiddleware::class])
             ->group(function (): void {
@@ -42,20 +40,20 @@ class ApiRouteServiceProvider extends ServiceProvider
                     $platformRouteFile =
                         __DIR__ . "/../../routes/platform.api.{$platformVersion}.php";
 
-                    Log::debug(
+                    static::logDebug(
                         '[ApiRouteServiceProvider] Loading platform file name',
                         ['platform_filename' => $platformRouteFile]
                     );
 
                     if (! file_exists($platformRouteFile)) {
-                        Log::warning(
+                        static::logWarning(
                             '[ApiRouteServiceProvider] Platform route file not found',
                             ['platform_version' => $platformVersion]
                         );
                         continue;
                     }
 
-                    Log::debug(
+                    static::logDebug(
                         '[ApiRouteServiceProvider] Loading platform routes',
                         ['platform_version' => $platformVersion]
                     );
@@ -70,7 +68,7 @@ class ApiRouteServiceProvider extends ServiceProvider
                              * ----------------------------------------------------------------------
                              */
                             $this->loadRoutesFrom($platformRouteFile);
-                            Log::debug('-------------------------------------------');
+                            static::logDebug('-------------------------------------------');
                             foreach (PackageDiscovery::getDiscoveredPackageNames() as $packageName) {
                                 $conf = ConfProvider::from($packageName);
                                 $conf->ensureLoaded();
@@ -81,7 +79,7 @@ class ApiRouteServiceProvider extends ServiceProvider
 
                                 $apiConf = $conf->api_conf;
 
-                                Log::debug(
+                                static::logDebug(
                                     '[ApiRouteServiceProvider] Loading package API',
                                     [
                                         'platform_version' => $platformVersion,
@@ -113,7 +111,7 @@ class ApiRouteServiceProvider extends ServiceProvider
                                         });
 
                                         foreach ($apiConf->api_versions as $apiVersion) {
-                                            Log::debug(
+                                            static::logDebug(
                                                 '[ApiRouteServiceProvider] Preparing to load API version',
                                                 [
                                                     'package' => $packageName,
@@ -125,13 +123,13 @@ class ApiRouteServiceProvider extends ServiceProvider
                                             $routeFile =
                                                 __DIR__ . "/../../../{$package}/{$apiVersion->file_name}";
 
-                                            Log::debug(
+                                            static::logDebug(
                                                 '[ApiRouteServiceProvider] Loading package file name',
                                                 ['package_filename' => $routeFile]
                                             );
 
                                             if (! file_exists($routeFile)) {
-                                                Log::warning(
+                                                static::logWarning(
                                                     '[ApiRouteServiceProvider] API version route file not found',
                                                     [
                                                         'package' => $packageName,
@@ -169,7 +167,7 @@ class ApiRouteServiceProvider extends ServiceProvider
                                                         ]);
                                                     });
 
-                                                    Log::debug(
+                                                    static::logDebug(
                                                         '[ApiRouteServiceProvider] Loading API routes',
                                                         [
                                                             'platform_version' => $platformVersion,
@@ -187,6 +185,5 @@ class ApiRouteServiceProvider extends ServiceProvider
                 }
             });
 
-        $this->logMethodEnd();
     }
 }

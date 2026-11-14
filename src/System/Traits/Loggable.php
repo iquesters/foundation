@@ -4,6 +4,13 @@ namespace Iquesters\Foundation\System\Traits;
 
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Consistent logging: every line is prefixed with [Class::method(line)].
+ *
+ * All methods are static, so they work from instance code ($this->logInfo())
+ * and from static helpers (static::logInfo()). An optional $context array is
+ * passed through to the log channel.
+ */
 trait Loggable
 {
     private static array $methodStartTimes = [];
@@ -11,34 +18,24 @@ trait Loggable
     /**
      * Log method start WITH timing tracking
      */
-    protected function logMethodStart(string $message = ''): void
+    protected static function logMethodStart(string $message = '', array $context = []): void
     {
-        $trace_depth = 2; // should not be less than 2
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, $trace_depth);
-
-        $classShort = class_basename($caller['class'] ?? static::class);
-        $method = $trace[$trace_depth - 1]['function'] ?? 'unknown';
-        $line = $trace[$trace_depth - 2]['line'] ?? 0;
+        [$classShort, $method, $line] = static::logCaller(2);
         $key = "{$classShort}::{$method}";
 
         $logMessage = "[$classShort::{$method}({$line})] 👉 STARTED";
         if ($message) $logMessage .= " - {$message}";
 
-        Log::info($logMessage);
+        Log::info($logMessage, $context);
         self::$methodStartTimes[$key] = microtime(true);
     }
 
     /**
      * Log method end WITH duration calculation
      */
-    protected function logMethodEnd(string $message = ''): void
+    protected static function logMethodEnd(string $message = '', array $context = []): void
     {
-        $trace_depth = 2; // should not be less than 2
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, $trace_depth);
-
-        $classShort = class_basename($caller['class'] ?? static::class);
-        $method = $trace[$trace_depth - 1]['function'] ?? 'unknown';
-        $line = $trace[$trace_depth - 2]['line'] ?? 0;
+        [$classShort, $method, $line] = static::logCaller(2);
         $key = "{$classShort}::{$method}";
 
         if (!isset(self::$methodStartTimes[$key])) {
@@ -52,75 +49,85 @@ trait Loggable
         $logMessage = "[$classShort::{$method}({$line})] ✅ COMPLETED";
         if ($message) $logMessage .= " - {$message}";
 
-        Log::info($logMessage, [
+        Log::info($logMessage, $context + [
             'duration_ms' => round($durationMs, 2),
-            'duration_s' => round($durationMs / 1000, 3)
+            'duration_s' => round($durationMs / 1000, 3),
         ]);
     }
 
     // 🚨 EMERGENCY
-    protected function logEmergency(string $message = ''): void
+    protected static function logEmergency(string $message = '', array $context = []): void
     {
-        $this->logActual('emergency', $message);
+        static::logActual('emergency', $message, $context);
     }
 
     // 🚨 ALERT
-    protected function logAlert(string $message = ''): void
+    protected static function logAlert(string $message = '', array $context = []): void
     {
-        $this->logActual('alert', $message);
+        static::logActual('alert', $message, $context);
     }
 
     // 💥 CRITICAL
-    protected function logCritical(string $message = ''): void
+    protected static function logCritical(string $message = '', array $context = []): void
     {
-        $this->logActual('critical', $message);
+        static::logActual('critical', $message, $context);
     }
 
     // ❌ ERROR
-    protected function logError(string $message = ''): void
+    protected static function logError(string $message = '', array $context = []): void
     {
-        $this->logActual('error', $message);
+        static::logActual('error', $message, $context);
     }
 
     // ⚠️ WARNING
-    protected function logWarning(string $message = ''): void
+    protected static function logWarning(string $message = '', array $context = []): void
     {
-        $this->logActual('warning', $message);
+        static::logActual('warning', $message, $context);
     }
 
     // ℹ️ NOTICE
-    protected function logNotice(string $message = ''): void
+    protected static function logNotice(string $message = '', array $context = []): void
     {
-        $this->logActual('notice', $message);
+        static::logActual('notice', $message, $context);
     }
 
     // 💬 INFO
-    protected function logInfo(string $message = ''): void
+    protected static function logInfo(string $message = '', array $context = []): void
     {
-        $this->logActual('info', $message);
+        static::logActual('info', $message, $context);
     }
 
     // 🐛 DEBUG
-    protected function logDebug(string $message = ''): void
+    protected static function logDebug(string $message = '', array $context = []): void
     {
-        $this->logActual('debug', $message);
+        static::logActual('debug', $message, $context);
     }
 
     /**
-     * Core method - Smart logging: CLEAN when empty, RICH when context/timing
+     * Core method: "[Class::method(line)] message" plus optional context.
      */
-    private function logActual(string $level, string $message): void
+    private static function logActual(string $level, string $message, array $context = []): void
     {
-        $trace_depth = 3; // should not be less than 2
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, $trace_depth);
+        [$classShort, $method, $line] = static::logCaller(3);
 
-        $classShort = class_basename($caller['class'] ?? static::class);
-        $method = $trace[$trace_depth - 1]['function'] ?? 'unknown';
-        $line = $trace[$trace_depth - 2]['line'] ?? 0;
-        $key = "{$classShort}::{$method}";
+        Log::{$level}("[$classShort::{$method}({$line})] {$message}", $context);
+    }
 
-        $fullMessage = "[$classShort::{$method}({$line})] {$message}";
+    /**
+     * Class, calling method and line for the log prefix.
+     * $depth = frames between the caller and this method (2 when called
+     * directly from logMethodStart/End, 3 via logInfo() etc. -> logActual()).
+     *
+     * @return array{0: string, 1: string, 2: int}
+     */
+    private static function logCaller(int $depth): array
+    {
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, $depth + 1);
 
-        Log::{$level}($fullMessage);
+        return [
+            class_basename(static::class),
+            $trace[$depth]['function'] ?? 'unknown',
+            $trace[$depth - 1]['line'] ?? 0,
+        ];
     }
 }

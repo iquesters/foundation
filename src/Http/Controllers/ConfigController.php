@@ -2,15 +2,17 @@
 
 namespace Iquesters\Foundation\Http\Controllers;
 
+use Iquesters\Foundation\System\Traits\Loggable;
 use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
 use Iquesters\Foundation\Models\Module;
-use Illuminate\Support\Facades\Log;
 use Iquesters\Foundation\Models\MasterData;
 use Iquesters\Foundation\Support\ConfSecret;
 
 class ConfigController extends Controller
 {
+    use Loggable;
+
     /**
      * Show config index or module-specific configuration
      */
@@ -33,7 +35,7 @@ class ConfigController extends Controller
             return view('foundation::config.index', compact('modules', 'selectedModule', 'configData'));
 
         } catch (\Exception $e) {
-            Log::error('Error loading configuration page', [
+            static::logError('Error loading configuration page', [
                 'module_id' => $moduleId,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -97,7 +99,7 @@ class ConfigController extends Controller
                 );
             }
 
-            Log::info('Module configuration updated successfully', [
+            static::logInfo('Module configuration updated successfully', [
                 'module_id' => $module->id,
                 'module_name' => $module->name,
                 'updated_by' => $userId,
@@ -106,7 +108,7 @@ class ConfigController extends Controller
             return redirect()->back()->with('success', 'Configuration updated successfully.');
 
         } catch (\Exception $e) {
-            Log::error('Error updating module configuration', [
+            static::logError('Error updating module configuration', [
                 'module_id' => $module->id ?? null,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),

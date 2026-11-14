@@ -2,6 +2,7 @@
 
 namespace Iquesters\Foundation\Support;
 
+use Iquesters\Foundation\System\Traits\Loggable;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
@@ -13,6 +14,8 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  */
 final class PackageAsset
 {
+    use Loggable;
+
     public const MIME_TYPES = [
         'css' => 'text/css',
         'js' => 'application/javascript',
@@ -114,6 +117,15 @@ final class PackageAsset
         $file = self::resolve($publicDir, $path);
 
         if ($file === null) {
+            // "../" in an asset path is an attempt to read files outside public/.
+            if (str_contains(str_replace('\\', '/', $path), '../') || str_contains($path, "\0")) {
+                static::logWarning('Blocked asset path traversal attempt', [
+                    'path' => $path,
+                    'ip' => request()?->ip(),
+                    'user_agent' => request()?->userAgent(),
+                ]);
+            }
+
             abort(404);
         }
 

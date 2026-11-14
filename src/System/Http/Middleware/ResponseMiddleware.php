@@ -22,23 +22,25 @@ class ResponseMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $this->logMethodStart("==================================================");
+        $startedAt = microtime(true);
 
         $requestId = $request->header('X-Request-ID')
             ?? 'req_' . now()->timestamp . '_' . Str::random(6);
         $request->headers->set('X-Request-ID', $requestId);
-        
-        $response = $next($request);
 
-        $this->logDebug("Processing response...");
+        $response = $next($request);
 
         // Process response based on type and status
         $response = $this->processResponse($request, $response);
 
-        $this->logDebug("Processing response done.");
-        $this->logDebug("--------------------------------------------------");
-
-        $this->logMethodEnd("##################################################");
+        // One readable line per API call; details are logged at debug level.
+        $this->logInfo(sprintf(
+            '%s /%s -> %d (%d ms)',
+            $request->method(),
+            $request->path(),
+            $response->getStatusCode(),
+            (int) round((microtime(true) - $startedAt) * 1000)
+        ), ['request_id' => $requestId]);
 
         return $response;
     }

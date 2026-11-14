@@ -5,6 +5,7 @@ namespace Iquesters\Foundation\Database;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Iquesters\Foundation\System\Traits\Loggable;
 
 /**
  * Helpers for migrations that tighten existing module tables in place.
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Schema;
  */
 final class SchemaHardening
 {
+    use Loggable;
+
     /**
      * Remove duplicate (ref_parent, meta_key) rows, keeping the newest, then
      * add a unique index (which also serves meta lookups).
@@ -22,7 +25,7 @@ final class SchemaHardening
             return;
         }
 
-        DB::statement(
+        $removed = DB::delete(
             "DELETE older FROM `{$table}` older
              JOIN `{$table}` newer
                ON newer.ref_parent <=> older.ref_parent
@@ -33,6 +36,8 @@ final class SchemaHardening
         Schema::table($table, function (Blueprint $t) {
             $t->unique(['ref_parent', 'meta_key']);
         });
+
+        static::logInfo("Unique (ref_parent, meta_key) added to {$table}", ['duplicate_rows_removed' => $removed]);
     }
 
     /** Widen a column to LONGTEXT (values over 255 chars were being truncated). */
@@ -67,7 +72,7 @@ final class SchemaHardening
                 $t->unsignedBigInteger($column)->nullable()->default(null)->change();
             });
 
-            DB::table($table)
+            $nulled = DB::table($table)
                 ->where(function ($q) use ($column) {
                     $q->where($column, 0)
                         ->orWhereNotIn($column, DB::table('users')->select('id'));
@@ -77,6 +82,8 @@ final class SchemaHardening
             Schema::table($table, function (Blueprint $t) use ($column) {
                 $t->foreign($column)->references('id')->on('users')->nullOnDelete();
             });
+
+            static::logInfo("{$table}.{$column} is now a nullable FK to users", ['rows_set_to_null' => $nulled]);
         }
     }
 

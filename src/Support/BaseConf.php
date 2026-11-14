@@ -2,13 +2,15 @@
 
 namespace Iquesters\Foundation\Support;
 
+use Iquesters\Foundation\System\Traits\Loggable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 abstract class BaseConf
 {
+    use Loggable;
+
     /**
      * Internal flag to ensure DB config is loaded only once.
      * Private: only used internally by BaseConf.
@@ -49,12 +51,12 @@ abstract class BaseConf
                     $this->applyDefaultsToSelf();
                 }
             } else {
-                Log::info("Skipping DB load for {$this->identifier}: master_data table not ready yet.");
+                static::logInfo("Skipping DB load for {$this->identifier}: master_data table not ready yet.");
                 // Apply defaults when table doesn't exist
                 $this->applyDefaultsToSelf();
             }
         } catch (\Throwable $e) {
-            Log::error("Failed to load DB config for {$this->identifier}: " . $e->getMessage());
+            static::logError("Failed to load DB config for {$this->identifier}: " . $e->getMessage());
             // Apply defaults on error
             $this->applyDefaultsToSelf();
         }
@@ -160,7 +162,7 @@ abstract class BaseConf
         // Always generate keys from default_values to ensure full structure
         $keyGenerationSource = $this->default_values;
         $keys = $keyGenerationSource->generateKeys();
-        Log::debug("Generated keys for flattening", ['keys' => $keys]);
+        static::logDebug("Generated keys for flattening", ['keys' => $keys]);
 
         $result = [];
 
@@ -170,7 +172,7 @@ abstract class BaseConf
 
             // ✅ Conditionally skip null values based on $ignoreNull flag
             if ($ignoreNull && $value === null) {
-                Log::debug("Skipping key '{$key}' because value is null (ignoreNull=true)");
+                static::logDebug("Skipping key '{$key}' because value is null (ignoreNull=true)");
                 continue;
             }
 
@@ -204,7 +206,7 @@ abstract class BaseConf
             
             // Check if current is still an object we can traverse
             if (!is_object($current)) {
-                Log::warning("Cannot traverse further at part '{$part}' for key: {$key}, current value: " . json_encode($current));
+                static::logWarning("Cannot traverse further at part '{$part}' for key: {$key}, current value: " . json_encode($current));
                 return null;
             }
             
@@ -212,7 +214,7 @@ abstract class BaseConf
             $reflection = new \ReflectionObject($current);
             
             if (!$reflection->hasProperty($cleanPart)) {
-                Log::warning("Property '{$cleanPart}' not found in " . get_class($current) . " while traversing key: {$key}");
+                static::logWarning("Property '{$cleanPart}' not found in " . get_class($current) . " while traversing key: {$key}");
                 return null;
             }
             
@@ -220,7 +222,7 @@ abstract class BaseConf
             $prop->setAccessible(true);
             
             if (!$prop->isInitialized($current)) {
-                Log::debug("Property '{$cleanPart}' not initialized in " . get_class($current) . " for key: {$key}");
+                static::logDebug("Property '{$cleanPart}' not initialized in " . get_class($current) . " for key: {$key}");
                 return null;
             }
             
@@ -228,7 +230,7 @@ abstract class BaseConf
             
             // Check if this is the last part
             if ($i === count($parts) - 1) {
-                Log::debug("Returning leaf value for key '{$key}': " . json_encode($value));
+                static::logDebug("Returning leaf value for key '{$key}': " . json_encode($value));
                 return $value;
             }
             
@@ -237,47 +239,47 @@ abstract class BaseConf
                 $i++; // Move to next part
                 if ($i >= count($parts)) {
                     // No more parts, return the array itself
-                    Log::debug("Returning array for key '{$key}': " . json_encode($value));
+                    static::logDebug("Returning array for key '{$key}': " . json_encode($value));
                     return $value;
                 }
                 
                 $nextPart = $parts[$i];
                 $arrayKey = strtolower(ltrim($nextPart, '$@'));
                 
-                Log::debug("Looking for array element with key '{$arrayKey}' in array with " . count($value) . " elements");
+                static::logDebug("Looking for array element with key '{$arrayKey}' in array with " . count($value) . " elements");
                 
                 // Try associative key first
                 if (isset($value[$arrayKey])) {
                     $current = $value[$arrayKey];
-                    Log::debug("Found array element using associative key '{$arrayKey}'");
+                    static::logDebug("Found array element using associative key '{$arrayKey}'");
                 } else {
                     // Search through all array elements for matching identifier
                     $found = false;
                     foreach ($value as $index => $item) {
                         if ($item instanceof BaseConf) {
                             $itemId = strtolower($item->identifier ?? '');
-                            Log::debug("Checking array item at index {$index} with identifier '{$itemId}' against '{$arrayKey}'");
+                            static::logDebug("Checking array item at index {$index} with identifier '{$itemId}' against '{$arrayKey}'");
                             if ($itemId === $arrayKey) {
                                 $current = $item;
                                 $found = true;
-                                Log::debug("Found matching element at index {$index}");
+                                static::logDebug("Found matching element at index {$index}");
                                 break;
                             }
                         }
                     }
                     
                     if (!$found) {
-                        Log::debug("Array element '{$arrayKey}' not found in array for key: {$key}");
+                        static::logDebug("Array element '{$arrayKey}' not found in array for key: {$key}");
                         return null;
                     }
                 }
             } elseif ($value instanceof BaseConf) {
                 // Continue traversing nested BaseConf
                 $current = $value;
-                Log::debug("Traversing into BaseConf: " . get_class($current));
+                static::logDebug("Traversing into BaseConf: " . get_class($current));
             } else {
                 // Scalar value but not at end - shouldn't happen
-                Log::warning("Reached scalar value '{$value}' before end of key: {$key}");
+                static::logWarning("Reached scalar value '{$value}' before end of key: {$key}");
                 return $value;
             }
             
@@ -350,17 +352,17 @@ abstract class BaseConf
 
                 $newPrefix = $currentPrefix === '' ? $this->toAllCaps($propName) : $currentPrefix . '~' . $this->toAllCaps($propName);
 
-                Log::debug("Inspecting property: '{$propName}', prefix: '{$newPrefix}', initialized: " . ($isInitialized ? 'yes' : 'no'));
+                static::logDebug("Inspecting property: '{$propName}', prefix: '{$newPrefix}', initialized: " . ($isInitialized ? 'yes' : 'no'));
 
                 // Nested BaseConf object
                 if ($prop->hasType() && !$prop->getType()->isBuiltin() && is_subclass_of($prop->getType()->getName(), BaseConf::class)) {
                     $objPrefix = $currentPrefix === '' ? '$' . $this->toAllCaps($propName) : $currentPrefix . '~$' . $this->toAllCaps($propName);
-                    Log::debug("Detected nested BaseConf object: '{$propName}', using prefix '{$objPrefix}'");
+                    static::logDebug("Detected nested BaseConf object: '{$propName}', using prefix '{$objPrefix}'");
 
                     if ($isInitialized) {
                         $recurse($value, $objPrefix);
                     } else {
-                        Log::debug("Uninitialized nested object '{$propName}', adding key: '{$objPrefix}'");
+                        static::logDebug("Uninitialized nested object '{$propName}', adding key: '{$objPrefix}'");
                         $keys[] = $objPrefix;
                     }
                     continue;
@@ -436,15 +438,15 @@ abstract class BaseConf
 
                 // Leaf scalar - only add if not already present
                 if (!in_array($newPrefix, $keys)) {
-                    Log::debug("Adding leaf property key: '{$newPrefix}'");
+                    static::logDebug("Adding leaf property key: '{$newPrefix}'");
                     $keys[] = $newPrefix;
                 }
             }
         };
 
-        Log::info("Starting generateKeys for class: " . get_class($this));
+        static::logInfo("Starting generateKeys for class: " . get_class($this));
         $recurse($this, $prefix);
-        Log::info("Completed generateKeys, total keys generated: " . count($keys));
+        static::logInfo("Completed generateKeys, total keys generated: " . count($keys));
 
         return $keys;
     }
@@ -514,7 +516,7 @@ abstract class BaseConf
         $cacheKey = $this->getCacheKey($this->identifier);
         $cleared = Cache::forget($cacheKey);
         
-        Log::info("Cache clear attempted", [
+        static::logInfo("Cache clear attempted", [
             'identifier' => $this->identifier,
             'cache_key' => $cacheKey,
             'cleared' => $cleared
@@ -532,19 +534,19 @@ abstract class BaseConf
             $flattened = $this->loadConfigFromDB($this->identifier);
             
             if (!empty($flattened)) {
-                Log::info("Reloaded config from DB", [
+                static::logInfo("Reloaded config from DB", [
                     'identifier' => $this->identifier,
                     'keys_count' => count($flattened)
                 ]);
                 $this->decipherConf($flattened);
             } else {
-                Log::warning("No DB config found on reload", [
+                static::logWarning("No DB config found on reload", [
                     'identifier' => $this->identifier
                 ]);
                 $this->applyDefaultsToSelf();
             }
         } catch (\Throwable $e) {
-            Log::error("Failed to reload config", [
+            static::logError("Failed to reload config", [
                 'identifier' => $this->identifier,
                 'error' => $e->getMessage()
             ]);
@@ -571,7 +573,7 @@ abstract class BaseConf
                 try {
                     $pair['value'] = ConfSecret::decrypt($pair['value']);
                 } catch (\Throwable $e) {
-                    Log::error('Failed to decrypt config secret', ['key' => $pair['key'], 'error' => $e->getMessage()]);
+                    static::logError('Failed to decrypt config secret', ['key' => $pair['key'], 'error' => $e->getMessage()]);
                     $pair['value'] = '';
                 }
             }
@@ -583,7 +585,7 @@ abstract class BaseConf
     private function loadRawConfigFromDB(string $cacheKey, string $dbKey, string $identifier): array
     {
         return Cache::rememberForever($cacheKey, function () use ($dbKey, $identifier) {
-            Log::info("Cache miss - querying database", [
+            static::logInfo("Cache miss - querying database", [
                 'identifier' => $identifier,
                 'database_key' => $dbKey
             ]);
@@ -594,7 +596,7 @@ abstract class BaseConf
                 ->first();
 
             if (!$moduleEntry) {
-                Log::warning("No master_data entry found", [
+                static::logWarning("No master_data entry found", [
                     'tried_key' => "{$dbKey}-conf",
                     'identifier' => $identifier
                 ]);
@@ -676,7 +678,7 @@ abstract class BaseConf
 
         $reflection = new \ReflectionObject($current);
         if (!$reflection->hasProperty($root)) {
-            Log::warning("⚠️  [{$trace}] Property '{$root}' missing in " . get_class($current));
+            static::logWarning("⚠️  [{$trace}] Property '{$root}' missing in " . get_class($current));
             return;
         }
 
@@ -699,11 +701,11 @@ abstract class BaseConf
                 $baseNamespace = (new \ReflectionClass($this))->getNamespaceName();
                 $fqcn = "{$baseNamespace}\\{$className}";
                 if (class_exists($fqcn)) {
-                    Log::debug("🧱 [{$trace}] Creating nested config {$fqcn}");
+                    static::logDebug("🧱 [{$trace}] Creating nested config {$fqcn}");
                     $currentValue = new $fqcn();
                     $prop->setValue($current, $currentValue);
                 } else {
-                    Log::warning("⚠️  [{$trace}] Missing class {$fqcn}");
+                    static::logWarning("⚠️  [{$trace}] Missing class {$fqcn}");
                     return;
                 }
             }
@@ -741,7 +743,7 @@ abstract class BaseConf
                                 $elementClass = $fqcn;
                                 // Log::debug("Resolved element class to: {$elementClass}");
                             } else {
-                                Log::warning("Could not resolve element class: {$elementClass} (tried {$fqcn})");
+                                static::logWarning("Could not resolve element class: {$elementClass} (tried {$fqcn})");
                                 $elementClass = null;
                             }
                         }
@@ -758,7 +760,7 @@ abstract class BaseConf
                                     // Log::debug("🧩 [{$trace}] Instantiating concrete class {$concreteClass} for abstract {$elementClass}");
                                     $arrayValue[$elementKey] = new $concreteClass();
                                 } else {
-                                    Log::warning("⚠️  [{$trace}] Cannot instantiate abstract class {$elementClass} and no concrete class found for '{$elementKey}'");
+                                    static::logWarning("⚠️  [{$trace}] Cannot instantiate abstract class {$elementClass} and no concrete class found for '{$elementKey}'");
                                     return;
                                 }
                             } else {
@@ -774,21 +776,21 @@ abstract class BaseConf
                             $this->processKey(implode('~', $parts), $value, $arrayValue[$elementKey], $trace);
                         } else {
                             // No more parts, this was just the array element identifier
-                            Log::debug("✅ [{$trace}] Array element created/accessed");
+                            static::logDebug("✅ [{$trace}] Array element created/accessed");
                         }
                         return;
                     } else {
-                        Log::warning("⚠️  [{$trace}] Cannot resolve array element class");
+                        static::logWarning("⚠️  [{$trace}] Cannot resolve array element class");
                         return;
                     }
                 } else {
-                    Log::warning("⚠️  [{$trace}] Unexpected array key part: {$nextPartNormalized} (original: {$nextPartOriginal})");
+                    static::logWarning("⚠️  [{$trace}] Unexpected array key part: {$nextPartNormalized} (original: {$nextPartOriginal})");
                     return;
                 }
             }
         }
 
-        Log::warning("⚠️  [{$trace}] Unsupported path: " . implode('~', $parts));
+        static::logWarning("⚠️  [{$trace}] Unsupported path: " . implode('~', $parts));
     }
 
     /**
@@ -830,9 +832,9 @@ abstract class BaseConf
             }
 
             $this->isLoaded = true;
-            Log::debug("✅ Config for {$this->identifier} loaded lazily");
+            static::logDebug("✅ Config for {$this->identifier} loaded lazily");
         } catch (\Throwable $e) {
-            Log::error("❌ Failed to lazy-load config for {$this->identifier}: " . $e->getMessage());
+            static::logError("❌ Failed to lazy-load config for {$this->identifier}: " . $e->getMessage());
             $this->applyDefaultsToSelf();
             $this->isLoaded = true;
         }
@@ -872,15 +874,15 @@ abstract class BaseConf
                         if ($defaultProp->isInitialized($this->default_values)) {
                             $defaultValue = $defaultProp->getValue($this->default_values);
                             $reflection->setValue($this, $defaultValue);
-                            Log::warning("Property '{$property}' was uninitialized, applied default: " . json_encode($defaultValue));
+                            static::logWarning("Property '{$property}' was uninitialized, applied default: " . json_encode($defaultValue));
                             return $defaultValue;
                         }
                     } catch (\Exception $e) {
-                        Log::error("Could not access default for '{$property}': " . $e->getMessage());
+                        static::logError("Could not access default for '{$property}': " . $e->getMessage());
                     }
                 }
                 
-                Log::error("Property '{$property}' is not initialized and no default available in " . get_class($this));
+                static::logError("Property '{$property}' is not initialized and no default available in " . get_class($this));
                 return null;
             }
             

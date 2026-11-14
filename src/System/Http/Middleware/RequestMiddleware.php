@@ -18,28 +18,14 @@ class RequestMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $this->logMethodStart("##################################################");
+        // Details at debug level; ResponseMiddleware writes the one-line INFO summary.
+        $this->logDebug("{$request->method()} {$request->fullUrl()}");
 
-        $this->logDebug("Request Method: " . $request->method());
-        $this->logDebug("Request URL: " . $request->fullUrl());
-        $this->logDebug("Request Path: " . $request->path());
-        $this->logDebug("--------------------------------------------------");
-
-        // Log request details for API routes
         if ($this->isApiRequest($request)) {
             $this->logRequestDetails($request);
         }
 
-        $this->logDebug("Processing request...");
-
-        // Process the request
         $this->processRequest($request);
-
-        $this->logDebug("Processing request done.");
-        $this->logDebug("--------------------------------------------------");
-        $this->logDebug("Forwarding to next middleware/controller...");
-
-        $this->logMethodEnd("==================================================");
 
         return $next($request);
     }
@@ -83,22 +69,12 @@ class RequestMiddleware
      */
     protected function logRequestDetails(Request $request): void
     {
-        $this->logDebug("API Request Details:");
-        
-        // Log headers (excluding sensitive ones)
-        $this->logDebug("Headers: " . json_encode($this->getSafeHeaders($request)));
-        
-        // Log query parameters
-        if ($request->query->count() > 0) {
-            $this->logDebug("Query Params: " . json_encode($request->query->all()));
-        }
-        
-        // Log request body (excluding sensitive fields)
-        if ($request->getContent()) {
-            $this->logDebug("Request Body: " . json_encode($this->getSafeRequestData($request)));
-        }
-        
-        $this->logDebug("--------------------------------------------------");
+        // Sensitive headers and fields are removed by getSafeHeaders()/getSafeRequestData().
+        $this->logDebug('API request details', array_filter([
+            'headers' => $this->getSafeHeaders($request),
+            'query' => $request->query->count() > 0 ? $request->query->all() : null,
+            'body' => $request->getContent() ? $this->getSafeRequestData($request) : null,
+        ]));
     }
 
     /**

@@ -2,15 +2,17 @@
 
 namespace Iquesters\Foundation\Http\Controllers;
 
+use Iquesters\Foundation\System\Traits\Loggable;
 use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\Models\Navigation;
 use Iquesters\Foundation\Models\Module;
 
 class NavigationController extends Controller
 {
+    use Loggable;
+
     /**
      * /navigations shows the navigation ordering UI.
      * (Previously referenced an undefined $tableSchema and always failed.)
@@ -133,7 +135,7 @@ class NavigationController extends Controller
             ));
 
         } catch (\Throwable $e) {
-            Log::error('Navigation index error', ['error' => $e->getMessage()]);
+            static::logError('Navigation index error', ['error' => $e->getMessage()]);
             abort(500, 'Unable to load navigation');
         }
     }
@@ -143,7 +145,7 @@ class NavigationController extends Controller
      */
     public function loadModuleSubMenu($moduleUid)
     {
-        Log::info('loadModuleSubMenu started', [
+        static::logInfo('loadModuleSubMenu started', [
             'module_uid' => $moduleUid
         ]);
 
@@ -153,7 +155,7 @@ class NavigationController extends Controller
                 ->first();
 
             if (!$module) {
-                Log::warning('Active module not found', [
+                static::logWarning('Active module not found', [
                     'module_uid' => $moduleUid
                 ]);
 
@@ -163,7 +165,7 @@ class NavigationController extends Controller
                 ], 404);
             }
 
-            Log::info('Module loaded', [
+            static::logInfo('Module loaded', [
                 'module_id' => $module->id,
                 'module_name' => $module->name
             ]);
@@ -176,7 +178,7 @@ class NavigationController extends Controller
 
             $submenuItems = is_array($submenuItems) ? $submenuItems : [];
 
-            Log::debug('Submenu meta loaded', [
+            static::logDebug('Submenu meta loaded', [
                 'count' => count($submenuItems)
             ]);
 
@@ -187,7 +189,7 @@ class NavigationController extends Controller
                 ->values()
                 ->toArray();
 
-            Log::debug('Extracted submenu routes', [
+            static::logDebug('Extracted submenu routes', [
                 'routes' => $routes
             ]);
 
@@ -203,7 +205,7 @@ class NavigationController extends Controller
                 ]
             );
 
-            Log::info('Navigation resolved', [
+            static::logInfo('Navigation resolved', [
                 'navigation_id' => $navigation->id,
                 'navigation_name' => $navigationName
             ]);
@@ -216,7 +218,7 @@ class NavigationController extends Controller
 
             $savedOrder = is_array($savedOrder) ? $savedOrder : [];
 
-            Log::debug('Saved navigation order', [
+            static::logDebug('Saved navigation order', [
                 'saved_order' => $savedOrder
             ]);
 
@@ -238,7 +240,7 @@ class NavigationController extends Controller
                     ]
                 );
 
-                Log::info('Navigation order updated', [
+                static::logInfo('Navigation order updated', [
                     'final_order' => $finalOrder
                 ]);
             }
@@ -251,7 +253,7 @@ class NavigationController extends Controller
                 ->filter()
                 ->values();
 
-            Log::info('Submenu build completed', [
+            static::logInfo('Submenu build completed', [
                 'submenu_count' => $orderedSubMenu->count()
             ]);
 
@@ -261,7 +263,7 @@ class NavigationController extends Controller
             ]);
 
         } catch (\Throwable $e) {
-            Log::error('Load submenu failed', [
+            static::logError('Load submenu failed', [
                 'module_uid' => $moduleUid,
                 'exception'  => $e,
             ]);
@@ -345,7 +347,7 @@ class NavigationController extends Controller
             return back()->with('success', 'Navigation updated successfully');
 
         } catch (\Throwable $e) {
-            Log::error('Save navigation failed', [
+            static::logError('Save navigation failed', [
                 'error' => $e->getMessage(),
                 'user'  => auth()->id(),
             ]);
