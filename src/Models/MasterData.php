@@ -55,14 +55,14 @@ class MasterData extends Model
         return $this->hasMany(MasterDataMeta::class, 'ref_parent');
     }
 
-    public function setMetaBulk(array $metas, int $userId): void
+    public function setMetaBulk(array $metas, ?int $userId = null): void
     {
         foreach ($metas as $key => $value) {
             $this->setMetaValue($key, $value, $userId);
         }
     }
 
-    public function setMetaValue(string $key, $value, int $userId): void
+    public function setMetaValue(string $key, $value, ?int $userId = null): void
     {
         $this->metas()->updateOrCreate(
             ['meta_key' => $key],
