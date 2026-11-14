@@ -22,6 +22,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follo
 - Logging across the package uses `Loggable`; request/response logging is one INFO summary per request with details at DEBUG.
 - Entity builder keeps validation keys; publishing adds unique keys and audit foreign keys.
 
+### Performance
+- `ConfProvider::from()` reuses one conf instance per module for the request (reset per request / queue job;
+  `ConfProvider::forget()` and `clearCache()` drop it). Previously every call rebuilt the conf, costing an
+  `information_schema` query and cache reads each time (hundreds per page).
+- `BaseConf` checks for the `master_data` table once per process.
+- `Module::getForUser()` eager-loads metas; `Module::getMeta()` / `Navigation::getMeta()` use loaded metas.
+
 ### Fixed
 - Admin check runs before route model binding; `LARAVEL_START` guard.
 - `/navigations` crashed on an undefined `$tableSchema`.

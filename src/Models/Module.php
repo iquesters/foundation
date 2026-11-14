@@ -33,12 +33,18 @@ class Module extends Model
 
     public function getMeta(string $key)
     {
-        $meta = $this->metas()->where('meta_key', $key)->first();
+        // Use eager-loaded metas when available (one query for all modules).
+        $meta = $this->relationLoaded('metas')
+            ? $this->metas->firstWhere('meta_key', $key)
+            : $this->metas()->where('meta_key', $key)->first();
+
         return $meta ? $meta->meta_value : null;
     }
 
     public function setMeta(string $key, $value)
     {
+        $this->unsetRelation('metas');
+
         return $this->metas()->updateOrCreate(
             ['meta_key' => $key],
             ['meta_value' => $value]
@@ -112,7 +118,7 @@ class Module extends Model
 
         $userRoleIds = $user->roles->pluck('id')->toArray();
         
-        return static::where('status', 'active')->get()->filter(function ($module) use ($userRoleIds) {
+        return static::with('metas')->where('status', 'active')->get()->filter(function ($module) use ($userRoleIds) {
             $assignedRoleIds = $module->getAssignedRoleIds();
             return count(array_intersect($assignedRoleIds, $userRoleIds)) > 0;
         });

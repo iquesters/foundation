@@ -42,7 +42,7 @@ abstract class BaseConf
         $this->prepareDefault($this->default_values);
         
         try {
-            if (Schema::hasTable('master_data')) {
+            if (static::masterDataReady()) {
                 $flattened = $this->loadConfigFromDB($this->identifier);
                 if (!empty($flattened)) {
                     $this->decipherConf($flattened);
@@ -62,6 +62,22 @@ abstract class BaseConf
         }
         
         $this->isLoaded = true;
+    }
+
+    /**
+     * Whether the master_data table exists. Every conf (and each nested conf)
+     * asks, and the answer is an information_schema query, so a "yes" is
+     * remembered for the process; a "no" is re-checked (it can be migrated later).
+     */
+    private static bool $masterDataReady = false;
+
+    private static function masterDataReady(): bool
+    {
+        if (!self::$masterDataReady) {
+            self::$masterDataReady = Schema::hasTable('master_data');
+        }
+
+        return self::$masterDataReady;
     }
 
     /**
@@ -515,7 +531,8 @@ abstract class BaseConf
     {
         $cacheKey = $this->getCacheKey($this->identifier);
         $cleared = Cache::forget($cacheKey);
-        
+        ConfProvider::forget($this->identifier);
+
         static::logInfo("Cache clear attempted", [
             'identifier' => $this->identifier,
             'cache_key' => $cacheKey,
