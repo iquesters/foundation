@@ -481,7 +481,12 @@ class EntityController extends Controller
                     "maxlength" => $field['maxlength'] ?? null,
                     "size" => $field['size'] ?? null,
                     "gridSize" => $field['gridSize'] ?? null,
-                    "default" => $this->normalizeFieldDefault($field['default'] ?? null, $fieldType)
+                    "default" => $this->normalizeFieldDefault($field['default'] ?? null, $fieldType),
+                    // Validation keys enforced by the generic entity API (EntityValidator).
+                    "unique" => (bool) ($field['unique'] ?? false),
+                    "options" => is_array($field['options'] ?? null) ? $field['options'] : null,
+                    "min" => isset($field['min']) && is_numeric($field['min']) ? $field['min'] + 0 : null,
+                    "max" => isset($field['max']) && is_numeric($field['max']) ? $field['max'] + 0 : null,
                 ];
             }
         }
@@ -1147,9 +1152,11 @@ class EntityController extends Controller
             case 'bigint':
                 if ($name === 'id') {
                     $column = $table->id();
+                } elseif (in_array($name, ['created_by', 'updated_by', 'deleted_by'], true)) {
+                    // Nullable FK to users (no fake "0" user).
+                    return $table->foreignId($name)->nullable()->constrained('users')->nullOnDelete();
                 } else {
-                    $column = $table->bigInteger($name)
-                        ->default(in_array($name, ['created_by', 'updated_by']) ? 0 : null);
+                    $column = $table->bigInteger($name);
                 }
                 break;
 
@@ -1231,8 +1238,13 @@ class EntityController extends Controller
         }
 
         // Add indexes for commonly queried fields
-        if (in_array($name, ['status', 'created_by', 'deleted_at'])) {
+        if (in_array($name, ['status', 'deleted_at'])) {
             $column->index();
+        }
+
+        // Fields marked unique get a DB-level unique index as well as API validation.
+        if (! empty($field['unique']) && ! in_array($name, ['id', 'uid'], true)) {
+            $column->unique();
         }
     }
 }
