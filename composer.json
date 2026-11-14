@@ -3,9 +3,9 @@
   "description": "A foundational package providing base classes and utilities for Laravel modules",
   "type": "library",
   "require": {
-    "php": ">=8.1",
-    "laravel/framework": "^10.0|^11.0|^12.0|^13.0",
-    "spatie/laravel-permission": "^6.16"
+    "php": "^8.3",
+    "laravel/framework": "^12.0|^13.0",
+    "spatie/laravel-permission": "^8.0"
   },
   "suggest": {
     "iquesters/user-interface": "Stores generated form/table schemas (binds Foundation\\Contracts\\SchemaModels) and provides the UI",
