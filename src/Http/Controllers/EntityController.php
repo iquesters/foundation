@@ -12,6 +12,7 @@ use Iquesters\Foundation\Services\FormSchemaGenerator;
 use Iquesters\Foundation\Services\TableSchemaGenerator;
 use Illuminate\Database\Eloquent\Model;
 use Iquesters\Foundation\Contracts\SchemaModels;
+use Iquesters\Foundation\Support\EntityPermission;
 use Illuminate\Database\Schema\Blueprint;
 use Iquesters\Foundation\Models\Module;
 use Illuminate\Support\Facades\Schema;
@@ -1031,6 +1032,9 @@ class EntityController extends Controller
             });
 
             Log::info("Meta table '{$metaTableName}' created successfully");
+
+            // Per-entity permissions for the generic entity API.
+            EntityPermission::ensureFor($tableName);
 
             // Update entity status to published
             $entity->update([
