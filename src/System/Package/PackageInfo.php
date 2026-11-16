@@ -99,7 +99,6 @@ abstract class PackageInfo
         $providersPath = $this->namespaceToPath($providersNamespace);
 
         if (!is_dir($providersPath)) {
-            // \Log::debug("Providers directory not found", ['path' => $providersPath]);
             return $providers;
         }
 
@@ -110,7 +109,6 @@ abstract class PackageInfo
             
             if (class_exists($className) && $this->isServiceProvider($className)) {
                 $providers[] = $className;
-                // \Log::debug("Auto-discovered provider", ['class' => $className]);
             }
         }
 
@@ -127,7 +125,6 @@ abstract class PackageInfo
         $consolePath = $this->namespaceToPath($consoleNamespace);
 
         if (!is_dir($consolePath)) {
-            // \Log::debug("Console directory not found", ['path' => $consolePath]);
             return $commands;
         }
 
@@ -143,7 +140,6 @@ abstract class PackageInfo
                 }
                 
                 $commands[] = $className;
-                // \Log::debug("Auto-discovered command", ['class' => $className]);
             }
         }
 
@@ -162,14 +158,7 @@ abstract class PackageInfo
         $packageRoot = $this->getPackagePath();
         $seederPath = $packageRoot . '/database/seeders';
 
-        // Log::debug("Looking for seeders directory", [
-        //     'module' => $this->module_name,
-        //     'package_root' => $packageRoot,
-        //     'seeder_path' => $seederPath,
-        //     'exists' => is_dir($seederPath)
-        // ]);
-
-        if (!is_dir($seederPath)) {
+if (!is_dir($seederPath)) {
             \Log::debug("Seeders directory not found", [
                 'module' => $this->module_name,
                 'path' => $seederPath
@@ -182,15 +171,7 @@ abstract class PackageInfo
         $expectedSeederName = $this->resolver->getModuleNamespace() . 'Seeder';
         $seederClass = $seederNamespace . '\\' . $expectedSeederName;
 
-        // Log::debug("Checking for seeder class", [
-        //     'module' => $this->module_name,
-        //     'seeder_namespace' => $seederNamespace,
-        //     'expected_name' => $expectedSeederName,
-        //     'full_class' => $seederClass,
-        //     'exists' => class_exists($seederClass)
-        // ]);
-
-        if (!class_exists($seederClass)) {
+if (!class_exists($seederClass)) {
             \Log::warning("Seeder class not found", [
                 'module' => $this->module_name,
                 'expected_class' => $seederClass,
@@ -205,10 +186,6 @@ abstract class PackageInfo
         // If not found in module, use Foundation's SeederCommand
         if (!class_exists($seederCommandClass)) {
             $seederCommandClass = 'Iquesters\\Foundation\\Console\\SeederCommand';
-            // \Log::debug("Using Foundation's SeederCommand", [
-            //     'module' => $this->module_name,
-            //     'command_class' => $seederCommandClass
-            // ]);
         }
         
         if (class_exists($seederCommandClass)) {
@@ -218,11 +195,6 @@ abstract class PackageInfo
                 'seeder_class' => $seederClass
             ];
             
-            // Log::info("Auto-discovered seeder binding", [
-            //     'module' => $this->module_name,
-            //     'seeder' => $seederClass,
-            //     'command' => $seederCommandClass
-            // ]);
         } else {
             \Log::error("SeederCommand class not found", [
                 'module' => $this->module_name,
@@ -246,7 +218,6 @@ abstract class PackageInfo
         $middlewarePath = $this->namespaceToPath($middlewareNamespace);
 
         if (!is_dir($middlewarePath)) {
-            // \Log::debug("Middleware directory not found", ['path' => $middlewarePath]);
             return $aliases;
         }
 
@@ -260,10 +231,6 @@ abstract class PackageInfo
                 $alias = $this->generateMiddlewareAlias($file->getFilenameWithoutExtension());
                 $aliases[$alias] = $className;
                 
-                // Log::debug("Auto-discovered middleware", [
-                //     'class' => $className,
-                //     'alias' => $alias
-                // ]);
             }
         }
 
@@ -280,7 +247,6 @@ abstract class PackageInfo
         $confClass = $configNamespace . '\\' . $expectedConfName;
 
         if (class_exists($confClass)) {
-            // \Log::debug("Auto-discovered config class", ['class' => $confClass]);
             return $confClass;
         }
 
@@ -307,11 +273,6 @@ abstract class PackageInfo
             
             if (defined("{$moduleEnumClass}::{$moduleName}")) {
                 $enumValue = constant("{$moduleEnumClass}::{$moduleName}");
-                // \Log::debug("Auto-discovered module enum", [
-                //     'enum_class' => $moduleEnumClass,
-                //     'constant' => $moduleName,
-                //     'value' => $enumValue
-                // ]);
                 return $enumValue;
             }
             

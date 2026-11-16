@@ -5,6 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follo
 
 ## [Unreleased] – 2.0.0
 
+### Housekeeping
+- Removed commented-out code and emoji from log messages; added Pint/Larastan (`composer format|lint|analyse`), a test CI workflow (PHP 8.3/8.4 × Laravel 12/13), `.gitattributes`, `SECURITY.md`, `CONTRIBUTING.md`, `UPGRADE.md` and composer metadata.
+
 ### Breaking
 - Requires PHP 8.3, Laravel 12/13 and spatie/laravel-permission 8.
 - Foundation no longer depends on higher-level modules; real dependencies are declared in composer.json.

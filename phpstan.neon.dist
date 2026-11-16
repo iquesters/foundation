@@ -1,0 +1,9 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 1
+    paths:
+        - src
+    # Raise the level step by step; add a baseline (phpstan --generate-baseline) if needed.
+    treatPhpDocTypesAsCertain: false
