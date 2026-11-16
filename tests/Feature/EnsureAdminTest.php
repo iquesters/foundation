@@ -29,12 +29,27 @@ class EnsureAdminTest extends TestCase
         $this->actingAs($this->makeUser('admin'))->get('/_admin-only')->assertOk();
     }
 
-    public function test_admin_roles_come_from_config(): void
+    public function test_admin_roles_come_from_the_foundation_conf(): void
     {
-        config(['foundation.admin_roles' => ['owner']]);
+        $this->setAdminRoles('owner');
 
-        $this->actingAs($this->makeUser('super-admin'))->get('/_admin-only')->assertForbidden();
         $this->actingAs($this->makeUser('owner'))->get('/_admin-only')->assertOk();
+        $this->actingAs($this->makeUser('admin'))->get('/_admin-only')->assertForbidden();
+    }
+
+    public function test_super_admin_is_always_allowed(): void
+    {
+        $this->setAdminRoles('owner');
+        $this->actingAs($this->makeUser('super-admin'))->get('/_admin-only')->assertOk();
+
+        $this->setAdminRoles(' , ');
+        $this->assertSame(['super-admin', 'admin'], \Iquesters\Foundation\Http\Middleware\EnsureAdmin::roles());
+    }
+
+    /** Set the DB-backed conf value for this request (ConfProvider reuses the instance). */
+    private function setAdminRoles(string $roles): void
+    {
+        \Iquesters\Foundation\Support\ConfProvider::from(\Iquesters\Foundation\Enums\Module::FOUNDATION)->admin_roles = $roles;
     }
 
     public function test_user_model_without_roles_fails_closed(): void

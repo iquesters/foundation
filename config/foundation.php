@@ -1,99 +1,38 @@
 <?php
 
+/*
+| Deploy-time settings read while routes are registered (so they can't come
+| from the DB: they'd be frozen into `route:cache`). Merged by
+| FoundationServiceProvider; publish to config/foundation.php to override.
+|
+| Runtime module settings (e.g. admin_roles) live in the DB-backed conf
+| (see docs/developer/configuration.md).
+*/
+
 return [
 
     /*
     |--------------------------------------------------------------------------
-    | Platform API Versions
+    | Module APIs  (/api/{module}/{version}/...)
     |--------------------------------------------------------------------------
     |
-    | These are the globally supported platform API versions.
-    | Any request using a version not listed here will return 404.
+    | Modules declare their API versions in composer.json
+    | (extra.platform.api). Keys below are the module prefix from that file.
+    |
+    | middleware:  extra middleware for every version of a module's API.
+    |              Authentication is declared in each route file, because a
+    |              module can have public endpoints (e.g. the setup form schema).
+    | rate_limits: "requests,minutes" per module and version (throttle).
     |
     */
 
-    'platform_versions' => [
-        'v1',
-        'v2',
-    ],
+    'api' => [
+        'middleware' => [],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Admin Roles
-    |--------------------------------------------------------------------------
-    |
-    | Roles allowed through the `ensure.admin` middleware, which guards admin,
-    | entity, config, form/table builder and queue routes.
-    |
-    */
-
-    'admin_roles' => array_values(array_filter(array_map(
-        'trim',
-        explode(',', env('FOUNDATION_ADMIN_ROLES', 'super-admin,admin'))
-    ))),
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Per-Package Middleware
-    |--------------------------------------------------------------------------
-    |
-    | Middleware applied to all API routes of a package.
-    | Example: auth:sanctum, verified, role checks, etc.
-    |
-    */
-
-    'middleware' => [
-
-        'iquesters/foundation' => [
-            'auth:sanctum',
-        ],
-
-        'iquesters/user-interface' => [
-            'auth:sanctum',
-        ],
-
-        'iquesters/user-management' => [
-            'auth:sanctum',
+        'rate_limits' => [
+            'foundation' => ['v1' => '600,1'],
+            // Tables prefetch pages and forms load schemas: keep this generous.
+            'user-interface' => ['v1' => '300,1'],
         ],
     ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Rate Limits
-    |--------------------------------------------------------------------------
-    |
-    | Rate limits are applied per package and per package version.
-    | Format: "requests,minutes"
-    |
-    */
-
-    'rate_limits' => [
-
-        'iquesters/foundation' => [
-            'v1' => '600,1',
-        ],
-
-        'iquesters/user-interface' => [
-            'v1' => '60,1',
-            'v2' => '120,1',
-        ],
-
-        'iquesters/user-management' => [
-            'v1' => '100,1',
-        ],
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Strict Mode
-    |--------------------------------------------------------------------------
-    |
-    | When true:
-    | - Enabled packages MUST declare platform.api in composer.json
-    | - Missing or invalid API manifests throw exceptions
-    |
-    */
-
-    'strict' => true,
 ];

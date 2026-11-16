@@ -29,6 +29,7 @@ abstract class BaseServiceProvider extends ServiceProvider
         $this->loadPackageViews();
         $this->loadPackageMigrations();
         $this->loadPackageRoutes();
+        $this->loadPackageApiRoutes();
         $this->registerPackageProviders();
         $this->registerPackageCommands();
         $this->registerPackageMiddleware();
@@ -36,9 +37,36 @@ abstract class BaseServiceProvider extends ServiceProvider
     }
 
     /* -------------------------------------------------
+     | Install-time hooks
+     |--------------------------------------------------*/
+
+    /**
+     * Run $callback once the app has booted, but only during
+     * `php artisan package:discover` (composer install/update). For one-time
+     * install steps: publishing vendor files, patching the user model, etc.
+     */
+    protected function onPackageDiscover(callable $callback): void
+    {
+        if (!$this->app->runningInConsole() || ($_SERVER['argv'][1] ?? null) !== 'package:discover') {
+            return;
+        }
+
+        $this->app->booted(fn () => $callback());
+    }
+
+    /* -------------------------------------------------
      | Package Info (Auto-Detection)
      |--------------------------------------------------*/
+
+    /** Built once per provider: auto-discovery scans the module's folders. */
+    private ?PackageInfo $packageInfoInstance = null;
+
     protected function packageInfo(): PackageInfo
+    {
+        return $this->packageInfoInstance ??= $this->makePackageInfo();
+    }
+
+    private function makePackageInfo(): PackageInfo
     {
         $moduleName = $this->detectModuleName();
         $packageInfoClass = $this->detectPackageInfoClass($moduleName);
@@ -238,6 +266,23 @@ abstract class BaseServiceProvider extends ServiceProvider
                 $this->loadRoutesFrom($path);
                 // Log::debug('Loaded routes', ['path' => $path]);
             }
+        }
+    }
+
+    /**
+     * /api/{module}/{version}/... for each version declared in composer.json
+     * (extra.platform.api). Skipped when routes are cached.
+     */
+    protected function loadPackageApiRoutes(): void
+    {
+        if ($this->app->routesAreCached()) {
+            return;
+        }
+
+        $api = $this->packageInfo()->getApi();
+
+        foreach ($api['versions'] ?? [] as $version => $routeFile) {
+            \Iquesters\Foundation\Routing\ModuleApi::register($api['prefix'], $version, $routeFile);
         }
     }
 

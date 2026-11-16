@@ -49,6 +49,12 @@ abstract class PackageInfo
     protected ?array $specific_middleware_aliases = null;
     protected ?array $specific_models = null;
 
+    // Optional overrides set in definePackageInfo()
+    /** View namespace when it differs from the module name (e.g. 'usermanagement'). */
+    protected ?string $view_namespace = null;
+    /** Route files loaded in addition to routes/web.php, relative to the package root. */
+    protected array $extra_routes_paths = [];
+
     // Common properties
     protected ?string $package_name = null;
     protected ?string $conf_name = null;
@@ -475,12 +481,21 @@ abstract class PackageInfo
 
     public function getRoutesPaths(): array
     {
-        return $this->collectPaths(
+        $paths = $this->collectPaths(
             type: 'routes',
             customPath: $this->custom_routes_path,
             defaultPath: $this->default_routes_path,
             mustBeDir: false
         );
+
+        foreach ($this->extra_routes_paths as $relative) {
+            $path = $this->getPackagePath() . '/' . ltrim($relative, '/');
+            if (file_exists($path)) {
+                $paths[] = $path;
+            }
+        }
+
+        return $paths;
     }
 
     /* -------------------------------------------------
@@ -527,9 +542,35 @@ abstract class PackageInfo
         return $this->auto_publishable_assets;
     }
 
+    /**
+     * The module's API declaration from composer.json
+     * (extra.platform.api: { prefix, versions: { v1: "routes/api.v1.php" } }).
+     *
+     * @return array{prefix: string, versions: array<string, string>}|null versions map to absolute paths
+     */
+    public function getApi(): ?array
+    {
+        $composer = json_decode((string) @file_get_contents($this->getPackagePath() . '/composer.json'), true);
+        $api = $composer['extra']['platform']['api'] ?? null;
+
+        if (!is_array($api) || empty($api['prefix']) || empty($api['versions']) || !is_array($api['versions'])) {
+            return null;
+        }
+
+        $versions = [];
+        foreach ($api['versions'] as $version => $file) {
+            $path = $this->getPackagePath() . '/' . ltrim((string) $file, '/');
+            if (file_exists($path)) {
+                $versions[(string) $version] = $path;
+            }
+        }
+
+        return $versions ? ['prefix' => (string) $api['prefix'], 'versions' => $versions] : null;
+    }
+
     public function getViewNamespace(): string
     {
-        return strtolower($this->module_name);
+        return $this->view_namespace ?? strtolower($this->module_name);
     }
 
     public function getConfName(): string

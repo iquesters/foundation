@@ -11,7 +11,7 @@ use Spatie\Permission\PermissionRegistrar;
  * Per-entity permissions for the generic entity API:
  *   entity.{table}.view | create | update | delete
  *
- * Admin roles (config foundation.admin_roles) are always allowed.
+ * Admin roles (foundation conf admin_roles, see EnsureAdmin::roles()) are always allowed.
  */
 final class EntityPermission
 {

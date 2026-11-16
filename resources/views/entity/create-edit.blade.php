@@ -26,14 +26,15 @@
 
     $systemFields = ['id','uid','status','created_by','created_at','updated_by','updated_at','deleted_by','deleted_at'];
 
+    // Generic entity API (iquesters/user-interface v1), keyed by the entity's table name.
+    $entityApiBase = url('/api/user-interface/v1/entity');
+    $entityTable = $isCreating ? null : ($entity->getMeta('published_table_name') ?: $entity->getMeta('table_name') ?: $entity->slug);
     $apis = $isCreating ? [] : [
-        ['GET', 'success', url("/api/entity/index/{$entity->slug}")],
-        ['GET', 'success', url("/api/entity/list/{$entity->slug}")],
-        ['POST', 'primary', url("/api/entity/store/{$entity->slug}")],
-        ['GET', 'success', url("/api/entity/show/{$entity->slug}") . '/{uid}'],
-        ['PUT', 'warning', url("/api/entity/update/{$entity->slug}") . '/{uid}'],
-        ['DELETE', 'danger', url("/api/entity/delete/{$entity->slug}") . '/{uid}'],
-        ['DELETE', 'dark', url("/api/entity/destroy/{$entity->slug}") . '/{uid}'],
+        ['GET', 'success', "{$entityApiBase}/list/{$entityTable}"],
+        ['POST', 'primary', "{$entityApiBase}/store/{$entityTable}"],
+        ['GET', 'success', "{$entityApiBase}/show/{$entityTable}/{uid}"],
+        ['PUT', 'warning', "{$entityApiBase}/update/{$entityTable}/{uid}"],
+        ['DELETE', 'danger', "{$entityApiBase}/delete/{$entityTable}/{uid}"],
     ];
 @endphp
 

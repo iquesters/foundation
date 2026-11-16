@@ -1,26 +1,21 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
 /*
 |--------------------------------------------------------------------------
-| Foundation API Health / Root
+| Foundation API v1  →  /api/foundation/v1/...
 |--------------------------------------------------------------------------
-| GET /api/{platform_version}
+| Loaded by ModuleApi (declared in composer.json extra.platform.api).
+| No /api prefix or version here; route names are relative to "api.foundation.v1.".
 */
 
-Route::get('/', function () {
-    return response()->json([
-        'success' => true,
-        'message' => 'API enabled and running for foundation',
-        'platform_version' => request()->route('platform_version'),
-    ]);
-});
+use Illuminate\Support\Facades\Route;
+use Iquesters\Foundation\Http\Controllers\ChatbotDispatchController;
+use Iquesters\Foundation\Http\Middleware\ValidateInternalDispatchToken;
 
-Route::get('/hola', function () {
-    return response()->json([
-        'success' => true,
-        'message' => 'hello, hola',
-        'platform_version' => request()->route('platform_version'),
-    ]);
-});
+// Serves smart-messenger: only when smart-messenger and integration are installed.
+if (class_exists(\Iquesters\SmartMessenger\Models\Message::class)
+    && class_exists(\Iquesters\Integration\Models\Integration::class)) {
+    Route::post('dispatch-queue', [ChatbotDispatchController::class, 'dispatchProcessResponse'])
+        ->middleware(ValidateInternalDispatchToken::class)
+        ->name('dispatch-queue');
+}

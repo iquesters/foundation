@@ -2,6 +2,7 @@
 
 namespace Iquesters\Foundation\Support;
 
+/** @deprecated See ApiConf. */
 class ApiVersion extends BaseConf
 {
     protected ?string $identifier = 'api_version';

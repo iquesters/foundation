@@ -8,6 +8,8 @@ use InvalidArgumentException;
 
 class SeederCommand extends Command
 {
+    private string $seederClass;
+
     private string $seederClassShortName;
     
     private string $seederClassKebabName;

@@ -4,6 +4,11 @@ namespace Iquesters\Foundation\Support;
 
 use Iquesters\Foundation\Support\BaseConf;
 
+/**
+ * @deprecated Module APIs are declared in composer.json (extra.platform.api) and
+ *             routed by Routing\ModuleApi; nothing reads this any more. Kept so
+ *             modules that still declare an `api_conf` property keep loading.
+ */
 class ApiConf extends BaseConf
 {
     protected ?string $identifier = 'api_conf';

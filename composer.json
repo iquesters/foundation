@@ -46,7 +46,7 @@
       "api": {
         "prefix": "foundation",
         "versions": {
-          "v1": "routes/api.php"
+          "v1": "routes/api.v1.php"
         }
       }
     }

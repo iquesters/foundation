@@ -22,7 +22,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follo
 - Logging across the package uses `Loggable`; request/response logging is one INFO summary per request with details at DEBUG.
 - Entity builder keeps validation keys; publishing adds unique keys and audit foreign keys.
 
+### Changed (module APIs)
+- **Breaking:** module APIs are served at `/api/{module}/{version}/...` (one version layer), declared in each module's
+  `composer.json` (`extra.platform.api`) and registered by `Routing\ModuleApi` from `BaseServiceProvider`.
+  Adds `GET /api` (index), `GET /api/{module}/{version}` (status), per-module rate limits/middleware from
+  `config/foundation.php` (`api.*`), and `route:cache` support. See `docs/developer/api.md`.
+- Removed the old `/api/{platform}/{module}/{version}` router (`ApiRouteServiceProvider`, `PackageDiscovery`,
+  `ValidatePlatformVersion`, `platform_versions`, `routes/api.v1.php`, `routes/platform.api.v1.php`) and the
+  `api_conf` setting of foundation/user-interface/user-management/organisation (migration removes the stored rows).
+  `ApiConf` / `ApiVersion` stay, deprecated, for other modules that still declare them.
+- `POST /api/foundation/v1/dispatch-queue`; `/api/dispatch-queue` kept as a deprecated alias.
+- `config/foundation.php` is now merged and only holds deploy-time API settings (`api.middleware`, `api.rate_limits`).
+- **Breaking:** admin roles moved to the DB conf: `FoundationConf::admin_roles` (`ADMIN_ROLES`, default
+  `super-admin,admin`) replaces `config('foundation.admin_roles')` / `FOUNDATION_ADMIN_ROLES` (which was never
+  loaded anyway). `super-admin` is always allowed. Use `EnsureAdmin::roles()`.
+- Module API route files are named `routes/api.v1.php` (one per version).
+- New `Support\ModuleAssets` base: modules' `Assets` classes only declare their slug (asset route, URLs, logo resolution).
+- Entity pages show the versioned entity API URLs, keyed by table name (they showed the slug and two endpoints that don't exist).
+
+### Added (module providers)
+- `Support\UserModelPatcher`: modules add their traits and fillable fields to the app's `User` model on
+  `composer install/update` (idempotent; only edits files inside `app/`).
+- `Support\InstallPublisher`: publish a vendor migration/config once (no duplicate timestamped migrations).
+- `BaseServiceProvider::onPackageDiscover()` hook for install-time steps.
+- `PackageInfo` overrides: `$view_namespace`, `$extra_routes_paths`.
+
 ### Performance
+- `BaseServiceProvider` builds its `PackageInfo` once per provider (it re-ran folder auto-discovery ~8 times per boot).
 - `ConfProvider::from()` reuses one conf instance per module for the request (reset per request / queue job;
   `ConfProvider::forget()` and `clearCache()` drop it). Previously every call rebuilt the conf, costing an
   `information_schema` query and cache reads each time (hundreds per page).
@@ -30,6 +56,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follo
 - `Module::getForUser()` eager-loads metas; `Module::getMeta()` / `Navigation::getMeta()` use loaded metas.
 
 ### Fixed
+- `SeederCommand` used an undeclared property (PHP 8.2+ dynamic-property deprecation).
 - Admin check runs before route model binding; `LARAVEL_START` guard.
 - `/navigations` crashed on an undefined `$tableSchema`.
 - `MasterData` meta setters accept a null user id.
