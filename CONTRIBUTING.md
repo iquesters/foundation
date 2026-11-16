@@ -10,24 +10,24 @@ Thanks for helping! Bug reports, fixes and docs improvements are welcome.
 
 ## Branch naming
 
-Every change starts from a GitHub issue. Name the branch after the issue's label and number:
+Every change starts from a GitHub issue. Name the branch after the issue's **label** and **number**:
 
 ```
-IQU-{type}-{issue-number}
+IQU-{label}-{issue-number}
 ```
 
-| Issue label | `{type}` | Example |
-|---|---|---|
-| `bug` | `fix` | `IQU-fix-142` |
-| `enhancement` / `feature` | `feat` | `IQU-feat-87` |
-| `documentation` | `docs` | `IQU-docs-90` |
-| `refactor` | `refactor` | `IQU-refactor-101` |
-| `security` | `security` | `IQU-security-77` |
-| `chore` / maintenance | `chore` | `IQU-chore-63` |
-| urgent production fix (`hotfix`) | `hotfix` | `IQU-hotfix-150` |
+`{label}` is the issue's label exactly as it is on GitHub (lowercase), not a fixed list. Examples:
 
-- Use lowercase for `{type}` and only the issue number after it (no titles).
-- If the issue's label changes before you start (e.g. a `bug` turns out to be a `feature`), use the new label.
+| Issue | Branch |
+|---|---|
+| #142 labelled `fix` | `IQU-fix-142` |
+| #87 labelled `feat` | `IQU-feat-87` |
+| #14 labelled `enhancement` | `IQU-enhancement-14` |
+| #90 labelled `docs` | `IQU-docs-90` |
+
+- Only the issue number after the label (no titles).
+- If the issue has several labels, use the one that describes the kind of work.
+- If the label changes before you start, use the new label.
 - Reference the issue in the pull request (`Closes #142`) so it closes on merge.
 
 ## Development setup
