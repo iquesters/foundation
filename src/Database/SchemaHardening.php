@@ -25,13 +25,14 @@ final class SchemaHardening
             return;
         }
 
-        $removed = DB::delete(
-            "DELETE older FROM `{$table}` older
-             JOIN `{$table}` newer
-               ON newer.ref_parent <=> older.ref_parent
-              AND newer.meta_key = older.meta_key
-              AND newer.id > older.id"
-        );
+        // Keep the newest id per (ref_parent, meta_key); GROUP BY treats NULL parents as one group.
+        // Portable SQL (MySQL, PostgreSQL, SQLite); the derived table lets MySQL read the table it deletes from.
+        $keep = DB::query()->fromSub(
+            DB::table($table)->selectRaw('MAX(id) AS id')->groupBy('ref_parent', 'meta_key'),
+            'keep'
+        )->select('id');
+
+        $removed = DB::table($table)->whereNotIn('id', $keep)->delete();
 
         Schema::table($table, function (Blueprint $t) {
             $t->unique(['ref_parent', 'meta_key']);

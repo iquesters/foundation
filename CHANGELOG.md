@@ -3,7 +3,12 @@
 All notable changes to this package are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
-## [Unreleased] – 2.0.0
+## [2.0.1] – 2026-11-17
+
+### Fixed
+- Meta-table hardening migration used MySQL-only `DELETE … JOIN`; the duplicate cleanup is now portable, so fresh installs migrate on SQLite and PostgreSQL too.
+
+## [2.0.0] – 2026-11-17
 
 ### Settings engine
 - **Breaking:** module settings are stored in a new `module_settings` table (JSON per module, only values that differ from the code defaults) instead of `master_data_metas`. The migration converts existing values; old rows are kept.
