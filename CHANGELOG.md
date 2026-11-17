@@ -3,6 +3,11 @@
 All notable changes to this package are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [2.0.2] – 2026-11-17
+
+### Fixed
+- Master data detail page (`/master-data/{id}`) failed with "Undefined variable $selectNode" (typo for `selectedNode`).
+
 ## [2.0.1] – 2026-11-17
 
 ### Fixed

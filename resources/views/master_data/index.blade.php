@@ -101,7 +101,7 @@
                     </div>
                     <div class="d-flex align-items-center justify-content-start gap-2">
                         <span><i class="fas fa-fw fa-key"></i>Key: {{ $selectedNode->key ?? 'N/A' }}</span>
-                        <x-userinterface::status :status="$selectNode->status" />
+                        <x-userinterface::status :status="$selectedNode->status" />
                     </div>
                     @if($selectedNode->value)
                         <span><i class="fas fa-fw fa-tag"></i>Value: {{ $selectedNode->value ?? 'N/A' }}</span>
