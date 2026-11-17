@@ -70,8 +70,6 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
-    # Report-only until the code base has been formatted once (separate commit).
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
