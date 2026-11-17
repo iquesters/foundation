@@ -54,7 +54,7 @@ return new class extends Migration
 
             $table->index(['endpoint_provider', 'event']);
         });
-        
+
         Schema::create('api_log_metas', function (Blueprint $table) {
             $table->id();
 

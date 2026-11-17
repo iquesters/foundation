@@ -43,6 +43,7 @@ class Queue extends Model
     public function getMetaValue(string $key, mixed $default = null): mixed
     {
         $meta = $this->activeMetas()->where('meta_key', $key)->first();
+
         return $meta ? $meta->meta_value : $default;
     }
 
@@ -56,7 +57,7 @@ class Queue extends Model
             [
                 'meta_value' => $value,
                 'status' => 'active',
-                'updated_by' => auth()->id() ?? 0,
+                'updated_by' => auth()->id(),
             ]
         );
     }

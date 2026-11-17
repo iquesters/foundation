@@ -3,12 +3,12 @@
 namespace Iquesters\Foundation\System\Http\Middleware;
 
 use Closure;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Iquesters\Foundation\Constants\HttpStatusCode;
-use Iquesters\Foundation\System\Traits\Loggable;
-use Iquesters\Foundation\System\Http\ApiResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Iquesters\Foundation\Constants\HttpStatusCode;
+use Iquesters\Foundation\System\Http\ApiResponse;
+use Iquesters\Foundation\System\Traits\Loggable;
 use Symfony\Component\HttpFoundation\Response;
 
 class ResponseMiddleware
@@ -18,51 +18,49 @@ class ResponseMiddleware
     /**
      * Handle an outgoing response.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $this->logMethodStart("==================================================");
+        $startedAt = microtime(true);
 
         $requestId = $request->header('X-Request-ID')
-            ?? 'req_' . now()->timestamp . '_' . Str::random(6);
+            ?? 'req_'.now()->timestamp.'_'.Str::random(6);
         $request->headers->set('X-Request-ID', $requestId);
-        
-        $response = $next($request);
-        
-        $startTime = LARAVEL_START;
 
-        $this->logDebug("Processing response...");
+        $response = $next($request);
 
         // Process response based on type and status
         $response = $this->processResponse($request, $response);
 
-        $this->logDebug("Processing response done.");
-        $this->logDebug("--------------------------------------------------");
-
-        $this->logMethodEnd("##################################################");
+        // One readable line per API call; details are logged at debug level.
+        $this->logInfo(sprintf(
+            '%s /%s -> %d (%d ms)',
+            $request->method(),
+            $request->path(),
+            $response->getStatusCode(),
+            (int) round((microtime(true) - $startedAt) * 1000)
+        ), ['request_id' => $requestId]);
 
         return $response;
     }
 
     /**
      * Process the response based on type and status code
-     *
-     * @param Request $request
-     * @param Response $response
-     * @return Response
      */
     protected function processResponse(Request $request, Response $response): Response
     {
         // Only process JSON responses for API routes
-        if (!$this->isApiRequest($request)) {
-            $this->logDebug("Non-API request - skipping response processing");
+        if (! $this->isApiRequest($request)) {
+            $this->logDebug('Non-API request - skipping response processing');
+
             return $response;
         }
 
         // If response is already in our standard format, return it
         if ($this->isStandardizedResponse($response)) {
-            $this->logDebug("Response already in standard format");
+            $this->logDebug('Response already in standard format');
+
             return $response;
         }
 
@@ -72,10 +70,10 @@ class ResponseMiddleware
         return $this->attachInfraMetadata($request, $response);
 
     }
-    
+
     protected function attachInfraMetadata(Request $request, Response $response): Response
     {
-        if (!$response instanceof JsonResponse) {
+        if (! $response instanceof JsonResponse) {
             return $response;
         }
 
@@ -86,7 +84,10 @@ class ResponseMiddleware
         $content['timestamp'] = now()->toIso8601String();
 
         $content['trace'] = app()->environment('production') ? null : [
-            'execution_time_ms' => round((microtime(true) - LARAVEL_START) * 1000),
+            // LARAVEL_START is only defined by public/index.php (not in CLI, queue or tests).
+            'execution_time_ms' => round((microtime(true) - (defined('LARAVEL_START')
+                ? LARAVEL_START
+                : (float) $request->server('REQUEST_TIME_FLOAT', microtime(true)))) * 1000),
             'cache_hit' => false,
         ];
 
@@ -97,12 +98,8 @@ class ResponseMiddleware
         );
     }
 
-
     /**
      * Check if request is an API request
-     *
-     * @param Request $request
-     * @return bool
      */
     protected function isApiRequest(Request $request): bool
     {
@@ -111,20 +108,17 @@ class ResponseMiddleware
 
     /**
      * Check if response is already in standardized format
-     *
-     * @param Response $response
-     * @return bool
      */
     protected function isStandardizedResponse(Response $response): bool
     {
-        if (!$response instanceof JsonResponse) {
+        if (! $response instanceof JsonResponse) {
             return false;
         }
 
         $content = json_decode($response->getContent(), true);
-        
-        return is_array($content) 
-            && isset($content['success']) 
+
+        return is_array($content)
+            && isset($content['success'])
             && isset($content['status'])
             && isset($content['response_schema'])
             && isset($content['ui_context']);
@@ -132,9 +126,6 @@ class ResponseMiddleware
 
     /**
      * Standardize non-standard responses
-     *
-     * @param Response $response
-     * @return Response
      */
     protected function standardizeResponse(Response $response): Response
     {
@@ -183,7 +174,7 @@ class ResponseMiddleware
      */
     protected function handleInformationalResponse(Response $response): Response
     {
-        $this->logDebug("Processing informational response: " . $response->getStatusCode());
+        $this->logDebug('Processing informational response: '.$response->getStatusCode());
 
         $content = $this->getResponseContent($response);
         $statusCode = $response->getStatusCode();
@@ -199,8 +190,8 @@ class ResponseMiddleware
      */
     protected function handleSuccessResponse(Response $response): Response
     {
-        $this->logDebug("Processing success response: " . $response->getStatusCode());
-        
+        $this->logDebug('Processing success response: '.$response->getStatusCode());
+
         $content = $this->getResponseContent($response);
         $statusCode = $response->getStatusCode();
 
@@ -219,20 +210,21 @@ class ResponseMiddleware
      */
     protected function handleRedirectResponse(Response $response): Response
     {
-        $this->logDebug("Processing redirect response: " . $response->getStatusCode());
-        
+        $this->logDebug('Processing redirect response: '.$response->getStatusCode());
+
         $statusCode = $response->getStatusCode();
         $content = $this->getResponseContent($response);
         $message = $this->extractMessage($content, 'Redirecting');
-        
+
         // Get redirect URL from Location header or content
         $redirectUrl = $response->headers->get('Location');
-        if (!$redirectUrl && is_array($content)) {
+        if (! $redirectUrl && is_array($content)) {
             $redirectUrl = $content['redirect_url'] ?? $content['url'] ?? $content['location'] ?? null;
         }
 
-        if (!$redirectUrl) {
-            $this->logDebug("Redirect response without URL - treating as generic response");
+        if (! $redirectUrl) {
+            $this->logDebug('Redirect response without URL - treating as generic response');
+
             return $this->handleSuccessResponse($response);
         }
 
@@ -247,8 +239,8 @@ class ResponseMiddleware
      */
     protected function handleBadRequest(Response $response): Response
     {
-        $this->logDebug("Processing bad request response");
-        
+        $this->logDebug('Processing bad request response');
+
         $content = $this->getResponseContent($response);
         $message = $this->extractMessage($content, 'Bad request');
         $errors = $this->extractErrors($content);
@@ -262,8 +254,8 @@ class ResponseMiddleware
      */
     protected function handleUnauthorized(Response $response): Response
     {
-        $this->logDebug("Processing unauthorized response");
-        
+        $this->logDebug('Processing unauthorized response');
+
         $content = $this->getResponseContent($response);
         $message = $this->extractMessage($content, 'Unauthorized');
         $uiContext = $this->extractUIContext($content);
@@ -276,8 +268,8 @@ class ResponseMiddleware
      */
     protected function handleForbidden(Response $response): Response
     {
-        $this->logDebug("Processing forbidden response");
-        
+        $this->logDebug('Processing forbidden response');
+
         $content = $this->getResponseContent($response);
         $message = $this->extractMessage($content, 'Forbidden');
         $uiContext = $this->extractUIContext($content);
@@ -290,8 +282,8 @@ class ResponseMiddleware
      */
     protected function handleNotFound(Response $response): Response
     {
-        $this->logDebug("Processing not found response");
-        
+        $this->logDebug('Processing not found response');
+
         $content = $this->getResponseContent($response);
         $message = $this->extractMessage($content, 'Resource not found');
         $uiContext = $this->extractUIContext($content);
@@ -304,12 +296,12 @@ class ResponseMiddleware
      */
     protected function handleMethodNotAllowed(Response $response): Response
     {
-        $this->logDebug("Processing method not allowed response");
-        
+        $this->logDebug('Processing method not allowed response');
+
         $content = $this->getResponseContent($response);
         $message = $this->extractMessage($content, 'Method not allowed');
         $uiContext = $this->extractUIContext($content);
-        
+
         $allowHeader = $response->headers->get('Allow');
         $allowedMethods = $allowHeader ? explode(', ', $allowHeader) : [];
 
@@ -321,8 +313,8 @@ class ResponseMiddleware
      */
     protected function handleConflict(Response $response): Response
     {
-        $this->logDebug("Processing conflict response");
-        
+        $this->logDebug('Processing conflict response');
+
         $content = $this->getResponseContent($response);
         $message = $this->extractMessage($content, 'Conflict');
         $errors = $this->extractErrors($content);
@@ -336,8 +328,8 @@ class ResponseMiddleware
      */
     protected function handleValidationError(Response $response): Response
     {
-        $this->logDebug("Processing validation error response");
-        
+        $this->logDebug('Processing validation error response');
+
         $content = $this->getResponseContent($response);
         $message = $this->extractMessage($content, 'Validation failed');
         $errors = $this->extractErrors($content);
@@ -351,14 +343,14 @@ class ResponseMiddleware
      */
     protected function handleTooManyRequests(Response $response): Response
     {
-        $this->logDebug("Processing too many requests response");
-        
+        $this->logDebug('Processing too many requests response');
+
         $content = $this->getResponseContent($response);
         $message = $this->extractMessage($content, 'Too many requests');
         $retryAfter = $response->headers->get('Retry-After');
         $uiContext = $this->extractUIContext($content);
 
-        return ApiResponse::tooManyRequests($message, $retryAfter ? (int)$retryAfter : null, $uiContext);
+        return ApiResponse::tooManyRequests($message, $retryAfter ? (int) $retryAfter : null, $uiContext);
     }
 
     /**
@@ -366,8 +358,8 @@ class ResponseMiddleware
      */
     protected function handleClientError(Response $response): Response
     {
-        $this->logDebug("Processing client error response: " . $response->getStatusCode());
-        
+        $this->logDebug('Processing client error response: '.$response->getStatusCode());
+
         $content = $this->getResponseContent($response);
         $message = $this->extractMessage($content, 'Client error');
         $errors = $this->extractErrors($content);
@@ -382,21 +374,22 @@ class ResponseMiddleware
      */
     protected function handleServerError(Response $response): Response
     {
-        $this->logDebug("Processing server error response: " . $response->getStatusCode());
-        
+        $this->logDebug('Processing server error response: '.$response->getStatusCode());
+
         $content = $this->getResponseContent($response);
         $message = $this->extractMessage($content, 'Internal server error');
-        
+
         // Hide error details in production
-        $errors = app()->environment('production') 
-            ? null 
+        $errors = app()->environment('production')
+            ? null
             : $this->extractErrors($content);
-            
+
         $uiContext = $this->extractUIContext($content);
 
         if ($response->getStatusCode() === HttpStatusCode::HTTP_SERVICE_UNAVAILABLE) {
             $retryAfter = $response->headers->get('Retry-After');
-            return ApiResponse::serviceUnavailable($message, $retryAfter ? (int)$retryAfter : null, $uiContext);
+
+            return ApiResponse::serviceUnavailable($message, $retryAfter ? (int) $retryAfter : null, $uiContext);
         }
 
         return ApiResponse::serverError($message, $errors, $uiContext);
@@ -407,8 +400,8 @@ class ResponseMiddleware
      */
     protected function handleGenericError(Response $response): Response
     {
-        $this->logDebug("Processing generic error response: " . $response->getStatusCode());
-        
+        $this->logDebug('Processing generic error response: '.$response->getStatusCode());
+
         $content = $this->getResponseContent($response);
         $message = $this->extractMessage($content, 'Request failed');
         $errors = $this->extractErrors($content);
@@ -429,7 +422,7 @@ class ResponseMiddleware
 
         $content = $response->getContent();
         $decoded = json_decode($content, true);
-        
+
         return $decoded ?? $content;
     }
 
@@ -438,7 +431,7 @@ class ResponseMiddleware
      */
     protected function extractData(mixed $content): mixed
     {
-        if (!is_array($content)) {
+        if (! is_array($content)) {
             return $content;
         }
 
@@ -477,13 +470,13 @@ class ResponseMiddleware
      */
     protected function extractErrors(mixed $content): mixed
     {
-        if (!is_array($content)) {
+        if (! is_array($content)) {
             return null;
         }
 
-        return $content['errors'] 
-            ?? $content['error'] 
-            ?? $content['response_schema']['errors'] 
+        return $content['errors']
+            ?? $content['error']
+            ?? $content['response_schema']['errors']
             ?? null;
     }
 
@@ -492,12 +485,12 @@ class ResponseMiddleware
      */
     protected function extractMeta(mixed $content): array
     {
-        if (!is_array($content)) {
+        if (! is_array($content)) {
             return [];
         }
 
-        return $content['meta'] 
-            ?? $content['response_schema']['meta'] 
+        return $content['meta']
+            ?? $content['response_schema']['meta']
             ?? [];
     }
 
@@ -506,12 +499,12 @@ class ResponseMiddleware
      */
     protected function extractLinks(mixed $content): array
     {
-        if (!is_array($content)) {
+        if (! is_array($content)) {
             return [];
         }
 
-        return $content['links'] 
-            ?? $content['response_schema']['links'] 
+        return $content['links']
+            ?? $content['response_schema']['links']
             ?? [];
     }
 
@@ -520,12 +513,12 @@ class ResponseMiddleware
      */
     protected function extractUIContext(mixed $content): array
     {
-        if (!is_array($content)) {
+        if (! is_array($content)) {
             return [];
         }
 
-        return $content['ui_context'] 
-            ?? $content['uiContext'] 
+        return $content['ui_context']
+            ?? $content['uiContext']
             ?? [];
     }
 }

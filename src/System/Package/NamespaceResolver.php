@@ -14,31 +14,47 @@ class NamespaceResolver
     protected const DEFAULT_VENDOR_NAME = 'iquesters';
 
     // Folder constants - UPPER_SNAKE_CASE with hierarchy
-    protected const CONFIG_FOLDER_NAME         = 'Config';
-    protected const CONSOLE_FOLDER_NAME        = 'Console';
-    protected const CONSTANTS_FOLDER_NAME      = 'Constants';
-    protected const DATABASE_FOLDER_NAME       = 'Database';
+    protected const CONFIG_FOLDER_NAME = 'Config';
+
+    protected const CONSOLE_FOLDER_NAME = 'Console';
+
+    protected const CONSTANTS_FOLDER_NAME = 'Constants';
+
+    protected const DATABASE_FOLDER_NAME = 'Database';
+
     protected const DATABASE_SEEDERS_FOLDER_NAME = 'Seeders';
-    protected const ENUMS_FOLDER_NAME          = 'Enums';
-    protected const HTTP_FOLDER_NAME           = 'Http';
+
+    protected const ENUMS_FOLDER_NAME = 'Enums';
+
+    protected const HTTP_FOLDER_NAME = 'Http';
+
     protected const HTTP_CONTROLLERS_FOLDER_NAME = 'Controllers';
-    protected const HTTP_MIDDLEWARE_FOLDER_NAME  = 'Middleware';
-    protected const MODELS_FOLDER_NAME         = 'Models';
-    protected const OPENAPI_FOLDER_NAME        = 'OpenApi';
-    protected const PACKAGE_FOLDER_NAME        = 'Package';
-    protected const PROVIDERS_FOLDER_NAME      = 'Providers';
-    protected const ROUTING_FOLDER_NAME        = 'Routing';
-    protected const SUPPORT_FOLDER_NAME        = 'Support';
-    protected const SYSTEM_FOLDER_NAME         = 'System';
-    protected const UTILS_FOLDER_NAME          = 'Utils';
+
+    protected const HTTP_MIDDLEWARE_FOLDER_NAME = 'Middleware';
+
+    protected const MODELS_FOLDER_NAME = 'Models';
+
+    protected const OPENAPI_FOLDER_NAME = 'OpenApi';
+
+    protected const PACKAGE_FOLDER_NAME = 'Package';
+
+    protected const PROVIDERS_FOLDER_NAME = 'Providers';
+
+    protected const ROUTING_FOLDER_NAME = 'Routing';
+
+    protected const SUPPORT_FOLDER_NAME = 'Support';
+
+    protected const SYSTEM_FOLDER_NAME = 'System';
+
+    protected const UTILS_FOLDER_NAME = 'Utils';
 
     protected string $vendorName;
+
     protected string $moduleName;
 
-
     /**
-     * @param string $moduleName Module name (e.g., 'foundation')
-     * @param string|null $vendorName Custom vendor name (defaults to DEFAULT_VENDOR_NAME)
+     * @param  string  $moduleName  Module name (e.g., 'foundation')
+     * @param  string|null  $vendorName  Custom vendor name (defaults to DEFAULT_VENDOR_NAME)
      */
     public function __construct(string $moduleName, ?string $vendorName = null)
     {
@@ -92,7 +108,7 @@ class NamespaceResolver
      */
     public function getSeedersNamespace(): string
     {
-        return $this->append(self::DATABASE_FOLDER_NAME) . '\\' . self::DATABASE_SEEDERS_FOLDER_NAME;
+        return $this->append(self::DATABASE_FOLDER_NAME).'\\'.self::DATABASE_SEEDERS_FOLDER_NAME;
     }
 
     /**
@@ -116,7 +132,7 @@ class NamespaceResolver
      */
     public function getControllersNamespace(): string
     {
-        return $this->append(self::HTTP_FOLDER_NAME) . '\\' . self::HTTP_CONTROLLERS_FOLDER_NAME;
+        return $this->append(self::HTTP_FOLDER_NAME).'\\'.self::HTTP_CONTROLLERS_FOLDER_NAME;
     }
 
     /**
@@ -124,7 +140,7 @@ class NamespaceResolver
      */
     public function getMiddlewareNamespace(): string
     {
-        return $this->append(self::HTTP_FOLDER_NAME) . '\\' . self::HTTP_MIDDLEWARE_FOLDER_NAME;
+        return $this->append(self::HTTP_FOLDER_NAME).'\\'.self::HTTP_MIDDLEWARE_FOLDER_NAME;
     }
 
     /**
@@ -196,7 +212,7 @@ class NamespaceResolver
      */
     public function append(string $segment): string
     {
-        return $this->getNamespace() . '\\' . Str::studly($segment);
+        return $this->getNamespace().'\\'.Str::studly($segment);
     }
 
     /**

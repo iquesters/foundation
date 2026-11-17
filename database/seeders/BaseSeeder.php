@@ -4,11 +4,12 @@ namespace Iquesters\Foundation\Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Schema;
-use Spatie\Permission\Models\Role;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Iquesters\Foundation\Jobs\BaseJob;
+use Iquesters\Foundation\System\Traits\Loggable;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 /**
  * BaseModuleWithEntitiesSeeder
@@ -23,6 +24,8 @@ use Spatie\Permission\Models\Permission;
  */
 abstract class BaseSeeder extends Seeder
 {
+    use Loggable;
+
     /**
      * Unique module name (used in `modules` table)
      */
@@ -47,7 +50,7 @@ abstract class BaseSeeder extends Seeder
     /**
      * Guard name for Spatie roles/permissions
      */
-    protected string $guardName = "web";
+    protected string $guardName = 'web';
 
     /**
      * Entity definitions
@@ -59,6 +62,7 @@ abstract class BaseSeeder extends Seeder
      * ]
      */
     protected array $entities = [];
+
     /**
      * Run the seeder
      */
@@ -89,10 +93,10 @@ abstract class BaseSeeder extends Seeder
 
         // 8️⃣ Seed Config for this module
         $this->seedConfig($moduleId);
-        
+
         // Seed jobs dynamically
         $this->seedJobs();
-        
+
         // 9️⃣ Hook for child seeders to add custom logic
         $this->seedCustom();
     }
@@ -167,8 +171,8 @@ abstract class BaseSeeder extends Seeder
 
         if (app()->runningInConsole()) {
             $message = $superAdmin->wasRecentlyCreated
-                ? "✅ Super-admin role created"
-                : "✅ Super-admin role updated";
+                ? '✅ Super-admin role created'
+                : '✅ Super-admin role updated';
             echo "$message, module permissions assigned.\n";
         }
     }
@@ -195,8 +199,8 @@ abstract class BaseSeeder extends Seeder
                 'ref_module' => $moduleId,
                 'entity_name' => $entityName,
                 'slug' => $slug,
-                'fields' => !empty($fields) ? json_encode($fields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
-                'meta_fields' => !empty($metaFields) ? json_encode($metaFields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+                'fields' => ! empty($fields) ? json_encode($fields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+                'meta_fields' => ! empty($metaFields) ? json_encode($metaFields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
                 'status' => 'active',
                 'updated_at' => now(),
                 'created_at' => $existingEntity->created_at ?? now(),
@@ -261,7 +265,7 @@ abstract class BaseSeeder extends Seeder
                 ->when($existingEntityId, fn ($query) => $query->where('id', '!=', $existingEntityId))
                 ->exists()
         ) {
-            $slug = $baseSlug . '-' . $counter;
+            $slug = $baseSlug.'-'.$counter;
             $counter++;
         }
 
@@ -273,100 +277,14 @@ abstract class BaseSeeder extends Seeder
         return Str::snake(Str::pluralStudly($entityName));
     }
 
-    final protected function seedConfig(int $moduleId): void
-    {
-        
-        /**
-         * Ensure the 'config' root entry exists
-        */
-        $configRoot = DB::table('master_data')->where('key', 'config')->first();
+    /**
+     * Settings are no longer seeded: defaults live in the module's settings
+     * class (prepareDefault()) and only values an admin changes are stored
+     * (module_settings, see BaseConf). So re-running a seeder can never
+     * overwrite those changes. Kept so existing seeders calling it still work.
+     */
+    final protected function seedConfig(int $moduleId): void {}
 
-        if (!$configRoot) {
-            $configRootId = DB::table('master_data')->insertGetId([
-                'key' => 'config',
-                'value' => 'Application Configuration',
-                'parent_id' => 0,
-                'status' => 'active',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        } else {
-            $configRootId = $configRoot->id;
-        }
-
-        /**
-         * Insert module entry into master_data
-         */
-        $moduleMasterdataId = DB::table('master_data')->updateOrInsert(
-            [
-                'key' => "{$this->moduleName}-conf", // e.g., "UserManagement-conf"
-            ],
-            [
-                'value' => $moduleId,
-                'parent_id' => $configRootId,
-                'status' => 'active',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]
-        );
-        
-        $moduleMasterdata = DB::table('master_data')
-        ->where('key', "{$this->moduleName}-conf")
-        ->first();
-        
-        $moduleMasterdataId = $moduleMasterdata->id;
-    
-        $moduleNamespacePart = str_replace(' ', '', ucwords(str_replace('-', ' ', $this->moduleName))); // PascalCase
-        
-        /**
-         * Construct the main config class dynamically
-         */
-        $moduleConfClass = "Iquesters\\{$moduleNamespacePart}\\Config\\{$moduleNamespacePart}Conf";
-        if (
-            !class_exists($moduleConfClass) || 
-            !is_subclass_of($moduleConfClass, \Iquesters\Foundation\Support\BaseConf::class)
-        ) {
-            throw new \RuntimeException("Main config class not found for module {$this->moduleName}");
-        }
-
-        /** @var \Iquesters\Foundation\Support\BaseConf $confInstance */
-        $confInstance = new $moduleConfClass();
-
-        $defaultConfig = $confInstance->getFlattenConfig(null, true, true);
-        Log::debug($defaultConfig);
-
-        /**
-         * Insert each key into master_data_metas
-         */
-        foreach ($defaultConfig as $configItem) {
-            $key = $configItem['key'];
-            $value = $configItem['value'];
-                        
-            // Convert booleans to 'true'/'false' strings
-            if (is_bool($value)) {
-                $value = $value ? 'true' : 'false';
-            }
-            
-            // Handle arrays by converting to JSON
-            if (is_array($value)) {
-                $value = json_encode($value);
-            }
-
-            DB::table('master_data_metas')->updateOrInsert(
-                [
-                    'ref_parent' => $moduleMasterdataId,
-                    'meta_key' => $key,
-                ],
-                [
-                    'meta_value' => $value,
-                    'status' => 'active',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]
-            );
-        }
-    }
-    
     /**
      * Auto-populate dynamic fields in entities
      */
@@ -386,7 +304,7 @@ abstract class BaseSeeder extends Seeder
      */
     protected function getTableFields(string $tableName): array
     {
-        if (!Schema::hasTable($tableName)) {
+        if (! Schema::hasTable($tableName)) {
             return [];
         }
 
@@ -398,7 +316,7 @@ abstract class BaseSeeder extends Seeder
                 'name' => $column['name'],
                 'type' => $column['type_name'],
                 'label' => ucwords(str_replace('_', ' ', $column['name'])),
-                'required' => !$column['nullable'],
+                'required' => ! $column['nullable'],
                 'nullable' => $column['nullable'],
                 'input_type' => $this->getInputType($column['name'], $column['type_name']),
                 'maxlength' => $column['length'] ?? null,
@@ -444,7 +362,7 @@ abstract class BaseSeeder extends Seeder
 
         return $typeMap[$columnType] ?? 'text';
     }
-    
+
     /**
      * Seed table schemas declared inside sidebar menu items
      */
@@ -474,7 +392,7 @@ abstract class BaseSeeder extends Seeder
                 ->where('slug', $schemaDef['slug'])
                 ->first();
 
-            if (!$existing) {
+            if (! $existing) {
                 // Insert new table schema
                 DB::table('table_schemas')->insert([
                     'uid' => (string) Str::ulid(),
@@ -483,8 +401,8 @@ abstract class BaseSeeder extends Seeder
                     'description' => $schemaDef['description'] ?? null,
                     'schema' => json_encode($schemaDef['schema'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     'status' => 'active',
-                    'created_by' => 0,
-                    'updated_by' => 0,
+                    'created_by' => null,
+                    'updated_by' => null,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
@@ -518,179 +436,179 @@ abstract class BaseSeeder extends Seeder
             ]
         );
     }
-    
+
     /**
      * Automatically seed jobs from the Jobs directory
-     * 
+     *
      * This method scans the module's Jobs directory and registers all concrete
      * classes that extend BaseJob into the queues table with default metadata.
-     * 
+     *
      * Directory Detection Strategy:
      * - Tries multiple common module structures
      * - Uses the first existing Jobs directory found
-     * 
+     *
      * Supports structures like:
      * - database/seeders → src/Jobs
-     * 
+     *
      * Skips:
      * - Abstract classes
      * - Classes that don't extend BaseJob
      * - Files with invalid PHP syntax
-     * 
-     * @return void
      */
     final protected function seedJobs(): void
     {
         $now = now();
-        
+
         try {
             // Determine module Jobs directory
             $reflection = new \ReflectionClass(static::class);
             $seederFile = $reflection->getFileName();
-            
-            // Only support database/seeders → src/Jobs
-            $moduleJobsDir = dirname($seederFile, 3) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Jobs';
 
-            if (!is_dir($moduleJobsDir)) {
+            // Only support database/seeders → src/Jobs
+            $moduleJobsDir = dirname($seederFile, 3).DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'Jobs';
+
+            if (! is_dir($moduleJobsDir)) {
                 if (app()->runningInConsole()) {
                     echo "ℹ️  No Jobs directory found\n";
                 }
+
                 return;
             }
-            
+
             // Scan for all PHP files in Jobs directory
             $jobFiles = $this->scanDirectoryRecursively($moduleJobsDir);
-            
+
             if (empty($jobFiles)) {
                 return;
             }
-            
+
             // Process each file and collect valid jobs
             $allJobs = [];
-            
+
             foreach ($jobFiles as $file) {
                 // Extract fully qualified class name
                 $class = $this->getClassFullNameFromFile($file);
-                
-                if (!$class || !class_exists($class)) {
+
+                if (! $class || ! class_exists($class)) {
                     continue;
                 }
-                
+
                 try {
                     $refClass = new \ReflectionClass($class);
-                    
+
                     // Only include concrete classes that extend BaseJob
-                    if ($refClass->isSubclassOf(\Iquesters\Foundation\Jobs\BaseJob::class) && !$refClass->isAbstract()) {
+                    if ($refClass->isSubclassOf(BaseJob::class) && ! $refClass->isAbstract()) {
                         $allJobs[] = $class;
                     }
                 } catch (\ReflectionException $e) {
                     // Skip files that cause reflection errors
-                    Log::warning("Job class reflection failed", [
+                    static::logWarning('Job class reflection failed', [
                         'class' => $class,
                         'error' => $e->getMessage(),
                     ]);
+
                     continue;
                 }
             }
-            
+
             // Exit if no valid jobs found
             if (empty($allJobs)) {
                 return;
             }
-            
+
             // Insert/update jobs in database
             foreach ($allJobs as $jobClass) {
                 $queueName = class_basename($jobClass);
-                
+
                 // Insert or update queue record
                 DB::table('queues')->updateOrInsert(
                     ['name' => $queueName],
                     [
-                        'uid'         => (string) Str::ulid(),
+                        'uid' => (string) Str::ulid(),
                         'description' => ucfirst($queueName),
-                        'status'      => 'active',
-                        'created_by'  => 0,
-                        'updated_by'  => 0,
-                        'created_at'  => $now,
-                        'updated_at'  => $now,
+                        'status' => 'active',
+                        'created_by' => null,
+                        'updated_by' => null,
+                        'created_at' => $now,
+                        'updated_at' => $now,
                     ]
                 );
-                
+
                 $queueId = DB::table('queues')->where('name', $queueName)->value('id');
-                
+
                 // Insert or update queue metadata with default values
                 $queueMetas = [
                     'max_workers' => 2,      // Maximum concurrent workers
-                    'max_tries'   => 3,      // Maximum retry attempts
-                    'timeout'     => 120,    // Job timeout in seconds
-                    'sleep'       => 3,      // Sleep time between jobs in seconds
-                    'memory'      => 128,    // Memory limit in MB
+                    'max_tries' => 3,      // Maximum retry attempts
+                    'timeout' => 120,    // Job timeout in seconds
+                    'sleep' => 3,      // Sleep time between jobs in seconds
+                    'memory' => 128,    // Memory limit in MB
                 ];
-                
+
                 foreach ($queueMetas as $key => $value) {
                     DB::table('queue_metas')->updateOrInsert(
                         [
                             'ref_parent' => $queueId,
-                            'meta_key'   => $key,
+                            'meta_key' => $key,
                         ],
                         [
                             'meta_value' => $value,
-                            'status'     => 'active',
-                            'created_by' => 0,
-                            'updated_by' => 0,
+                            'status' => 'active',
+                            'created_by' => null,
+                            'updated_by' => null,
                             'created_at' => $now,
                             'updated_at' => $now,
                         ]
                     );
                 }
-                
+
                 // Output to console
                 if (app()->runningInConsole()) {
                     echo "✅ Queue seeded: $queueName\n";
                 }
             }
-            
+
         } catch (\Exception $e) {
             // Log critical errors but don't halt seeding
-            Log::error("Job seeding failed", [
+            static::logError('Job seeding failed', [
                 'module' => $this->moduleName ?? 'unknown',
                 'error' => $e->getMessage(),
             ]);
-            
+
             if (app()->runningInConsole()) {
-                echo "⚠️  Job seeding error: " . $e->getMessage() . "\n";
+                echo '⚠️  Job seeding error: '.$e->getMessage()."\n";
             }
         }
     }
 
     /**
      * Recursively scan directory for PHP files
-     * 
-     * @param string $dir Directory path to scan
+     *
+     * @param  string  $dir  Directory path to scan
      * @return array Array of file paths
      */
     protected function scanDirectoryRecursively(string $dir): array
     {
         $files = [];
-        
-        if (!is_readable($dir)) {
+
+        if (! is_readable($dir)) {
             return $files;
         }
-        
+
         $items = @scandir($dir);
-        
+
         if ($items === false) {
             return $files;
         }
-        
+
         foreach ($items as $item) {
             // Skip hidden directories
             if ($item === '.' || $item === '..') {
                 continue;
             }
-            
-            $path = $dir . DIRECTORY_SEPARATOR . $item;
-            
+
+            $path = $dir.DIRECTORY_SEPARATOR.$item;
+
             if (is_dir($path)) {
                 // Recursively scan subdirectories
                 $files = array_merge($files, $this->scanDirectoryRecursively($path));
@@ -699,52 +617,52 @@ abstract class BaseSeeder extends Seeder
                 $files[] = $path;
             }
         }
-        
+
         return $files;
     }
 
     /**
      * Extract fully qualified class name from PHP file
-     * 
+     *
      * Parses the file content to extract namespace and class name
      * Handles abstract and final class declarations
-     * 
-     * @param string $file File path
+     *
+     * @param  string  $file  File path
      * @return string|null Fully qualified class name or null if not found
      */
     protected function getClassFullNameFromFile(string $file): ?string
     {
-        if (!is_readable($file)) {
+        if (! is_readable($file)) {
             return null;
         }
-        
+
         $contents = file_get_contents($file);
-        
+
         if ($contents === false) {
             return null;
         }
-        
+
         $namespace = '';
         $class = '';
-        
+
         // Extract namespace (e.g., "namespace App\Jobs\MessageJobs;")
         if (preg_match('/^\s*namespace\s+([a-zA-Z0-9_\\\\]+)\s*;/m', $contents, $matches)) {
             $namespace = trim($matches[1]);
         }
-        
+
         // Extract class name (handles: class, abstract class, final class)
         if (preg_match('/^\s*(?:abstract\s+)?(?:final\s+)?class\s+([a-zA-Z0-9_]+)/m', $contents, $matches)) {
             $class = trim($matches[1]);
         }
-        
+
         // Return fully qualified class name
         if ($namespace && $class) {
-            return $namespace . '\\' . $class;
+            return $namespace.'\\'.$class;
         }
-        
+
         return $class ?: null;
     }
-    
+
     /**
      * Hook for child seeders to add custom logic
      * Override this method in child seeders if needed

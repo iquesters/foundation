@@ -2,11 +2,11 @@
 
 namespace Iquesters\Foundation\Services;
 
-use Throwable;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\Constants\Constant as FormSchemaConstant;
 use Iquesters\Foundation\Models\Entity;
 use Iquesters\Foundation\System\Traits\Loggable;
+use Throwable;
 
 class FormSchemaGenerator
 {
@@ -36,38 +36,38 @@ class FormSchemaGenerator
                 'modes' => [
                     FormSchemaConstant::MODE_CREATE => [
                         'method' => FormSchemaConstant::METHOD_POST,
-                        'endpoint' => url('/api/entity/store/' . $entityTable),
+                        'endpoint' => url('/api/entity/store/'.$entityTable),
                         'header' => [
                             'icon' => FormSchemaConstant::HEADER_ICON_CREATE,
-                            'title' => 'Create ' . $entityName,
-                            'description' => 'You are creating a new ' . Str::lower($entityName) . '.',
+                            'title' => 'Create '.$entityName,
+                            'description' => 'You are creating a new '.Str::lower($entityName).'.',
                         ],
                     ],
                     FormSchemaConstant::MODE_VIEW => [
                         'method' => FormSchemaConstant::METHOD_GET,
-                        'endpoint' => url('/api/entity/show/' . $entityTable . '/{uid}'),
+                        'endpoint' => url('/api/entity/show/'.$entityTable.'/{uid}'),
                         'header' => [
                             'icon' => FormSchemaConstant::HEADER_ICON_VIEW,
-                            'title' => 'View ' . $entityName,
-                            'description' => 'You are viewing this ' . Str::lower($entityName) . '.',
+                            'title' => 'View '.$entityName,
+                            'description' => 'You are viewing this '.Str::lower($entityName).'.',
                         ],
                     ],
                     FormSchemaConstant::MODE_EDIT => [
                         'method' => FormSchemaConstant::METHOD_PUT,
-                        'endpoint' => url('/api/entity/update/' . $entityTable . '/{uid}'),
+                        'endpoint' => url('/api/entity/update/'.$entityTable.'/{uid}'),
                         'header' => [
                             'icon' => FormSchemaConstant::HEADER_ICON_EDIT,
-                            'title' => 'Edit ' . $entityName,
-                            'description' => 'You are editing this ' . Str::lower($entityName) . '.',
+                            'title' => 'Edit '.$entityName,
+                            'description' => 'You are editing this '.Str::lower($entityName).'.',
                         ],
                     ],
                     FormSchemaConstant::MODE_DELETE => [
                         'method' => FormSchemaConstant::METHOD_DELETE,
-                        'endpoint' => url('/api/entity/delete/' . $entityTable . '/{uid}'),
+                        'endpoint' => url('/api/entity/delete/'.$entityTable.'/{uid}'),
                         'header' => [
                             'icon' => FormSchemaConstant::HEADER_ICON_DELETE,
-                            'title' => 'Delete ' . $entityName,
-                            'description' => 'You are deleting this ' . Str::lower($entityName) . '.',
+                            'title' => 'Delete '.$entityName,
+                            'description' => 'You are deleting this '.Str::lower($entityName).'.',
                         ],
                     ],
                 ],
@@ -99,7 +99,7 @@ class FormSchemaGenerator
 
             return $schema;
         } catch (Throwable $throwable) {
-            $this->logError('Failed to generate form schema: ' . $throwable->getMessage());
+            $this->logError('Failed to generate form schema: '.$throwable->getMessage());
             throw $throwable;
         }
     }
@@ -135,8 +135,8 @@ class FormSchemaGenerator
                     'id' => $fieldId,
                     'type' => $this->resolveFormFieldType($field, $inputTypeMapping),
                     'label' => $fieldLabel,
-                    'placeholder' => 'Enter ' . strtolower($fieldLabel),
-                    'helpertext' => $fieldLabel . ' field',
+                    'placeholder' => 'Enter '.strtolower($fieldLabel),
+                    'helpertext' => $fieldLabel.' field',
                     'required' => ! empty($field['required']),
                 ];
 
@@ -151,7 +151,7 @@ class FormSchemaGenerator
 
                 if (! empty($field['required'])) {
                     $formField['messages'] = [
-                        'required' => $fieldLabel . ' is required',
+                        'required' => $fieldLabel.' is required',
                     ];
                 }
 
@@ -166,7 +166,7 @@ class FormSchemaGenerator
 
             return $schemaFields;
         } catch (Throwable $throwable) {
-            $this->logError('Failed to build form schema fields: ' . $throwable->getMessage());
+            $this->logError('Failed to build form schema fields: '.$throwable->getMessage());
             throw $throwable;
         }
     }
@@ -209,7 +209,7 @@ class FormSchemaGenerator
                 'value' => FormSchemaConstant::DEFAULT_SIZE,
             ];
         } catch (Throwable $throwable) {
-            $this->logError('Failed to build field size config: ' . $throwable->getMessage());
+            $this->logError('Failed to build field size config: '.$throwable->getMessage());
             throw $throwable;
         }
     }
@@ -244,7 +244,7 @@ class FormSchemaGenerator
 
             return $resolvedType;
         } catch (Throwable $throwable) {
-            $this->logError('Failed to resolve form field type: ' . $throwable->getMessage());
+            $this->logError('Failed to resolve form field type: '.$throwable->getMessage());
             throw $throwable;
         }
     }
@@ -277,6 +277,7 @@ class FormSchemaGenerator
             foreach (FormSchemaConstant::BREAKPOINTS as $breakpoint) {
                 if (array_key_exists($breakpoint, $configuredSize) && is_numeric($configuredSize[$breakpoint])) {
                     $sizes[$breakpoint] = (int) $configuredSize[$breakpoint];
+
                     continue;
                 }
 
@@ -290,7 +291,7 @@ class FormSchemaGenerator
 
             return $normalizedSize;
         } catch (Throwable $throwable) {
-            $this->logError('Failed to normalize field size value: ' . $throwable->getMessage());
+            $this->logError('Failed to normalize field size value: '.$throwable->getMessage());
             throw $throwable;
         }
     }
@@ -308,7 +309,7 @@ class FormSchemaGenerator
 
             return $filteredMetaFields;
         } catch (Throwable $throwable) {
-            $this->logError('Failed to filter displayable meta fields: ' . $throwable->getMessage());
+            $this->logError('Failed to filter displayable meta fields: '.$throwable->getMessage());
             throw $throwable;
         }
     }
@@ -324,7 +325,7 @@ class FormSchemaGenerator
 
             return $tableName;
         } catch (Throwable $throwable) {
-            $this->logError('Failed to generate table name: ' . $throwable->getMessage());
+            $this->logError('Failed to generate table name: '.$throwable->getMessage());
             throw $throwable;
         }
     }

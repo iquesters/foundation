@@ -2,11 +2,12 @@
 
 namespace Iquesters\Foundation\System\Providers;
 
-use Illuminate\Support\ServiceProvider;
-use Iquesters\Foundation\System\Package\NamespaceResolver;
-use Iquesters\Foundation\Support\ConfProvider;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
+use Iquesters\Foundation\Routing\ModuleApi;
+use Iquesters\Foundation\Support\ConfProvider;
+use Iquesters\Foundation\System\Package\NamespaceResolver;
 use Iquesters\Foundation\System\Package\PackageInfo;
 
 abstract class BaseServiceProvider extends ServiceProvider
@@ -18,7 +19,6 @@ abstract class BaseServiceProvider extends ServiceProvider
     {
         $this->registerPackageConf();
         $this->registerSeederCommands();
-        // $this->loadPackageConfigs();
     }
 
     /* -------------------------------------------------
@@ -29,27 +29,48 @@ abstract class BaseServiceProvider extends ServiceProvider
         $this->loadPackageViews();
         $this->loadPackageMigrations();
         $this->loadPackageRoutes();
+        $this->loadPackageApiRoutes();
         $this->registerPackageProviders();
         $this->registerPackageCommands();
         $this->registerPackageMiddleware();
-        // $this->publishPackageAssets();
+    }
+
+    /* -------------------------------------------------
+     | Install-time hooks
+     |--------------------------------------------------*/
+
+    /**
+     * Run $callback once the app has booted, but only during
+     * `php artisan package:discover` (composer install/update). For one-time
+     * install steps: publishing vendor files, patching the user model, etc.
+     */
+    protected function onPackageDiscover(callable $callback): void
+    {
+        if (! $this->app->runningInConsole() || ($_SERVER['argv'][1] ?? null) !== 'package:discover') {
+            return;
+        }
+
+        $this->app->booted(fn () => $callback());
     }
 
     /* -------------------------------------------------
      | Package Info (Auto-Detection)
      |--------------------------------------------------*/
+
+    /** Built once per provider: auto-discovery scans the module's folders. */
+    private ?PackageInfo $packageInfoInstance = null;
+
     protected function packageInfo(): PackageInfo
+    {
+        return $this->packageInfoInstance ??= $this->makePackageInfo();
+    }
+
+    private function makePackageInfo(): PackageInfo
     {
         $moduleName = $this->detectModuleName();
         $packageInfoClass = $this->detectPackageInfoClass($moduleName);
 
-        // Log::info('Instantiating PackageInfo', [
-        //     'module_name' => $moduleName,
-        //     'package_info_class' => $packageInfoClass,
-        //     'service_provider_class' => static::class,
-        // ]);
-
-        if (!class_exists($packageInfoClass)) {
+        if (! class_exists($packageInfoClass)) {
             throw new \RuntimeException("PackageInfo class not found: {$packageInfoClass}");
         }
 
@@ -61,9 +82,6 @@ abstract class BaseServiceProvider extends ServiceProvider
      |--------------------------------------------------*/
     protected function registerPackageConf(): void
     {
-        // Log::debug('Registering package ConfProvider', [
-        //     'service_provider_class' => static::class,
-        // ]);
 
         $info = $this->packageInfo();
         $confClass = $info->getConfClass();
@@ -71,11 +89,7 @@ abstract class BaseServiceProvider extends ServiceProvider
 
         if ($confClass && $confModule) {
             ConfProvider::register($confModule, $confClass);
-            
-            // Log::info('ConfProvider registered', [
-            //     'module' => $confModule,
-            //     'conf_class' => $confClass,
-            // ]);
+
         } else {
             Log::debug('ConfProvider not registered (no config class or module found)', [
                 'conf_class' => $confClass,
@@ -89,9 +103,6 @@ abstract class BaseServiceProvider extends ServiceProvider
      |--------------------------------------------------*/
     protected function registerSeederCommands(): void
     {
-        // Log::debug('Registering seeder commands', [
-        //     'service_provider_class' => static::class,
-        // ]);
 
         $info = $this->packageInfo();
         $bindings = $info->getSeederBindings();
@@ -101,16 +112,12 @@ abstract class BaseServiceProvider extends ServiceProvider
                 $bindingName = $binding['binding_name'] ?? $binding['command_class'];
                 $commandClass = $binding['command_class'];
                 $seederClass = $binding['seeder_class'];
-                
+
                 // Bind the SeederCommand with its required constructor parameter
                 $this->app->bind($bindingName, function ($app) use ($commandClass, $seederClass) {
                     return new $commandClass($seederClass);
                 });
 
-                // Log::debug('Bound seeder command', [
-                //     'command_class' => $commandClass,
-                //     'seeder_class' => $seederClass
-                // ]);
             }
         }
     }
@@ -120,9 +127,6 @@ abstract class BaseServiceProvider extends ServiceProvider
      |--------------------------------------------------*/
     protected function registerPackageProviders(): void
     {
-        // Log::debug('Registering package providers', [
-        //     'service_provider_class' => static::class,
-        // ]);
 
         $info = $this->packageInfo();
         $providers = $info->getProviders();
@@ -130,20 +134,15 @@ abstract class BaseServiceProvider extends ServiceProvider
         if ($providers) {
             foreach ($providers as $provider) {
                 $this->app->register($provider);
-                // Log::debug('Registered provider', ['provider' => $provider]);
             }
         }
     }
 
     protected function registerPackageCommands(): void
     {
-        if (!$this->app->runningInConsole()) {
+        if (! $this->app->runningInConsole()) {
             return;
         }
-
-        // Log::debug('Registering package commands', [
-        //     'service_provider_class' => static::class,
-        // ]);
 
         $info = $this->packageInfo();
         $commands = $info->getConsoleCommands();
@@ -161,16 +160,13 @@ abstract class BaseServiceProvider extends ServiceProvider
             $this->commands($allCommands);
             Log::debug('Registered commands', [
                 'count' => count($allCommands),
-                'commands' => $allCommands
+                'commands' => $allCommands,
             ]);
         }
     }
 
     protected function registerPackageMiddleware(): void
     {
-        // Log::debug('Registering package middleware', [
-        //     'service_provider_class' => static::class,
-        // ]);
 
         $info = $this->packageInfo();
         $aliases = $info->getMiddlewareAliases();
@@ -178,10 +174,6 @@ abstract class BaseServiceProvider extends ServiceProvider
         if ($aliases) {
             foreach ($aliases as $alias => $middleware) {
                 $this->app['router']->aliasMiddleware($alias, $middleware);
-                // Log::debug('Registered middleware alias', [
-                //     'alias' => $alias,
-                //     'middleware' => $middleware
-                // ]);
             }
         }
     }
@@ -191,9 +183,6 @@ abstract class BaseServiceProvider extends ServiceProvider
      |--------------------------------------------------*/
     protected function loadPackageViews(): void
     {
-        // Log::debug('Loading package views', [
-        //     'service_provider_class' => static::class,
-        // ]);
 
         $info = $this->packageInfo();
         $paths = $info->getViewsPaths();
@@ -202,16 +191,12 @@ abstract class BaseServiceProvider extends ServiceProvider
         foreach ($paths as $path) {
             if (is_dir($path)) {
                 $this->loadViewsFrom($path, $namespace);
-                // Log::debug('Loaded views', ['path' => $path, 'namespace' => $namespace]);
             }
         }
     }
 
     protected function loadPackageMigrations(): void
     {
-        // Log::debug('Loading package migrations', [
-        //     'service_provider_class' => static::class,
-        // ]);
 
         $info = $this->packageInfo();
         $paths = $info->getMigrationsPaths();
@@ -219,16 +204,12 @@ abstract class BaseServiceProvider extends ServiceProvider
         foreach ($paths as $path) {
             if (is_dir($path)) {
                 $this->loadMigrationsFrom($path);
-                // Log::debug('Loaded migrations', ['path' => $path]);
             }
         }
     }
 
     protected function loadPackageRoutes(): void
     {
-        // Log::debug('Loading package routes', [
-        //     'service_provider_class' => static::class,
-        // ]);
 
         $info = $this->packageInfo();
         $paths = $info->getRoutesPaths();
@@ -236,16 +217,29 @@ abstract class BaseServiceProvider extends ServiceProvider
         foreach ($paths as $path) {
             if (file_exists($path)) {
                 $this->loadRoutesFrom($path);
-                // Log::debug('Loaded routes', ['path' => $path]);
             }
+        }
+    }
+
+    /**
+     * /api/{module}/{version}/... for each version declared in composer.json
+     * (extra.platform.api). Skipped when routes are cached.
+     */
+    protected function loadPackageApiRoutes(): void
+    {
+        if ($this->app->routesAreCached()) {
+            return;
+        }
+
+        $api = $this->packageInfo()->getApi();
+
+        foreach ($api['versions'] ?? [] as $version => $routeFile) {
+            ModuleApi::register($api['prefix'], $version, $routeFile);
         }
     }
 
     protected function loadPackageConfigs(): void
     {
-        // Log::debug('Loading package configs', [
-        //     'service_provider_class' => static::class,
-        // ]);
 
         $info = $this->packageInfo();
         $paths = $info->getConfigPaths();
@@ -254,20 +248,15 @@ abstract class BaseServiceProvider extends ServiceProvider
         foreach ($paths as $path) {
             if (file_exists($path)) {
                 $this->mergeConfigFrom($path, $confName);
-                // Log::debug('Merged config', ['path' => $path, 'key' => $confName]);
             }
         }
     }
 
     protected function publishPackageAssets(): void
     {
-        if (!$this->app->runningInConsole()) {
+        if (! $this->app->runningInConsole()) {
             return;
         }
-
-        // Log::debug('Publishing package assets', [
-        //     'service_provider_class' => static::class,
-        // ]);
 
         $info = $this->packageInfo();
         $assets = $info->getPublishableAssets();
@@ -275,10 +264,6 @@ abstract class BaseServiceProvider extends ServiceProvider
         if ($assets) {
             foreach ($assets as $tag => $paths) {
                 $this->publishes($paths, $tag);
-                // Log::debug('Registered publishable assets', [
-                //     'tag' => $tag,
-                //     'paths' => $paths
-                // ]);
             }
         }
     }
@@ -291,17 +276,7 @@ abstract class BaseServiceProvider extends ServiceProvider
         $namespaceParts = explode('\\', static::class);
         $providerClassName = end($namespaceParts);
 
-        // Log::debug('BaseServiceProvider::detectModuleName', [
-        //     'service_provider_class' => static::class,
-        //     'provider_class_name' => $providerClassName,
-        // ]);
-
         $moduleName = Str::kebab(Str::beforeLast($providerClassName, 'ServiceProvider'));
-
-        // Log::info('Module name detected successfully', [
-        //     'service_provider_class' => static::class,
-        //     'module_name' => $moduleName,
-        // ]);
 
         return $moduleName;
     }
@@ -312,11 +287,6 @@ abstract class BaseServiceProvider extends ServiceProvider
         $packageInfoNamespace = $resolver->getPackageNamespace();
         $studlyModule = $resolver->getModuleNamespace();
         $packageInfoClass = "{$packageInfoNamespace}\\{$studlyModule}PackageInfo";
-
-        // Log::debug('PackageInfo class generated via NamespaceResolver', [
-        //     'module_name' => $moduleName,
-        //     'package_info_class' => $packageInfoClass,
-        // ]);
 
         return $packageInfoClass;
     }

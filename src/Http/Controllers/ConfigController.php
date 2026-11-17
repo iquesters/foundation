@@ -2,110 +2,120 @@
 
 namespace Iquesters\Foundation\Http\Controllers;
 
-use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Iquesters\Foundation\Models\Module;
-use Illuminate\Support\Facades\Log;
-use Iquesters\Foundation\Models\MasterData;
+use Iquesters\Foundation\Support\BaseConf;
+use Iquesters\Foundation\Support\ConfProvider;
+use Iquesters\Foundation\System\Traits\Loggable;
 
+/**
+ * Admin screen for module settings (typed, validated; see BaseConf).
+ * Only changed values are stored; "Reset" returns a setting to its code default.
+ */
 class ConfigController extends Controller
 {
-    /**
-     * Show config index or module-specific configuration
-     */
+    use Loggable;
+
     public function index(Request $request, $moduleId = null)
     {
-        try {
-            $modules = Module::active()->get();
-            $selectedModule = $moduleId ? Module::find($moduleId) : null;
+        $modules = Module::active()->get();
+        $selectedModule = $moduleId ? Module::find($moduleId) : null;
+        $settings = [];
 
-            $configData = collect();
-
-            if ($selectedModule) {
-                $masterData = MasterData::where('key', $selectedModule->name . '-conf')->first();
-
-                if ($masterData) {
-                    $configData = $masterData->metas()->get();
-                }
-            }
-
-            return view('foundation::config.index', compact('modules', 'selectedModule', 'configData'));
-
-        } catch (\Exception $e) {
-            Log::error('Error loading configuration page', [
-                'module_id' => $moduleId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return redirect()->back()->with('error', 'Failed to load configuration page.');
+        if ($selectedModule && ($conf = $this->confFor($selectedModule))) {
+            $settings = $conf->describe();
         }
+
+        return view('foundation::config.index', compact('modules', 'selectedModule', 'settings'));
     }
 
-    /**
-     * Update configuration for a specific module
-     */
     public function update(Request $request, Module $module)
     {
-        try {
-            $masterData = MasterData::where('key', $module->name . '-conf')->first();
+        $conf = $this->confFor($module);
 
-            if (!$masterData) {
-                return redirect()->back()->with('error', 'Configuration not found for this module.');
-            }
-
-            $validated = $request->validate([
-                'config_keys' => 'required|array',
-                'config_values' => 'required|array',
-            ]);
-
-            $keys = $validated['config_keys'];
-            $values = $validated['config_values'];
-            $userId = auth()->id() ?? 1;
-
-            foreach ($keys as $i => $key) {
-                $value = $values[$i] ?? '';
-
-                // ensure value is never null
-                if (is_null($value)) {
-                    $value = '';
-                }
-
-                // optionally encode arrays to JSON
-                if (is_array($value)) {
-                    $value = json_encode($value, JSON_UNESCAPED_UNICODE);
-                }
-
-                // use model as-is
-                $masterData->metas()->updateOrCreate(
-                    ['meta_key' => $key],
-                    [
-                        'meta_value' => $value,
-                        'status' => 'active',
-                        'updated_by' => $userId,
-                        'created_by' => $userId,
-                    ]
-                );
-            }
-
-            Log::info('Module configuration updated successfully', [
-                'module_id' => $module->id,
-                'module_name' => $module->name,
-                'updated_by' => $userId,
-            ]);
-
-            return redirect()->back()->with('success', 'Configuration updated successfully.');
-
-        } catch (\Exception $e) {
-            Log::error('Error updating module configuration', [
-                'module_id' => $module->id ?? null,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'user_id' => auth()->id(),
-            ]);
-
-            return redirect()->back()->with('error', 'Failed to update configuration.');
+        if (! $conf) {
+            return redirect()->back()->with('error', 'This module has no settings.');
         }
+
+        $changes = [];
+        $errors = [];
+        $submitted = (array) $request->input('settings', []);
+        $reset = (array) $request->input('reset', []);
+
+        foreach ($conf->describe() as $row) {
+            $path = $row['path'];
+            $field = $this->fieldName($path);
+
+            if (in_array($path, $reset, true)) {
+                data_set($changes, $path, $row['default']);
+
+                continue;
+            }
+
+            if (! array_key_exists($field, $submitted)) {
+                continue;
+            }
+
+            $value = $submitted[$field];
+
+            // Secrets are never sent to the browser: blank means "keep the current value".
+            if ($row['secret'] && ($value === null || $value === '')) {
+                continue;
+            }
+
+            if ($row['type'] === 'array') {
+                $decoded = json_decode((string) $value, true);
+                if (! is_array($decoded)) {
+                    $errors["settings.{$field}"] = 'Must be valid JSON (a list or object).';
+
+                    continue;
+                }
+                $value = $decoded;
+            } elseif ($row['nullable'] && $value === '' && $row['type'] !== 'string') {
+                $value = null;
+            }
+
+            data_set($changes, $path, $value);
+        }
+
+        if ($errors) {
+            return redirect()->back()->withErrors($errors)->withInput();
+        }
+
+        try {
+            $conf->update($changes, auth()->id());
+        } catch (ValidationException $e) {
+            $messages = [];
+            foreach ($e->errors() as $path => $list) {
+                $messages['settings.'.$this->fieldName($path)] = $list[0];
+            }
+
+            return redirect()->back()->withErrors($messages)->withInput();
+        }
+
+        static::logInfo('Module settings updated', ['module' => $module->name, 'user_id' => auth()->id()]);
+
+        return redirect()->back()->with('success', 'Settings saved.');
     }
 
+    /** Registered settings of a module (Module::name is the package name, e.g. "user-management"). */
+    private function confFor(Module $module): ?BaseConf
+    {
+        foreach (array_keys(ConfProvider::registered()) as $identifier) {
+            if (Str::afterLast($identifier, '/') === $module->name) {
+                return ConfProvider::from($identifier);
+            }
+        }
+
+        return null;
+    }
+
+    /** Dot paths can't be form field names directly ("a.b" would nest); use "a__b". */
+    private function fieldName(string $path): string
+    {
+        return str_replace('.', '__', $path);
+    }
 }

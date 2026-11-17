@@ -41,6 +41,7 @@ class JobController extends Controller
             return view('foundation::jobs.current', compact('queues', 'totalStats'));
         } catch (\Throwable $e) {
             Log::error('Jobs index failed', ['exception' => $e]);
+
             return back()->with('error', 'Unable to load current jobs.');
         }
     }
@@ -75,6 +76,7 @@ class JobController extends Controller
             return view('foundation::jobs.completed', compact('queues', 'totalStats'));
         } catch (\Throwable $e) {
             Log::error('Jobs completed failed', ['exception' => $e]);
+
             return back()->with('error', 'Unable to load completed jobs.');
         }
     }
@@ -116,6 +118,7 @@ class JobController extends Controller
             return view('foundation::jobs.failed', compact('queues', 'commonExceptions', 'totalStats'));
         } catch (\Throwable $e) {
             Log::error('Jobs failed failed', ['exception' => $e]);
+
             return back()->with('error', 'Unable to load failed jobs.');
         }
     }

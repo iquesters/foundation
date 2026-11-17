@@ -29,8 +29,8 @@ class ChatbotDispatchController extends Controller
                 ->where('message_id', $validated['message_id'])
                 ->first();
 
-            if (!$message) {
-                $this->logWarning('Dispatch aborted: message not found' . $this->formatContext([
+            if (! $message) {
+                $this->logWarning('Dispatch aborted: message not found'.$this->formatContext([
                     'message_id' => $validated['message_id'],
                 ]));
 
@@ -42,8 +42,8 @@ class ChatbotDispatchController extends Controller
 
             $freshMessage = $message->fresh();
 
-            if (!$freshMessage) {
-                $this->logError('Dispatch aborted: failed to refresh message model' . $this->formatContext([
+            if (! $freshMessage) {
+                $this->logError('Dispatch aborted: failed to refresh message model'.$this->formatContext([
                     'message_id' => $message->id,
                 ]));
 
@@ -61,7 +61,7 @@ class ChatbotDispatchController extends Controller
                 $resolvedIntegrationId
             );
 
-            $this->logInfo('ProcessChatbotResponseJob dispatched via foundation API' . $this->formatContext([
+            $this->logInfo('ProcessChatbotResponseJob dispatched via foundation API'.$this->formatContext([
                 'message_db_id' => $freshMessage->id,
                 'message_id' => $freshMessage->message_id,
                 'queue' => 'ProcessChatbotResponseJob',
@@ -84,7 +84,7 @@ class ChatbotDispatchController extends Controller
                 ],
             ], 200);
         } catch (\Throwable $e) {
-            $this->logError('Dispatch failed' . $this->formatContext([
+            $this->logError('Dispatch failed'.$this->formatContext([
                 'message_id' => $validated['message_id'] ?? null,
                 'integration_input' => $validated['integration_id'] ?? null,
                 'error' => $e->getMessage(),
@@ -101,7 +101,7 @@ class ChatbotDispatchController extends Controller
 
     private function formatContext(array $context): string
     {
-        return ' | context=' . json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return ' | context='.json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     private function resolveIntegrationId(?string $integrationInput): ?int
@@ -120,8 +120,8 @@ class ChatbotDispatchController extends Controller
                 ->first();
         }
 
-        if (!$integration) {
-            $this->logWarning('Integration input could not be resolved' . $this->formatContext([
+        if (! $integration) {
+            $this->logWarning('Integration input could not be resolved'.$this->formatContext([
                 'integration_input' => $integrationInput,
             ]));
 

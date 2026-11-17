@@ -38,7 +38,7 @@ class ApiLog extends Model
      */
     protected $casts = [
         'start_ts' => 'datetime',
-        'end_ts'   => 'datetime',
+        'end_ts' => 'datetime',
     ];
 
     /**
@@ -98,7 +98,7 @@ class ApiLog extends Model
      */
     public function durationMs(): ?int
     {
-        if (!$this->start_ts || !$this->end_ts) {
+        if (! $this->start_ts || ! $this->end_ts) {
             return null;
         }
 

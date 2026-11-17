@@ -19,14 +19,16 @@
 
     $systemFields = ['id','uid','status','created_by','created_at','updated_by','updated_at','deleted_by','deleted_at'];
 
-    $entityApiBase = url('/api/entity');
+    // Generic entity API (iquesters/user-interface v1), keyed by the entity's table name.
+    $entityApiBase = url('/api/user-interface/v1/entity');
+    $entityTable = $entity->getMeta('published_table_name') ?: $entity->getMeta('table_name') ?: $entity->slug;
 
     $apis = [
-        ['GET', 'success', "{$entityApiBase}/list/{$entity->slug}"],
-        ['POST', 'primary', "{$entityApiBase}/store/{$entity->slug}"],
-        ['GET', 'success', "{$entityApiBase}/show/{$entity->slug}/{uid}"],
-        ['PUT', 'warning', "{$entityApiBase}/update/{$entity->slug}/{uid}"],
-        ['DELETE', 'danger', "{$entityApiBase}/delete/{$entity->slug}/{uid}"],
+        ['GET', 'success', "{$entityApiBase}/list/{$entityTable}"],
+        ['POST', 'primary', "{$entityApiBase}/store/{$entityTable}"],
+        ['GET', 'success', "{$entityApiBase}/show/{$entityTable}/{uid}"],
+        ['PUT', 'warning', "{$entityApiBase}/update/{$entityTable}/{uid}"],
+        ['DELETE', 'danger', "{$entityApiBase}/delete/{$entityTable}/{uid}"],
     ];
 @endphp
 

@@ -2,8 +2,8 @@
 
 namespace Iquesters\Foundation\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Permission\Models\Role;
 
@@ -33,12 +33,18 @@ class Module extends Model
 
     public function getMeta(string $key)
     {
-        $meta = $this->metas()->where('meta_key', $key)->first();
+        // Use eager-loaded metas when available (one query for all modules).
+        $meta = $this->relationLoaded('metas')
+            ? $this->metas->firstWhere('meta_key', $key)
+            : $this->metas()->where('meta_key', $key)->first();
+
         return $meta ? $meta->meta_value : null;
     }
 
     public function setMeta(string $key, $value)
     {
+        $this->unsetRelation('metas');
+
         return $this->metas()->updateOrCreate(
             ['meta_key' => $key],
             ['meta_value' => $value]
@@ -51,6 +57,7 @@ class Module extends Model
     public function getAssignedRoles()
     {
         $roleIds = json_decode($this->getMeta('assigned_roles') ?? '[]', true);
+
         return Role::whereIn('id', $roleIds)->get();
     }
 
@@ -76,15 +83,15 @@ class Module extends Model
     public function isAssignedToRole($role): bool
     {
         $assignedRoleIds = $this->getAssignedRoleIds();
-        
+
         if (is_numeric($role)) {
             return in_array($role, $assignedRoleIds);
         }
-        
+
         if ($role instanceof Role) {
             return in_array($role->id, $assignedRoleIds);
         }
-        
+
         return false;
     }
 
@@ -93,11 +100,13 @@ class Module extends Model
      */
     public function isAccessibleByUser($user): bool
     {
-        if (!$user) return false;
-        
+        if (! $user) {
+            return false;
+        }
+
         $assignedRoleIds = $this->getAssignedRoleIds();
         $userRoleIds = $user->roles->pluck('id')->toArray();
-        
+
         return count(array_intersect($assignedRoleIds, $userRoleIds)) > 0;
     }
 
@@ -106,14 +115,15 @@ class Module extends Model
      */
     public static function getForUser($user)
     {
-        if (!$user) {
+        if (! $user) {
             return collect();
         }
 
         $userRoleIds = $user->roles->pluck('id')->toArray();
-        
-        return static::where('status', 'active')->get()->filter(function ($module) use ($userRoleIds) {
+
+        return static::with('metas')->where('status', 'active')->get()->filter(function ($module) use ($userRoleIds) {
             $assignedRoleIds = $module->getAssignedRoleIds();
+
             return count(array_intersect($assignedRoleIds, $userRoleIds)) > 0;
         });
     }

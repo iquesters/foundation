@@ -11,6 +11,7 @@ class MetaHelper
     {
         $filtered = array_filter($titles);
         $filtered[] = config('app.name', 'Iquesters');
+
         return implode(' | ', $filtered);
     }
 

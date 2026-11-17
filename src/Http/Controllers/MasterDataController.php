@@ -2,13 +2,13 @@
 
 namespace Iquesters\Foundation\Http\Controllers;
 
-use Illuminate\Routing\Controller;
-use Iquesters\Foundation\Constants\EntityStatus;
-use Iquesters\Foundation\Models\MasterData;
+use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Exception;
+use Iquesters\Foundation\Constants\EntityStatus;
+use Iquesters\Foundation\Models\MasterData;
 
 class MasterDataController extends Controller
 {
@@ -19,11 +19,12 @@ class MasterDataController extends Controller
             Log::info('Fetching all master data');
 
             $isSuperAdmin = Auth::user()->hasRole('super-admin');
-            if (!$isSuperAdmin) {
+            if (! $isSuperAdmin) {
                 Log::info('User is not a super admin', ['user_id' => Auth::user()->id]);
+
                 return redirect()
-                ->back()
-                ->with('error', 'You dont have permission to access masterdata.');
+                    ->back()
+                    ->with('error', 'You dont have permission to access masterdata.');
             }
             $statuses = $isSuperAdmin
                 ? [EntityStatus::ACTIVE, EntityStatus::INACTIVE]
@@ -33,11 +34,12 @@ class MasterDataController extends Controller
                     return $query->whereIn('status', $statuses);
                 })
                 ->get();
-                
+
             Log::debug('Master data fetched successfully', [
                 'count' => $masterData->count(),
-                'is_super_admin' => $isSuperAdmin
+                'is_super_admin' => $isSuperAdmin,
             ]);
+
             return view('foundation::master_data.index', [
                 'masterData' => $masterData,
                 'selectedNode' => null,
@@ -47,19 +49,22 @@ class MasterDataController extends Controller
         } catch (Exception $e) {
             Log::error('Error fetching master data', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
+
             return redirect()
                 ->back()
                 ->with('error', 'An error occurred while fetching master data.');
         }
     }
+
     public function show(MasterData $master_datum)
     {
         try {
             $isSuperAdmin = Auth::user()->hasRole('super-admin');
-            if (!$isSuperAdmin) {
+            if (! $isSuperAdmin) {
                 Log::info('User is not a super admin', ['user_id' => Auth::user()->id]);
+
                 return redirect()
                     ->back()
                     ->with('error', 'You dont have permission to access masterdata.');
@@ -73,10 +78,11 @@ class MasterDataController extends Controller
                 'masterData' => $masterData,
                 'selectedNode' => $selectedNode,
                 'parentNode' => $parentNode,
-                'childNodes' => $childNodes
+                'childNodes' => $childNodes,
             ]);
         } catch (Exception $e) {
             Log::error('Error showing master data details', ['error' => $e->getMessage()]);
+
             return redirect()->route('master-data.index')->with('error', 'Error loading master data details');
         }
     }
@@ -115,7 +121,7 @@ class MasterDataController extends Controller
             if ($request->meta_keys && $request->meta_values) {
                 Log::debug('Adding meta data to master data', ['meta_keys' => $request->meta_keys, 'meta_values' => $request->meta_values]);
                 foreach ($request->meta_keys as $index => $key) {
-                    if (!empty($key)) {
+                    if (! empty($key)) {
                         Log::debug('Setting meta value', ['key' => $key, 'value' => $request->meta_values[$index]]);
                         $masterData->setMetaValue($key, $request->meta_values[$index], $user->id);
                     }
@@ -123,9 +129,11 @@ class MasterDataController extends Controller
             }
 
             Log::info('Master data creation process completed successfully');
+
             return redirect()->back()->with('success', 'Master data created successfully.');
         } catch (Exception $e) {
             Log::error('Error creating master data', ['error' => $e->getMessage()]);
+
             return redirect()->back()->with('error', 'An error occurred while creating master data.');
         }
     }
@@ -165,7 +173,7 @@ class MasterDataController extends Controller
             if ($request->meta_keys && $request->meta_values) {
                 Log::debug('Adding new meta data to master data', ['meta_keys' => $request->meta_keys, 'meta_values' => $request->meta_values]);
                 foreach ($request->meta_keys as $index => $key) {
-                    if (!empty($key)) {
+                    if (! empty($key)) {
                         Log::debug('Setting meta value', ['key' => $key, 'value' => $request->meta_values[$index]]);
                         $master_data->setMetaValue($key, $request->meta_values[$index], $user->id);
                     }
@@ -173,9 +181,11 @@ class MasterDataController extends Controller
             }
 
             Log::info('Master data update process completed successfully', ['id' => $master_data->id]);
+
             return redirect()->back()->with('success', 'Master data updated successfully.');
         } catch (Exception $e) {
             Log::error('Error updating master data', ['error' => $e->getMessage()]);
+
             return redirect()->back()->with('error', 'An error occurred while updating master data.');
         }
     }
@@ -186,7 +196,7 @@ class MasterDataController extends Controller
         try {
             Log::info('Starting master data deletion process', [
                 'id' => $master_datum->id,
-                'master_datum' => $master_datum->toArray()
+                'master_datum' => $master_datum->toArray(),
             ]);
 
             // Get fresh instance to ensure events trigger
@@ -208,8 +218,9 @@ class MasterDataController extends Controller
         } catch (Exception $e) {
             Log::error('Error deleting master data', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
+
             return redirect()
                 ->back()
                 ->with('error', 'An error occurred while deleting master data.');

@@ -2,54 +2,26 @@
 
 namespace Iquesters\Foundation\Http\Controllers;
 
-use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Routing\Controller;
 use Illuminate\Support\Str;
-use Iquesters\Foundation\Models\Navigation;
 use Iquesters\Foundation\Models\Module;
-use Iquesters\UserInterface\Models\TableSchema;
+use Iquesters\Foundation\Models\Navigation;
+use Iquesters\Foundation\System\Traits\Loggable;
 
 class NavigationController extends Controller
 {
+    use Loggable;
+
+    /**
+     * /navigations shows the navigation ordering UI.
+     * (Previously referenced an undefined $tableSchema and always failed.)
+     */
     public function index()
-{
-    try {
-        Log::info('Fetching all navigation');
-
-        $navigations = Navigation::with('metas')->get();
-
-        Log::info('Displaying navigations', [
-            'count' => $navigations->count()
-        ]);
-
-        // $tableSchema = TableSchema::where('slug', 'navigations-table')->first();
-        Log::debug('Table Schema details', [$tableSchema]);
-        if (!$tableSchema) {
-            return redirect()
-                ->back()
-                ->with('error', 'Table schema not found.');
-        }
-
-        return redirect()->route('ui.list', [
-            'table_schema_id' => 'navigations-table'
-        ]);
-
-        // OR if ui.list expects a view:
-        // return view('ui.list', compact('tableSchema', 'navigations'));
-
-    } catch (\Throwable $e) {
-        Log::error('Error fetching navigation', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-
-        return redirect()
-            ->back()
-            ->with('error', 'An error occurred while fetching navigations.');
+    {
+        return $this->details();
     }
-}
-    
+
     /**
      * Show navigation ordering UI
      * Auto-syncs primary navigation_order with modules
@@ -57,7 +29,7 @@ class NavigationController extends Controller
     public function details()
     {
         try {
-            $userId = auth()->id() ?? 0;
+            $userId = auth()->id();
 
             /** ---------------- PRIMARY NAV ---------------- */
             $modules = Module::active()->orderBy('id')->get();
@@ -66,8 +38,8 @@ class NavigationController extends Controller
             $primaryNav = Navigation::firstOrCreate(
                 ['name' => 'primary_navigation'],
                 [
-                    'uid'        => (string) Str::ulid(),
-                    'status'     => 'active',
+                    'uid' => (string) Str::ulid(),
+                    'status' => 'active',
                     'created_by' => $userId,
                 ]
             );
@@ -88,7 +60,7 @@ class NavigationController extends Controller
                     ['meta_key' => 'navigation_order'],
                     [
                         'meta_value' => json_encode($finalOrder),
-                        'status'     => 'active',
+                        'status' => 'active',
                         'created_by' => $userId,
                         'updated_by' => $userId,
                     ]
@@ -108,7 +80,7 @@ class NavigationController extends Controller
                     true
                 );
 
-                if (!is_array($submenuItems) || empty($submenuItems)) {
+                if (! is_array($submenuItems) || empty($submenuItems)) {
                     continue;
                 }
 
@@ -124,12 +96,12 @@ class NavigationController extends Controller
 
                 $submenuNav = Navigation::firstOrCreate(
                     [
-                        'name' => $module->name . '_sub_menu',
-                        'ref_parent' => $module->id
+                        'name' => $module->name.'_sub_menu',
+                        'ref_parent' => $module->id,
                     ],
                     [
-                        'uid'        => (string) Str::ulid(),
-                        'status'     => 'active',
+                        'uid' => (string) Str::ulid(),
+                        'status' => 'active',
                         'created_by' => $userId,
                     ]
                 );
@@ -150,7 +122,7 @@ class NavigationController extends Controller
                         ['meta_key' => 'navigation_order'],
                         [
                             'meta_value' => json_encode($finalSubOrder),
-                            'status'     => 'active',
+                            'status' => 'active',
                             'created_by' => $userId,
                             'updated_by' => $userId,
                         ]
@@ -163,7 +135,7 @@ class NavigationController extends Controller
             ));
 
         } catch (\Throwable $e) {
-            Log::error('Navigation index error', ['error' => $e->getMessage()]);
+            static::logError('Navigation index error', ['error' => $e->getMessage()]);
             abort(500, 'Unable to load navigation');
         }
     }
@@ -173,8 +145,8 @@ class NavigationController extends Controller
      */
     public function loadModuleSubMenu($moduleUid)
     {
-        Log::info('loadModuleSubMenu started', [
-            'module_uid' => $moduleUid
+        static::logInfo('loadModuleSubMenu started', [
+            'module_uid' => $moduleUid,
         ]);
 
         try {
@@ -182,20 +154,20 @@ class NavigationController extends Controller
                 ->where('status', 'active')
                 ->first();
 
-            if (!$module) {
-                Log::warning('Active module not found', [
-                    'module_uid' => $moduleUid
+            if (! $module) {
+                static::logWarning('Active module not found', [
+                    'module_uid' => $moduleUid,
                 ]);
 
                 return response()->json([
                     'success' => false,
-                    'message' => 'Module not found'
+                    'message' => 'Module not found',
                 ], 404);
             }
 
-            Log::info('Module loaded', [
+            static::logInfo('Module loaded', [
                 'module_id' => $module->id,
-                'module_name' => $module->name
+                'module_name' => $module->name,
             ]);
 
             // Read submenu items from module meta
@@ -206,8 +178,8 @@ class NavigationController extends Controller
 
             $submenuItems = is_array($submenuItems) ? $submenuItems : [];
 
-            Log::debug('Submenu meta loaded', [
-                'count' => count($submenuItems)
+            static::logDebug('Submenu meta loaded', [
+                'count' => count($submenuItems),
             ]);
 
             // Unique routes
@@ -217,25 +189,25 @@ class NavigationController extends Controller
                 ->values()
                 ->toArray();
 
-            Log::debug('Extracted submenu routes', [
-                'routes' => $routes
+            static::logDebug('Extracted submenu routes', [
+                'routes' => $routes,
             ]);
 
-            $navigationName = $module->name . '_sub_menu';
+            $navigationName = $module->name.'_sub_menu';
 
             // Get or create submenu navigation
             $navigation = Navigation::firstOrCreate(
                 ['name' => $navigationName],
                 [
-                    'uid'        => (string) Str::ulid(),
-                    'status'     => 'active',
-                    'created_by' => auth()->id() ?? 0,
+                    'uid' => (string) Str::ulid(),
+                    'status' => 'active',
+                    'created_by' => auth()->id(),
                 ]
             );
 
-            Log::info('Navigation resolved', [
+            static::logInfo('Navigation resolved', [
                 'navigation_id' => $navigation->id,
-                'navigation_name' => $navigationName
+                'navigation_name' => $navigationName,
             ]);
 
             // Read saved order
@@ -246,8 +218,8 @@ class NavigationController extends Controller
 
             $savedOrder = is_array($savedOrder) ? $savedOrder : [];
 
-            Log::debug('Saved navigation order', [
-                'saved_order' => $savedOrder
+            static::logDebug('Saved navigation order', [
+                'saved_order' => $savedOrder,
             ]);
 
             // Remove deleted submenu items
@@ -262,27 +234,26 @@ class NavigationController extends Controller
                     ['meta_key' => 'navigation_order'],
                     [
                         'meta_value' => json_encode($finalOrder),
-                        'status'     => 'active',
-                        'created_by' => auth()->id() ?? 0,
-                        'updated_by' => auth()->id() ?? 0,
+                        'status' => 'active',
+                        'created_by' => auth()->id(),
+                        'updated_by' => auth()->id(),
                     ]
                 );
 
-                Log::info('Navigation order updated', [
-                    'final_order' => $finalOrder
+                static::logInfo('Navigation order updated', [
+                    'final_order' => $finalOrder,
                 ]);
             }
 
             // Build ordered submenu
             $orderedSubMenu = collect($finalOrder)
-                ->map(fn ($route) =>
-                    collect($submenuItems)->firstWhere('route', $route)
+                ->map(fn ($route) => collect($submenuItems)->firstWhere('route', $route)
                 )
                 ->filter()
                 ->values();
 
-            Log::info('Submenu build completed', [
-                'submenu_count' => $orderedSubMenu->count()
+            static::logInfo('Submenu build completed', [
+                'submenu_count' => $orderedSubMenu->count(),
             ]);
 
             return response()->json([
@@ -291,13 +262,13 @@ class NavigationController extends Controller
             ]);
 
         } catch (\Throwable $e) {
-            Log::error('Load submenu failed', [
+            static::logError('Load submenu failed', [
                 'module_uid' => $moduleUid,
-                'exception'  => $e,
+                'exception' => $e,
             ]);
 
             return response()->json([
-                'success' => false
+                'success' => false,
             ], 500);
         }
     }
@@ -308,7 +279,7 @@ class NavigationController extends Controller
     public function saveOrder(Request $request)
     {
         try {
-            $userId = auth()->id() ?? 0;
+            $userId = auth()->id();
 
             /**
              * PRIMARY NAVIGATION
@@ -320,8 +291,8 @@ class NavigationController extends Controller
                     $navigation = Navigation::firstOrCreate(
                         ['name' => 'primary_navigation'],
                         [
-                            'uid'        => (string) Str::ulid(),
-                            'status'     => 'active',
+                            'uid' => (string) Str::ulid(),
+                            'status' => 'active',
                             'created_by' => $userId,
                         ]
                     );
@@ -330,7 +301,7 @@ class NavigationController extends Controller
                         ['meta_key' => 'navigation_order'],
                         [
                             'meta_value' => json_encode(array_map('intval', $order)),
-                            'status'     => 'active',
+                            'status' => 'active',
                             'created_by' => $userId,
                             'updated_by' => $userId,
                         ]
@@ -346,15 +317,15 @@ class NavigationController extends Controller
                 $module = Module::find($request->submenu_module_id);
 
                 if ($module) {
-                    $navigationName = $module->name . '_sub_menu';
+                    $navigationName = $module->name.'_sub_menu';
                     $order = json_decode($request->submenu_order, true);
 
                     if (is_array($order)) {
                         $navigation = Navigation::firstOrCreate(
                             ['name' => $navigationName],
                             [
-                                'uid'        => (string) Str::ulid(),
-                                'status'     => 'active',
+                                'uid' => (string) Str::ulid(),
+                                'status' => 'active',
                                 'created_by' => $userId,
                             ]
                         );
@@ -363,7 +334,7 @@ class NavigationController extends Controller
                             ['meta_key' => 'navigation_order'],
                             [
                                 'meta_value' => json_encode(array_values($order)),
-                                'status'     => 'active',
+                                'status' => 'active',
                                 'created_by' => $userId,
                                 'updated_by' => $userId,
                             ]
@@ -375,9 +346,9 @@ class NavigationController extends Controller
             return back()->with('success', 'Navigation updated successfully');
 
         } catch (\Throwable $e) {
-            Log::error('Save navigation failed', [
+            static::logError('Save navigation failed', [
                 'error' => $e->getMessage(),
-                'user'  => auth()->id(),
+                'user' => auth()->id(),
             ]);
 
             return back()->with('error', 'Failed to save navigation');

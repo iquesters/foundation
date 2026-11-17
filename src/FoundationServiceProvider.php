@@ -1,21 +1,52 @@
 <?php
 
-// =============================================================================
-// FILE 2: FoundationServiceProvider.php (EMPTY - Everything Auto-Loaded!)
-// =============================================================================
-
 namespace Iquesters\Foundation;
 
+use Illuminate\Contracts\Http\Kernel as HttpKernel;
+use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Support\Facades\Route;
+use Iquesters\Foundation\Http\Middleware\EnsureAdmin;
 use Iquesters\Foundation\System\Providers\BaseServiceProvider;
 
+/**
+ * Routes, views, migrations, commands, middleware aliases and the conf are
+ * auto-loaded by BaseServiceProvider (see Package\FoundationPackageInfo).
+ */
 class FoundationServiceProvider extends BaseServiceProvider
 {
-    // Everything auto-detected and auto-loaded by BaseServiceProvider!
-    //
-    // Automatically:
-    // ✅ Detects module name: "foundation"
-    // ✅ Finds PackageInfo: Iquesters\Foundation\Package\FoundationPackageInfo
-    // ✅ Registers: ConfProvider, configs, providers, commands, middleware
-    // ✅ Loads: routes, migrations, views
-    // ✅ Publishes: config and view assets
+    public function register(): void
+    {
+        parent::register();
+
+        // Code-level settings with no DB equivalent (admin roles, API limits).
+        $this->mergeConfigFrom(__DIR__.'/../config/foundation.php', 'foundation');
+    }
+
+    public function boot(): void
+    {
+        parent::boot();
+
+        // GET /api: the module APIs and their versions (/api/{module}/{version}).
+        // Built from the route list, so it also works with cached routes.
+        if (! $this->app->routesAreCached()) {
+            Route::middleware('api')->get('api', function () {
+                $modules = [];
+
+                foreach (Route::getRoutes()->getRoutes() as $route) {
+                    if (preg_match('/^api\.(.+)\.(v[^.]+)\.status$/', (string) $route->getName(), $m)) {
+                        $modules[$m[1]][] = $m[2];
+                    }
+                }
+
+                return response()->json(['success' => true, 'modules' => $modules]);
+            })->name('api.index');
+        }
+
+        // Run the admin check before route-model binding, so non-admins get
+        // 403 rather than learning whether a record exists (404).
+        $kernel = $this->app->make(HttpKernel::class);
+        if (method_exists($kernel, 'addToMiddlewarePriorityBefore')) {
+            $kernel->addToMiddlewarePriorityBefore(SubstituteBindings::class, EnsureAdmin::class);
+        }
+    }
 }

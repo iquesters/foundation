@@ -2,23 +2,26 @@
 
 namespace Iquesters\Foundation\Http\Controllers;
 
-use Illuminate\Routing\Controller;
-use Iquesters\Foundation\Constants\EntityStatus;
-use Iquesters\Foundation\Models\Entity;
+use Exception;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Log;
+use Iquesters\Foundation\Constants\EntityStatus;
+use Iquesters\Foundation\Contracts\SchemaModels;
+use Iquesters\Foundation\Models\Entity;
+use Iquesters\Foundation\Models\Module;
 use Iquesters\Foundation\Services\FormSchemaGenerator;
 use Iquesters\Foundation\Services\TableSchemaGenerator;
-use Iquesters\UserInterface\Models\FormSchema;
-use Iquesters\UserInterface\Models\TableSchema;
-use Illuminate\Database\Schema\Blueprint;
-use Iquesters\Foundation\Models\Module;
-use Illuminate\Support\Facades\Schema;
-use Exception;
+use Iquesters\Foundation\Support\EntityPermission;
+use Iquesters\Foundation\System\Traits\Loggable;
 
 class EntityController extends Controller
 {
+    use Loggable;
+
     public function __construct(
         private readonly FormSchemaGenerator $formSchemaGenerator,
         private readonly TableSchemaGenerator $tableSchemaGenerator
@@ -64,42 +67,44 @@ class EntityController extends Controller
     public function index()
     {
         try {
-            Log::info('Fetching all entity');
+            static::logInfo('Fetching all entity');
 
             $entities = Entity::with('metas')
                 ->get();
-            Log::info('Displaying entities', ['entities' => $entities->toArray()]);
+            static::logInfo('Displaying entities', ['entities' => $entities->toArray()]);
 
             return view('foundation::entity.index', [
-                'entities' => $entities
+                'entities' => $entities,
             ]);
         } catch (Exception $e) {
-            Log::error('Error fetching entity', [
+            static::logError('Error fetching entity', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
+
             return redirect()
                 ->back()
                 ->with('error', 'An error occurred while fetching entity.');
         }
     }
-    
+
     public function create()
     {
         try {
-            Log::info('Creating new entity');
+            static::logInfo('Creating new entity');
             $modules = Module::where('status', 'active')->get();
-            
+
             return view('foundation::entity.create-edit', [
                 'entity' => null,
                 'isCreating' => true,
-                'modules'    => $modules,
+                'modules' => $modules,
             ]);
         } catch (Exception $e) {
-            Log::error('Error displaying create form', [
+            static::logError('Error displaying create form', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
+
             return redirect()
                 ->back()
                 ->with('error', 'An error occurred while loading the create form.');
@@ -109,7 +114,7 @@ class EntityController extends Controller
     public function edit($uid)
     {
         try {
-            Log::info('Editing entity', ['uid' => $uid]);
+            static::logInfo('Editing entity', ['uid' => $uid]);
 
             $entity = Entity::where('uid', $uid)->firstOrFail();
             $modules = Module::where('status', 'active')->get();
@@ -117,14 +122,15 @@ class EntityController extends Controller
             return view('foundation::entity.create-edit', [
                 'entity' => $entity,
                 'isCreating' => false,
-                'modules'    => $modules,
+                'modules' => $modules,
             ]);
         } catch (Exception $e) {
-            Log::error('Error displaying edit form', [
+            static::logError('Error displaying edit form', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
-                'uid' => $uid
+                'uid' => $uid,
             ]);
+
             return redirect()
                 ->back()
                 ->with('error', 'An error occurred while loading the edit form.');
@@ -149,7 +155,7 @@ class EntityController extends Controller
             $metaFieldsData = $this->decodeMetaFields($validated['meta_fields'] ?? null);
 
             // Create entity
-            $entity = new Entity();
+            $entity = new Entity;
             $entity->uid = Str::ulid();
             $entity->ref_module = $validated['ref_module'];
             $entity->entity_name = $validated['entity_name'];
@@ -158,7 +164,7 @@ class EntityController extends Controller
             $entity->fields = $allFields;
             $entity->meta_fields = $metaFieldsData;
             $entity->status = 'active';
-            $entity->created_by = auth()->id() ?? 0;
+            $entity->created_by = auth()->id();
             $entity->save();
 
             // Save metadata and generate schemas
@@ -168,22 +174,23 @@ class EntityController extends Controller
             $tableSchemaUid = $this->createTableSchema($entity, $slug, $processedCustomFields, $formSchemaUid);
             $this->saveEntityMeta($entity, 'table_schema_uid', $tableSchemaUid);
 
-            Log::info('Entity created with schemas', [
+            static::logInfo('Entity created with schemas', [
                 'entity' => $entity->toArray(),
                 'table_name' => $tableName,
                 'form_schema_uid' => $formSchemaUid,
-                'table_schema_uid' => $tableSchemaUid
+                'table_schema_uid' => $tableSchemaUid,
             ]);
 
             return redirect()
                 ->route('entities.show', $entity->uid)
                 ->with('success', 'Entity created successfully with form and table schemas.');
-                
+
         } catch (Exception $e) {
-            Log::error('Error creating entity', [
+            static::logError('Error creating entity', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
+
             return redirect()
                 ->back()
                 ->withInput()
@@ -199,7 +206,7 @@ class EntityController extends Controller
             $isPublished = $entity->status === 'published';
 
             $validated = $request->validate([
-                'entity_name' => 'required|string|max:255|unique:entities,entity_name,' . $entity->id,
+                'entity_name' => 'required|string|max:255|unique:entities,entity_name,'.$entity->id,
                 'ref_module' => 'required|exists:modules,id',
                 'desc' => 'nullable|string',
                 'fields' => 'required|json',
@@ -218,7 +225,7 @@ class EntityController extends Controller
             $metaFieldsData = $this->decodeMetaFields($validated['meta_fields'] ?? null);
 
             // ❗ Table name MUST NOT change after publish
-            if (!$isPublished) {
+            if (! $isPublished) {
                 $tableName = $this->generateTableName($validated['entity_name']);
                 $this->saveEntityMeta($entity, 'table_name', $tableName, false);
             }
@@ -239,9 +246,9 @@ class EntityController extends Controller
 
             $this->ensureGeneratedFormSchema($entity, $customFieldsForSchema, $metaFieldsData);
 
-            Log::info('Entity updated', [
+            static::logInfo('Entity updated', [
                 'entity_uid' => $entity->uid,
-                'published' => $isPublished
+                'published' => $isPublished,
             ]);
 
             return redirect()
@@ -249,9 +256,9 @@ class EntityController extends Controller
                 ->with('success', 'Entity updated successfully.');
 
         } catch (Exception $e) {
-            Log::error('Error updating entity', [
+            static::logError('Error updating entity', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return redirect()
@@ -260,7 +267,7 @@ class EntityController extends Controller
                 ->with('error', $e->getMessage());
         }
     }
-    
+
     /**
      * Generate unique slug for entity
      * price, price-1, price-2 ...
@@ -278,7 +285,7 @@ class EntityController extends Controller
         while (
             Entity::where('slug', $slug)->exists()
         ) {
-            $slug = $baseSlug . '-' . $counter;
+            $slug = $baseSlug.'-'.$counter;
             $counter++;
         }
 
@@ -292,6 +299,7 @@ class EntityController extends Controller
     {
         $tableName = strtolower($entityName);
         $tableName = preg_replace('/[^a-z0-9]+/', '_', $tableName);
+
         return trim($tableName, '_');
     }
 
@@ -310,19 +318,19 @@ class EntityController extends Controller
             }
 
             if (substr($tableName, -1) === 'y') {
-                return substr($tableName, 0, -1) . 'ies';
+                return substr($tableName, 0, -1).'ies';
             }
 
             if (
                 in_array(substr($tableName, -1), ['s', 'x', 'z'], true) ||
                 in_array(substr($tableName, -2), ['sh', 'ch'], true)
             ) {
-                return $tableName . 'es';
+                return $tableName.'es';
             }
 
-            return $tableName . 's';
+            return $tableName.'s';
         } catch (\Throwable $th) {
-            Log::error('Error pluralizing table name', [
+            static::logError('Error pluralizing table name', [
                 'table_name' => $tableName,
                 'error' => $th->getMessage(),
                 'trace' => $th->getTraceAsString(),
@@ -338,96 +346,96 @@ class EntityController extends Controller
     private function getSystemFields()
     {
         return [
-            "id" => [
-                "name" => "id",
-                "type" => "bigint",
-                "label" => "Id",
-                "required" => true,
-                "nullable" => false,
-                "input_type" => "number",
-                "maxlength" => null,
-                "default" => null
+            'id' => [
+                'name' => 'id',
+                'type' => 'bigint',
+                'label' => 'Id',
+                'required' => true,
+                'nullable' => false,
+                'input_type' => 'number',
+                'maxlength' => null,
+                'default' => null,
             ],
-            "uid" => [
-                "name" => "uid",
-                "type" => "char",
-                "label" => "Uid",
-                "required" => true,
-                "nullable" => false,
-                "input_type" => "text",
-                "maxlength" => null,
-                "default" => null
+            'uid' => [
+                'name' => 'uid',
+                'type' => 'char',
+                'label' => 'Uid',
+                'required' => true,
+                'nullable' => false,
+                'input_type' => 'text',
+                'maxlength' => null,
+                'default' => null,
             ],
-            "status" => [
-                "name" => "status",
-                "type" => "varchar",
-                "label" => "Status",
-                "required" => true,
-                "nullable" => false,
-                "input_type" => "text",
-                "maxlength" => null,
-                "default" => "'unknown'"
+            'status' => [
+                'name' => 'status',
+                'type' => 'varchar',
+                'label' => 'Status',
+                'required' => true,
+                'nullable' => false,
+                'input_type' => 'text',
+                'maxlength' => null,
+                'default' => "'unknown'",
             ],
-            "created_by" => [
-                "name" => "created_by",
-                "type" => "bigint",
-                "label" => "Created By",
-                "required" => false,
-                "nullable" => true,
-                "input_type" => "number",
-                "maxlength" => null,
-                "default" => "NULL"
+            'created_by' => [
+                'name' => 'created_by',
+                'type' => 'bigint',
+                'label' => 'Created By',
+                'required' => false,
+                'nullable' => true,
+                'input_type' => 'number',
+                'maxlength' => null,
+                'default' => 'NULL',
             ],
-            "created_at" => [
-                "name" => "created_at",
-                "type" => "timestamp",
-                "label" => "Created At",
-                "required" => false,
-                "nullable" => true,
-                "input_type" => "datetime-local",
-                "maxlength" => null,
-                "default" => "NULL"
+            'created_at' => [
+                'name' => 'created_at',
+                'type' => 'timestamp',
+                'label' => 'Created At',
+                'required' => false,
+                'nullable' => true,
+                'input_type' => 'datetime-local',
+                'maxlength' => null,
+                'default' => 'NULL',
             ],
-            "updated_by" => [
-                "name" => "updated_by",
-                "type" => "bigint",
-                "label" => "Updated By",
-                "required" => false,
-                "nullable" => true,
-                "input_type" => "number",
-                "maxlength" => null,
-                "default" => "NULL"
+            'updated_by' => [
+                'name' => 'updated_by',
+                'type' => 'bigint',
+                'label' => 'Updated By',
+                'required' => false,
+                'nullable' => true,
+                'input_type' => 'number',
+                'maxlength' => null,
+                'default' => 'NULL',
             ],
-            "updated_at" => [
-                "name" => "updated_at",
-                "type" => "timestamp",
-                "label" => "Updated At",
-                "required" => false,
-                "nullable" => true,
-                "input_type" => "datetime-local",
-                "maxlength" => null,
-                "default" => "NULL"
+            'updated_at' => [
+                'name' => 'updated_at',
+                'type' => 'timestamp',
+                'label' => 'Updated At',
+                'required' => false,
+                'nullable' => true,
+                'input_type' => 'datetime-local',
+                'maxlength' => null,
+                'default' => 'NULL',
             ],
-            "deleted_by" => [
-                "name" => "deleted_by",
-                "type" => "bigint",
-                "label" => "Deleted By",
-                "required" => false,
-                "nullable" => true,
-                "input_type" => "number",
-                "maxlength" => null,
-                "default" => "NULL"
+            'deleted_by' => [
+                'name' => 'deleted_by',
+                'type' => 'bigint',
+                'label' => 'Deleted By',
+                'required' => false,
+                'nullable' => true,
+                'input_type' => 'number',
+                'maxlength' => null,
+                'default' => 'NULL',
             ],
-            "deleted_at" => [
-                "name" => "deleted_at",
-                "type" => "timestamp",
-                "label" => "Deleted At",
-                "required" => false,
-                "nullable" => true,
-                "input_type" => "datetime-local",
-                "maxlength" => null,
-                "default" => "NULL"
-            ]
+            'deleted_at' => [
+                'name' => 'deleted_at',
+                'type' => 'timestamp',
+                'label' => 'Deleted At',
+                'required' => false,
+                'nullable' => true,
+                'input_type' => 'datetime-local',
+                'maxlength' => null,
+                'default' => 'NULL',
+            ],
         ];
     }
 
@@ -472,16 +480,21 @@ class EntityController extends Controller
                 }
 
                 $processedCustomFields[$fieldName] = [
-                    "name" => $fieldName,
-                    "type" => $typeMapping[$fieldType] ?? $fieldType,
-                    "label" => $field['label'],
-                    "required" => $field['required'] ?? false,
-                    "nullable" => $field['nullable'] ?? true,
-                    "input_type" => $field['input_type'],
-                    "maxlength" => $field['maxlength'] ?? null,
-                    "size" => $field['size'] ?? null,
-                    "gridSize" => $field['gridSize'] ?? null,
-                    "default" => $this->normalizeFieldDefault($field['default'] ?? null, $fieldType)
+                    'name' => $fieldName,
+                    'type' => $typeMapping[$fieldType] ?? $fieldType,
+                    'label' => $field['label'],
+                    'required' => $field['required'] ?? false,
+                    'nullable' => $field['nullable'] ?? true,
+                    'input_type' => $field['input_type'],
+                    'maxlength' => $field['maxlength'] ?? null,
+                    'size' => $field['size'] ?? null,
+                    'gridSize' => $field['gridSize'] ?? null,
+                    'default' => $this->normalizeFieldDefault($field['default'] ?? null, $fieldType),
+                    // Validation keys enforced by the generic entity API (EntityValidator).
+                    'unique' => (bool) ($field['unique'] ?? false),
+                    'options' => is_array($field['options'] ?? null) ? $field['options'] : null,
+                    'min' => isset($field['min']) && is_numeric($field['min']) ? $field['min'] + 0 : null,
+                    'max' => isset($field['max']) && is_numeric($field['max']) ? $field['max'] + 0 : null,
                 ];
             }
         }
@@ -554,7 +567,7 @@ class EntityController extends Controller
         $metaData = [
             'meta_value' => $metaValue,
             'status' => 'active',
-            'updated_by' => auth()->id()
+            'updated_by' => auth()->id(),
         ];
 
         if ($isCreate) {
@@ -567,17 +580,29 @@ class EntityController extends Controller
         );
     }
 
+    /** @return class-string<Model> */
+    private function formSchemaModel(): string
+    {
+        return app(SchemaModels::class)->formSchemaModel();
+    }
+
+    /** @return class-string<Model> */
+    private function tableSchemaModel(): string
+    {
+        return app(SchemaModels::class)->tableSchemaModel();
+    }
+
     /**
      * Create form schema and return its UID
      */
     private function createFormSchema($entity, $slug, $customFields, $metaFields = [])
     {
         $formSchema = $this->formSchemaGenerator->generate($entity, $customFields, $metaFields);
-        $formSchemaRecord = FormSchema::create([
+        $formSchemaRecord = $this->formSchemaModel()::create([
             'uid' => Str::ulid(),
-            'slug' => $slug . '-form',
-            'name' => $entity->entity_name . ' Form',
-            'description' => 'Auto-generated form for ' . $entity->entity_name,
+            'slug' => $slug.'-form',
+            'name' => $entity->entity_name.' Form',
+            'description' => 'Auto-generated form for '.$entity->entity_name,
             'schema' => $formSchema,
             'extra_info' => [],
             'status' => EntityStatus::ACTIVE,
@@ -598,7 +623,7 @@ class EntityController extends Controller
             $newFormSchemaUid = $this->createFormSchema($entity, $entitySlug, $customFields, $metaFields);
             $this->saveEntityMeta($entity, 'form_schema_uid', $newFormSchemaUid, false);
 
-            Log::info('Generated form schema created because no existing schema record could be resolved', [
+            static::logInfo('Generated form schema created because no existing schema record could be resolved', [
                 'entity_uid' => $entity->uid,
                 'missing_form_schema_uid' => $formSchemaUid,
                 'form_schema_uid' => $newFormSchemaUid,
@@ -608,8 +633,8 @@ class EntityController extends Controller
         }
 
         $formSchemaRecord->update([
-            'name' => $entity->entity_name . ' Form',
-            'description' => 'Auto-generated form for ' . $entity->entity_name,
+            'name' => $entity->entity_name.' Form',
+            'description' => 'Auto-generated form for '.$entity->entity_name,
             'schema' => $this->formSchemaGenerator->generate($entity, $customFields, $metaFields),
             'updated_by' => auth()->id(),
         ]);
@@ -625,11 +650,11 @@ class EntityController extends Controller
     private function createTableSchema($entity, $slug, $customFields, $formSchemaUid)
     {
         $tableSchema = $this->tableSchemaGenerator->generate($entity, $customFields, $formSchemaUid);
-        $tableSchemaRecord = TableSchema::create([
+        $tableSchemaRecord = $this->tableSchemaModel()::create([
             'uid' => Str::ulid(),
-            'slug' => $slug . '-table',
-            'name' => $entity->entity_name . ' Table',
-            'description' => 'Auto-generated table for ' . $entity->entity_name,
+            'slug' => $slug.'-table',
+            'name' => $entity->entity_name.' Table',
+            'description' => 'Auto-generated table for '.$entity->entity_name,
             'schema' => $tableSchema,
             'extra_info' => [],
             'status' => EntityStatus::ACTIVE,
@@ -650,7 +675,7 @@ class EntityController extends Controller
             $newTableSchemaUid = $this->createTableSchema($entity, $entitySlug, $customFields, $formSchemaUid);
             $this->saveEntityMeta($entity, 'table_schema_uid', $newTableSchemaUid, false);
 
-            Log::info('Generated table schema created because no existing schema record could be resolved', [
+            static::logInfo('Generated table schema created because no existing schema record could be resolved', [
                 'entity_uid' => $entity->uid,
                 'missing_table_schema_uid' => $tableSchemaUid,
                 'table_schema_uid' => $newTableSchemaUid,
@@ -660,8 +685,8 @@ class EntityController extends Controller
         }
 
         $tableSchemaRecord->update([
-            'name' => $entity->entity_name . ' Table',
-            'description' => 'Auto-generated table for ' . $entity->entity_name,
+            'name' => $entity->entity_name.' Table',
+            'description' => 'Auto-generated table for '.$entity->entity_name,
             'schema' => $this->tableSchemaGenerator->generate($entity, $customFields, $formSchemaUid),
             'updated_by' => auth()->id(),
         ]);
@@ -671,10 +696,10 @@ class EntityController extends Controller
         }
     }
 
-    private function findExistingFormSchemaRecord(Entity $entity, ?string $formSchemaUid, string $entitySlug): ?FormSchema
+    private function findExistingFormSchemaRecord(Entity $entity, ?string $formSchemaUid, string $entitySlug): ?Model
     {
         if ($formSchemaUid) {
-            $formSchemaRecord = FormSchema::where('uid', $formSchemaUid)->first();
+            $formSchemaRecord = $this->formSchemaModel()::where('uid', $formSchemaUid)->first();
 
             if ($formSchemaRecord) {
                 return $formSchemaRecord;
@@ -682,7 +707,7 @@ class EntityController extends Controller
         }
 
         foreach ($this->buildSchemaSlugCandidates($entitySlug, 'form') as $candidateSlug) {
-            $formSchemaRecord = FormSchema::where('slug', $candidateSlug)->first();
+            $formSchemaRecord = $this->formSchemaModel()::where('slug', $candidateSlug)->first();
 
             if ($formSchemaRecord) {
                 return $formSchemaRecord;
@@ -692,7 +717,7 @@ class EntityController extends Controller
         $entityTableNames = $this->buildEntityTableNameCandidates($entity);
 
         foreach ($entityTableNames as $entityTableName) {
-            $formSchemaRecord = FormSchema::where('schema->entity', $entityTableName)->first();
+            $formSchemaRecord = $this->formSchemaModel()::where('schema->entity', $entityTableName)->first();
 
             if ($formSchemaRecord) {
                 return $formSchemaRecord;
@@ -702,10 +727,10 @@ class EntityController extends Controller
         return null;
     }
 
-    private function findExistingTableSchemaRecord(Entity $entity, ?string $tableSchemaUid, string $entitySlug): ?TableSchema
+    private function findExistingTableSchemaRecord(Entity $entity, ?string $tableSchemaUid, string $entitySlug): ?Model
     {
         if ($tableSchemaUid) {
-            $tableSchemaRecord = TableSchema::where('uid', $tableSchemaUid)->first();
+            $tableSchemaRecord = $this->tableSchemaModel()::where('uid', $tableSchemaUid)->first();
 
             if ($tableSchemaRecord) {
                 return $tableSchemaRecord;
@@ -713,7 +738,7 @@ class EntityController extends Controller
         }
 
         foreach ($this->buildSchemaSlugCandidates($entitySlug, 'table') as $candidateSlug) {
-            $tableSchemaRecord = TableSchema::where('slug', $candidateSlug)->first();
+            $tableSchemaRecord = $this->tableSchemaModel()::where('slug', $candidateSlug)->first();
 
             if ($tableSchemaRecord) {
                 return $tableSchemaRecord;
@@ -723,7 +748,7 @@ class EntityController extends Controller
         $entityTableNames = $this->buildEntityTableNameCandidates($entity);
 
         foreach ($entityTableNames as $entityTableName) {
-            $tableSchemaRecord = TableSchema::where('schema->entity', $entityTableName)->first();
+            $tableSchemaRecord = $this->tableSchemaModel()::where('schema->entity', $entityTableName)->first();
 
             if ($tableSchemaRecord) {
                 return $tableSchemaRecord;
@@ -744,7 +769,7 @@ class EntityController extends Controller
         $slug = $this->buildSlugFromEntityName($entity->entity_name);
 
         if ($slug === '') {
-            $slug = 'entity-' . $entity->uid;
+            $slug = 'entity-'.$entity->uid;
         }
 
         $entity->slug = $slug;
@@ -772,7 +797,7 @@ class EntityController extends Controller
                 continue;
             }
 
-            $candidates[] = $candidateBase . '-' . $suffix;
+            $candidates[] = $candidateBase.'-'.$suffix;
         }
 
         return array_values(array_unique($candidates));
@@ -814,21 +839,21 @@ class EntityController extends Controller
                 ->where('uid', $entityUid)
                 ->first();
 
-            if (!$entity) {
+            if (! $entity) {
                 return redirect()
-                ->back()
-                ->with('error', 'Entity not found.');
+                    ->back()
+                    ->with('error', 'Entity not found.');
             }
 
             return view('foundation::entity.show', [
-                'entity' => $entity
+                'entity' => $entity,
             ]);
 
         } catch (\Throwable $th) {
-            Log::error('Error fetching entity', [
+            static::logError('Error fetching entity', [
                 'entity_uid' => $entityUid,
                 'error' => $th->getMessage(),
-                'trace' => $th->getTraceAsString()
+                'trace' => $th->getTraceAsString(),
             ]);
 
             return redirect()
@@ -850,7 +875,7 @@ class EntityController extends Controller
                 ->route('entities.show', $entity->uid)
                 ->with('success', 'Form schema generated successfully.');
         } catch (Exception $e) {
-            Log::error('Error generating form schema from entity', [
+            static::logError('Error generating form schema from entity', [
                 'entity_uid' => $entityUid,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -882,7 +907,7 @@ class EntityController extends Controller
                 ->route('entities.show', $entity->uid)
                 ->with('success', 'Table schema generated successfully.');
         } catch (Exception $e) {
-            Log::error('Error generating table schema from entity', [
+            static::logError('Error generating table schema from entity', [
                 'entity_uid' => $entityUid,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -893,7 +918,7 @@ class EntityController extends Controller
                 ->with('error', $e->getMessage());
         }
     }
-    
+
     public function destroy($entityUid)
     {
         try {
@@ -905,8 +930,8 @@ class EntityController extends Controller
                 'updated_at' => now(),
             ]);
 
-            Log::info('Entity marked as deleted', [
-                'entity' => $entity->toArray()
+            static::logInfo('Entity marked as deleted', [
+                'entity' => $entity->toArray(),
             ]);
 
             return redirect()
@@ -914,9 +939,9 @@ class EntityController extends Controller
                 ->with('success', 'Entity deleted successfully.');
 
         } catch (Exception $e) {
-            Log::error('Error deleting entity', [
+            static::logError('Error deleting entity', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return redirect()
@@ -928,8 +953,8 @@ class EntityController extends Controller
     public function publish($entityUid)
     {
         try {
-            Log::debug('Publishing entity', [
-                'entityUid' => $entityUid
+            static::logDebug('Publishing entity', [
+                'entityUid' => $entityUid,
             ]);
             $entity = Entity::where('uid', $entityUid)->firstOrFail();
 
@@ -937,20 +962,20 @@ class EntityController extends Controller
             if ($entity->status !== 'active') {
                 return redirect()
                     ->back()
-                    ->with('error', 'Only active entities can be published. Current status: ' . $entity->status);
+                    ->with('error', 'Only active entities can be published. Current status: '.$entity->status);
             }
 
             // Get table name from entity meta
             $tableMeta = $entity->metas()->where('meta_key', 'table_name')->first();
-            
-            if (!$tableMeta) {
+
+            if (! $tableMeta) {
                 return redirect()
                     ->back()
                     ->with('error', 'Table name not found in entity meta.');
             }
 
             $baseTableName = $tableMeta->meta_value;
-            
+
             // Pluralize table name if not already plural
             $tableName = $this->pluralizeTableName($baseTableName);
             $metaTableName = $this->getMetaTableName($baseTableName);
@@ -963,13 +988,13 @@ class EntityController extends Controller
             }
 
             // Get fields from entity
-            $fields = is_string($entity->fields) 
-                ? json_decode($entity->fields, true) 
+            $fields = is_string($entity->fields)
+                ? json_decode($entity->fields, true)
                 : $entity->fields;
 
             // Get meta fields from entity
-            $metaFields = is_string($entity->meta_fields) 
-                ? json_decode($entity->meta_fields, true) 
+            $metaFields = is_string($entity->meta_fields)
+                ? json_decode($entity->meta_fields, true)
                 : $entity->meta_fields;
 
             // Separate and order fields
@@ -982,8 +1007,8 @@ class EntityController extends Controller
                 }
             });
 
-            Log::info("Table '{$tableName}' created successfully", [
-                'fields' => $orderedFields
+            static::logInfo("Table '{$tableName}' created successfully", [
+                'fields' => $orderedFields,
             ]);
 
             // Create meta table
@@ -995,16 +1020,16 @@ class EntityController extends Controller
                 $table->longText('meta_value')->nullable();
                 $table->string('status')->default('unknown');
 
-                $table->bigInteger('created_by')->default(0);
-                $table->bigInteger('updated_by')->default(0);
-                $table->bigInteger('deleted_by')->nullable();
+                $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->foreignId('deleted_by')->nullable()->constrained('users')->nullOnDelete();
 
                 // DB-level timestamps (AUTO)
                 $table->timestamp('created_at')->useCurrent();
                 $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
                 $table->timestamp('deleted_at')->nullable();
 
-                $table->index(['ref_parent', 'meta_key']);
+                $table->unique(['ref_parent', 'meta_key']);
 
                 $table->foreign('ref_parent')
                     ->references('id')
@@ -1013,12 +1038,15 @@ class EntityController extends Controller
                     ->onDelete('cascade');
             });
 
-            Log::info("Meta table '{$metaTableName}' created successfully");
+            static::logInfo("Meta table '{$metaTableName}' created successfully");
+
+            // Per-entity permissions for the generic entity API.
+            EntityPermission::ensureFor($tableName);
 
             // Update entity status to published
             $entity->update([
                 'status' => 'published',
-                'updated_by' => auth()->id()
+                'updated_by' => auth()->id(),
             ]);
 
             // Save published status in entity meta
@@ -1028,7 +1056,7 @@ class EntityController extends Controller
                     'meta_value' => now()->toDateTimeString(),
                     'status' => 'active',
                     'created_by' => auth()->id(),
-                    'updated_by' => auth()->id()
+                    'updated_by' => auth()->id(),
                 ]
             );
 
@@ -1039,7 +1067,7 @@ class EntityController extends Controller
                     'meta_value' => $tableName,
                     'status' => 'active',
                     'created_by' => auth()->id(),
-                    'updated_by' => auth()->id()
+                    'updated_by' => auth()->id(),
                 ]
             );
 
@@ -1049,23 +1077,23 @@ class EntityController extends Controller
                     'meta_value' => $metaTableName,
                     'status' => 'active',
                     'created_by' => auth()->id(),
-                    'updated_by' => auth()->id()
+                    'updated_by' => auth()->id(),
                 ]
             );
 
             return redirect()
                 ->back()
                 ->with('success', "Entity published successfully. Tables '{$tableName}' and '{$metaTableName}' created.");
-                
+
         } catch (Exception $e) {
-            Log::error('Error publishing entity', [
+            static::logError('Error publishing entity', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return redirect()
                 ->back()
-                ->with('error', 'Error: ' . $e->getMessage());
+                ->with('error', 'Error: '.$e->getMessage());
         }
     }
 
@@ -1077,12 +1105,12 @@ class EntityController extends Controller
         // If base name ends with 's', check if it's already plural
         if (substr($baseTableName, -1) === 's') {
             // Likely already plural (e.g., 'users')
-            return $baseTableName . '_metas';
+            return $baseTableName.'_metas';
         } elseif (substr($baseTableName, -1) === 'y') {
             // category -> category_metas (keep singular for meta table relationship)
-            return $baseTableName . '_metas';
+            return $baseTableName.'_metas';
         } else {
-            return $baseTableName . '_metas';
+            return $baseTableName.'_metas';
         }
     }
 
@@ -1117,6 +1145,7 @@ class EntityController extends Controller
         }
 
         ksort($orderedFields);
+
         return array_values($orderedFields);
     }
 
@@ -1135,9 +1164,11 @@ class EntityController extends Controller
             case 'bigint':
                 if ($name === 'id') {
                     $column = $table->id();
+                } elseif (in_array($name, ['created_by', 'updated_by', 'deleted_by'], true)) {
+                    // Nullable FK to users (no fake "0" user).
+                    return $table->foreignId($name)->nullable()->constrained('users')->nullOnDelete();
                 } else {
-                    $column = $table->bigInteger($name)
-                        ->default(in_array($name, ['created_by', 'updated_by']) ? 0 : null);
+                    $column = $table->bigInteger($name);
                 }
                 break;
 
@@ -1198,7 +1229,7 @@ class EntityController extends Controller
         // Apply nullable
         if (
             $nullable &&
-            !in_array($name, ['id', 'uid', 'created_by', 'updated_by'])
+            ! in_array($name, ['id', 'uid', 'created_by', 'updated_by'])
         ) {
             $column->nullable();
         }
@@ -1219,8 +1250,13 @@ class EntityController extends Controller
         }
 
         // Add indexes for commonly queried fields
-        if (in_array($name, ['status', 'created_by', 'deleted_at'])) {
+        if (in_array($name, ['status', 'deleted_at'])) {
             $column->index();
+        }
+
+        // Fields marked unique get a DB-level unique index as well as API validation.
+        if (! empty($field['unique']) && ! in_array($name, ['id', 'uid'], true)) {
+            $column->unique();
         }
     }
 }

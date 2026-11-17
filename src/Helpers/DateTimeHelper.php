@@ -26,7 +26,9 @@ class DateTimeHelper
         string|DateTimeInterface|null $time,
         string $fallback = 'N/A'
     ): string {
-        if (!$time) return $fallback;
+        if (! $time) {
+            return $fallback;
+        }
 
         if (self::hasUserDateTimeSettings()) {
             return self::displayFromUserSettings($time, $fallback);
@@ -42,7 +44,9 @@ class DateTimeHelper
         string|DateTimeInterface|null $time,
         string $fallback = 'N/A'
     ): string {
-        if (!$time) return $fallback;
+        if (! $time) {
+            return $fallback;
+        }
 
         if (self::hasUserDateTimeSettings()) {
             return self::displayDateTimeFromUserSettings($time, $fallback);
@@ -60,7 +64,9 @@ class DateTimeHelper
         string|DateTimeInterface|null $time,
         string $fallback = 'N/A'
     ): string {
-        if (!$time) return $fallback;
+        if (! $time) {
+            return $fallback;
+        }
 
         try {
             $date = self::resolveDate($time);
@@ -97,7 +103,9 @@ class DateTimeHelper
         string|DateTimeInterface|null $time,
         string $fallback = 'N/A'
     ): string {
-        if (!$time) return $fallback;
+        if (! $time) {
+            return $fallback;
+        }
 
         try {
             $date = self::resolveDate($time);
@@ -107,7 +115,7 @@ class DateTimeHelper
             }
 
             if ($date->isYesterday()) {
-                return 'Yesterday ' . $date->format('h:i A');
+                return 'Yesterday '.$date->format('h:i A');
             }
 
             if ($date->isCurrentWeek()) {

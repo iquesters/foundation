@@ -13,7 +13,7 @@ class FoundationPackageInfo extends PackageInfo
     protected function definePackageInfo(): void
     {
         // Everything is auto-discovered using NamespaceResolver!
-        // 
+        //
         // Auto-discovers:
         // ✅ Providers: Iquesters\Foundation\Providers\*
         // ✅ Commands: Iquesters\Foundation\Console\*Command
