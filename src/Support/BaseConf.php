@@ -3,6 +3,7 @@
 namespace Iquesters\Foundation\Support;
 
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Iquesters\Foundation\Support\Settings\SettingsStore;
 use Iquesters\Foundation\System\Traits\Loggable;
@@ -18,6 +19,7 @@ use Iquesters\Foundation\System\Traits\Loggable;
  *         protected ?string $identifier = Module::USER_MGMT;
  *         protected string $auth_form_type;
  *         protected RecaptchaConf $recaptcha;           // nested settings
+ *
  *         /** @var OAuthConf[] *\/
  *         protected array $o_auth_providers;            // map of nested settings
  *
@@ -143,6 +145,7 @@ abstract class BaseConf
 
             if ($value instanceof self) {
                 array_push($rows, ...$value->describeInto($path, $rules, is_array($default) ? $default : []));
+
                 continue;
             }
 
@@ -152,6 +155,7 @@ abstract class BaseConf
                         array_push($rows, ...$element->describeInto("{$path}.{$key}", $rules, (array) ($default[$key] ?? [])));
                     }
                 }
+
                 continue;
             }
 
@@ -182,8 +186,8 @@ abstract class BaseConf
      */
     public function update(array $changes, ?int $userId = null): void
     {
-        if (!$this->isRootSettings()) {
-            throw new \LogicException(static::class . ' is not a registered module settings class; update the root settings instead.');
+        if (! $this->isRootSettings()) {
+            throw new \LogicException(static::class.' is not a registered module settings class; update the root settings instead.');
         }
 
         $candidate = clone $this;
@@ -226,7 +230,7 @@ abstract class BaseConf
         $candidate->fill($values, '', $errors);
 
         foreach ($errors as $path => $message) {
-            static::logWarning("Skipping invalid setting '{$path}' for " . static::class, ['reason' => $message]);
+            static::logWarning("Skipping invalid setting '{$path}' for ".static::class, ['reason' => $message]);
         }
 
         return self::diff($candidate->toArray(), $this->defaultValues);
@@ -235,7 +239,7 @@ abstract class BaseConf
     /** Drop the cached settings so the next ConfProvider::from() reads them again. */
     public function clearCache(): void
     {
-        if (!empty($this->identifier)) {
+        if (! empty($this->identifier)) {
             SettingsStore::forget($this->identifier);
             ConfProvider::forget($this->identifier);
         }
@@ -253,9 +257,7 @@ abstract class BaseConf
     }
 
     /** @deprecated Settings are loaded on construction; kept for existing callers. */
-    public function ensureLoaded(): void
-    {
-    }
+    public function ensureLoaded(): void {}
 
     /* -------------------------------------------------
      | Magic access (settings are protected properties)
@@ -269,7 +271,7 @@ abstract class BaseConf
             return $prop->isInitialized($this) ? $prop->getValue($this) : null;
         }
 
-        trigger_error('Undefined setting: ' . static::class . '::$' . $property, E_USER_NOTICE);
+        trigger_error('Undefined setting: '.static::class.'::$'.$property, E_USER_NOTICE);
 
         return null;
     }
@@ -280,7 +282,7 @@ abstract class BaseConf
         if (property_exists($this, $property)) {
             (new \ReflectionProperty($this, $property))->setValue($this, $value);
         } else {
-            trigger_error('Cannot set undefined setting: ' . static::class . '::$' . $property, E_USER_NOTICE);
+            trigger_error('Cannot set undefined setting: '.static::class.'::$'.$property, E_USER_NOTICE);
         }
     }
 
@@ -295,7 +297,7 @@ abstract class BaseConf
 
     private function isRootSettings(): bool
     {
-        return !empty($this->identifier) && ConfProvider::isRegistered($this->identifier);
+        return ! empty($this->identifier) && ConfProvider::isRegistered($this->identifier);
     }
 
     /** Every setting gets a typed empty value, then the class's own defaults. */
@@ -304,14 +306,15 @@ abstract class BaseConf
         foreach (self::settingProperties($this) as $prop) {
             $type = $prop->getType();
 
-            if (!$type instanceof \ReflectionNamedType) {
+            if (! $type instanceof \ReflectionNamedType) {
                 $prop->setValue($this, null);
+
                 continue;
             }
 
             $name = $type->getName();
-            if (!$type->isBuiltin() && is_subclass_of($name, self::class) && !(new \ReflectionClass($name))->isAbstract()) {
-                $prop->setValue($this, new $name());
+            if (! $type->isBuiltin() && is_subclass_of($name, self::class) && ! (new \ReflectionClass($name))->isAbstract()) {
+                $prop->setValue($this, new $name);
             } elseif ($type->allowsNull()) {
                 $prop->setValue($this, null);
             } else {
@@ -362,8 +365,9 @@ abstract class BaseConf
             $keyPath = $path === '' ? (string) $key : "{$path}.{$key}";
             $prop = $properties[$key] ?? null;
 
-            if (!$prop) {
-                static::logDebug("Ignoring unknown setting '{$keyPath}' for " . static::class);
+            if (! $prop) {
+                static::logDebug("Ignoring unknown setting '{$keyPath}' for ".static::class);
+
                 continue;
             }
 
@@ -372,40 +376,46 @@ abstract class BaseConf
             $current = $prop->isInitialized($this) ? $prop->getValue($this) : null;
 
             // Nested settings object
-            if ($typeName && !$type->isBuiltin() && is_subclass_of($typeName, self::class)) {
-                if (!is_array($value)) {
-                    $errors[$keyPath] = "Must be a group of settings.";
+            if ($typeName && ! $type->isBuiltin() && is_subclass_of($typeName, self::class)) {
+                if (! is_array($value)) {
+                    $errors[$keyPath] = 'Must be a group of settings.';
+
                     continue;
                 }
-                if (!$current instanceof self) {
+                if (! $current instanceof self) {
                     $current = self::makeElement($typeName, $key);
-                    if (!$current) {
+                    if (! $current) {
                         $errors[$keyPath] = "Cannot create settings group {$typeName}.";
+
                         continue;
                     }
                     $prop->setValue($this, $current);
                 }
                 $current->fill($value, $keyPath, $errors);
+
                 continue;
             }
 
             // Map of nested settings objects (declared with @var SomeConf[])
             if ($typeName === 'array' && ($elementClass = self::elementClass($prop))) {
-                if (!is_array($value)) {
+                if (! is_array($value)) {
                     $errors[$keyPath] = 'Must be a map of settings groups.';
+
                     continue;
                 }
                 $map = is_array($current) ? $current : [];
                 foreach ($value as $elementKey => $elementValues) {
                     $element = ($map[$elementKey] ?? null) instanceof self ? $map[$elementKey] : self::makeElement($elementClass, (string) $elementKey);
-                    if (!$element || !is_array($elementValues)) {
+                    if (! $element || ! is_array($elementValues)) {
                         $errors["{$keyPath}.{$elementKey}"] = 'Invalid settings group.';
+
                         continue;
                     }
                     $element->fill($elementValues, "{$keyPath}.{$elementKey}", $errors);
                     $map[$elementKey] = $element;
                 }
                 $prop->setValue($this, $map);
+
                 continue;
             }
 
@@ -416,7 +426,7 @@ abstract class BaseConf
             if ($ok) {
                 $prop->setValue($this, $coerced);
             } else {
-                $errors[$keyPath] = 'Must be of type ' . ($type ? (string) $type : 'mixed') . '.';
+                $errors[$keyPath] = 'Must be of type '.($type ? (string) $type : 'mixed').'.';
             }
         }
     }
@@ -441,7 +451,7 @@ abstract class BaseConf
                 $prop->setValue($this, $copy);
             } elseif (is_array($value)) {
                 $prop->setValue($this, array_map(function ($item) {
-                    if (!$item instanceof self) {
+                    if (! $item instanceof self) {
                         return $item;
                     }
                     $copy = clone $item;
@@ -460,7 +470,7 @@ abstract class BaseConf
      */
     private static function coerce(mixed $value, ?\ReflectionType $type): array
     {
-        if (!$type instanceof \ReflectionNamedType || $type->getName() === 'mixed') {
+        if (! $type instanceof \ReflectionNamedType || $type->getName() === 'mixed') {
             return [true, $value];
         }
 
@@ -494,7 +504,7 @@ abstract class BaseConf
 
     private static function decryptIfSecret(mixed $value, string $path): mixed
     {
-        if (!ConfSecret::isEncrypted($value)) {
+        if (! ConfSecret::isEncrypted($value)) {
             return $value;
         }
 
@@ -526,11 +536,11 @@ abstract class BaseConf
     /** Element class of an `@var SomeConf[]` array property, resolved against the declaring class's namespace. */
     private static function elementClass(\ReflectionProperty $prop): ?string
     {
-        if (!preg_match('/@var\s+\\\\?([A-Za-z0-9_\\\\]+)\[\]/', (string) $prop->getDocComment(), $m)) {
+        if (! preg_match('/@var\s+\\\\?([A-Za-z0-9_\\\\]+)\[\]/', (string) $prop->getDocComment(), $m)) {
             return null;
         }
 
-        foreach ([$m[1], $prop->getDeclaringClass()->getNamespaceName() . '\\' . $m[1]] as $class) {
+        foreach ([$m[1], $prop->getDeclaringClass()->getNamespaceName().'\\'.$m[1]] as $class) {
             if (class_exists($class) && is_subclass_of($class, self::class)) {
                 return $class;
             }
@@ -545,14 +555,14 @@ abstract class BaseConf
         $reflection = new \ReflectionClass($class);
 
         if ($reflection->isAbstract()) {
-            $concrete = $reflection->getNamespaceName() . '\\' . \Illuminate\Support\Str::studly($key) . 'Conf';
-            if (!class_exists($concrete) || !is_subclass_of($concrete, $class)) {
+            $concrete = $reflection->getNamespaceName().'\\'.Str::studly($key).'Conf';
+            if (! class_exists($concrete) || ! is_subclass_of($concrete, $class)) {
                 return null;
             }
             $class = $concrete;
         }
 
-        $element = new $class();
+        $element = new $class;
         if (empty($element->identifier)) {
             $element->identifier = $key;
         }
@@ -567,14 +577,14 @@ abstract class BaseConf
 
         foreach ($data as $key => $value) {
             $default = $defaults[$key] ?? null;
-            $isGroup = is_array($value) && !array_is_list($value) && $value !== [];
+            $isGroup = is_array($value) && ! array_is_list($value) && $value !== [];
 
             if ($isGroup && is_array($default)) {
                 $nested = self::diff($value, $default);
                 if ($nested !== []) {
                     $result[$key] = $nested;
                 }
-            } elseif (!array_key_exists($key, $defaults) || $value !== $default) {
+            } elseif (! array_key_exists($key, $defaults) || $value !== $default) {
                 $result[$key] = $value;
             }
         }

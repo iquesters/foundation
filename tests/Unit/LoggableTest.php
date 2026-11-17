@@ -22,7 +22,7 @@ class LoggableTest extends TestCase
 
     public function test_prefixes_class_method_and_line_from_instance_and_static_code(): void
     {
-        $subject = new LoggableSubject();
+        $subject = new LoggableSubject;
 
         $instanceLine = $subject->fromInstance();
         $staticLine = LoggableSubject::fromStatic();
@@ -49,14 +49,16 @@ class LoggableSubject
 
     public function fromInstance(): int
     {
-        $this->logWarning('instance message', ['k' => 1]); $line = __LINE__;
+        $this->logWarning('instance message', ['k' => 1]);
+        $line = __LINE__ - 1; // the log call above
 
         return $line;
     }
 
     public static function fromStatic(): int
     {
-        static::logInfo('static message'); $line = __LINE__;
+        static::logInfo('static message');
+        $line = __LINE__ - 1; // the log call above
 
         return $line;
     }

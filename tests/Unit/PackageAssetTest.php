@@ -15,7 +15,7 @@ class PackageAssetTest extends TestCase
     {
         parent::setUp();
 
-        $this->base = sys_get_temp_dir() . '/pkg-asset-' . uniqid();
+        $this->base = sys_get_temp_dir().'/pkg-asset-'.uniqid();
         File::makeDirectory("{$this->base}/public/js", 0777, true);
         File::makeDirectory("{$this->base}/public/.hidden", 0777, true);
         File::makeDirectory("{$this->base}/public-other", 0777, true);

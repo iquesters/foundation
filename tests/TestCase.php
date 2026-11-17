@@ -32,14 +32,14 @@ abstract class TestCase extends Orchestra
 
     protected function defineDatabaseMigrations(): void
     {
-        $this->loadMigrationsFrom(__DIR__ . '/database/migrations');
+        $this->loadMigrationsFrom(__DIR__.'/database/migrations');
     }
 
     protected function makeUser(?string $role = null): User
     {
         $user = User::create([
-            'name' => 'Test ' . Str::random(6),
-            'email' => Str::random(10) . '@example.test',
+            'name' => 'Test '.Str::random(6),
+            'email' => Str::random(10).'@example.test',
             'password' => bcrypt(Str::random(20)),
         ]);
 

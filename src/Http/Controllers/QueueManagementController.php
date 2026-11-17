@@ -3,9 +3,9 @@
 namespace Iquesters\Foundation\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Routing\Controller;
 use Iquesters\Foundation\Services\QueueManager;
 
 class QueueManagementController extends Controller
@@ -31,11 +31,11 @@ class QueueManagementController extends Controller
     public function getQueues()
     {
         $stats = $this->queueManager->getQueueStats();
-        
+
         return response()->json([
             'success' => true,
             'data' => $stats,
-            'timestamp' => now()->toIso8601String()
+            'timestamp' => now()->toIso8601String(),
         ]);
     }
 
@@ -49,10 +49,10 @@ class QueueManagementController extends Controller
             ->where('status', 'active')
             ->first();
 
-        if (!$queue) {
+        if (! $queue) {
             return response()->json([
                 'success' => false,
-                'message' => 'Queue not found'
+                'message' => 'Queue not found',
             ], 404);
         }
 
@@ -78,7 +78,7 @@ class QueueManagementController extends Controller
                     'reserved_at' => $job->reserved_at,
                     'available_at' => $job->available_at,
                     'created_at' => $job->created_at,
-                    'status' => $job->reserved_at ? 'processing' : 'waiting'
+                    'status' => $job->reserved_at ? 'processing' : 'waiting',
                 ];
             });
 
@@ -98,12 +98,12 @@ class QueueManagementController extends Controller
                     'jobs' => $jobCounts,
                     'workers' => [
                         'running' => $runningWorkers,
-                        'max' => (int) ($metas['max_workers'] ?? 1)
-                    ]
+                        'max' => (int) ($metas['max_workers'] ?? 1),
+                    ],
                 ],
                 'recent_jobs' => $recentJobs,
-                'failed_jobs' => $failedJobs
-            ]
+                'failed_jobs' => $failedJobs,
+            ],
         ]);
     }
 
@@ -113,7 +113,7 @@ class QueueManagementController extends Controller
     public function startWorkers(Request $request, string $queueName)
     {
         $validated = $request->validate([
-            'worker_count' => 'integer|min:1|max:10'
+            'worker_count' => 'integer|min:1|max:10',
         ]);
 
         $queue = DB::table('queues')
@@ -121,10 +121,10 @@ class QueueManagementController extends Controller
             ->where('status', 'active')
             ->first();
 
-        if (!$queue) {
+        if (! $queue) {
             return response()->json([
                 'success' => false,
-                'message' => 'Queue not found'
+                'message' => 'Queue not found',
             ], 404);
         }
 
@@ -140,15 +140,15 @@ class QueueManagementController extends Controller
 
         // Calculate how many workers we can actually start
         $availableSlots = $maxWorkers - $runningWorkers;
-        
+
         if ($availableSlots <= 0) {
             return response()->json([
                 'success' => false,
                 'message' => "Queue already has maximum workers running ({$maxWorkers})",
                 'data' => [
                     'running_workers' => $runningWorkers,
-                    'max_workers' => $maxWorkers
-                ]
+                    'max_workers' => $maxWorkers,
+                ],
             ], 400);
         }
 
@@ -170,8 +170,8 @@ class QueueManagementController extends Controller
                 'started' => $started,
                 'requested' => $requestedWorkers,
                 'running_workers' => $runningWorkers + $started,
-                'max_workers' => $maxWorkers
-            ]
+                'max_workers' => $maxWorkers,
+            ],
         ]);
     }
 
@@ -189,10 +189,10 @@ class QueueManagementController extends Controller
     //     }
 
     //     $lockFile = storage_path('framework/schedule-worker.lock');
-        
+
     //     // Start scheduler
     //     $cmd = sprintf('php %s/artisan schedule:work', base_path());
-        
+
     //     if (PHP_OS_FAMILY === 'Windows') {
     //         $cmd .= ' > NUL 2>&1';
     //         pclose(popen("start /B " . $cmd, "r"));
@@ -200,7 +200,7 @@ class QueueManagementController extends Controller
     //         $cmd .= ' > /dev/null 2>&1 &';
     //         exec($cmd . ' & echo $!', $output);
     //         $pid = !empty($output[0]) ? (int) $output[0] : null;
-            
+
     //         // Store PID in lock file
     //         @file_put_contents($lockFile, json_encode([
     //             'pid' => $pid,
@@ -215,62 +215,61 @@ class QueueManagementController extends Controller
     //         'message' => 'Scheduler started successfully'
     //     ]);
     // }
-public function startScheduler()
-{
-    // Check if already running
-    if ($this->isSchedulerRunning()) {
-        return response()->json(['success' => false, 'message' => 'Scheduler is already running'], 400);
+    public function startScheduler()
+    {
+        // Check if already running
+        if ($this->isSchedulerRunning()) {
+            return response()->json(['success' => false, 'message' => 'Scheduler is already running'], 400);
+        }
+
+        $lockFile = storage_path('framework/schedule-worker.lock');
+        $basePath = base_path();
+        $phpPath = '/usr/local/bin/php'; // Your verified path
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            $cmd = sprintf('start /B %s "%s/artisan" schedule:work > NUL 2>&1', $phpPath, $basePath);
+            pclose(popen($cmd, 'r'));
+            $pid = 'windows';
+        } else {
+            // Use nohup to ensure the process survives after the HTTP request ends
+            $cmd = sprintf(
+                'nohup %s "%s/artisan" schedule:work > /dev/null 2>&1 & echo $!',
+                $phpPath,
+                $basePath
+            );
+
+            $output = shell_exec($cmd);
+            $pid = $output ? (int) trim($output) : null;
+        }
+
+        // Write to Laravel Log
+        \Log::info('Queue System: Scheduler started via UI', [
+            'php_path' => $phpPath,
+            'pid' => $pid,
+            'command' => $cmd,
+        ]);
+
+        // Store PID in lock file
+        @file_put_contents($lockFile, json_encode([
+            'pid' => $pid,
+            'started_at' => time(),
+        ]));
+
+        return response()->json([
+            'success' => true,
+            'message' => "Scheduler started successfully (PID: $pid)",
+        ]);
     }
-
-    $lockFile = storage_path('framework/schedule-worker.lock');
-    $basePath = base_path();
-    $phpPath = '/usr/local/bin/php'; // Your verified path
-
-    if (PHP_OS_FAMILY === 'Windows') {
-        $cmd = sprintf('start /B %s "%s/artisan" schedule:work > NUL 2>&1', $phpPath, $basePath);
-        pclose(popen($cmd, "r"));
-        $pid = 'windows';
-    } else {
-        // Use nohup to ensure the process survives after the HTTP request ends
-        $cmd = sprintf(
-            'nohup %s "%s/artisan" schedule:work > /dev/null 2>&1 & echo $!', 
-            $phpPath, 
-            $basePath
-        );
-        
-        $output = shell_exec($cmd);
-        $pid = $output ? (int) trim($output) : null;
-    }
-
-    // Write to Laravel Log
-    \Log::info('Queue System: Scheduler started via UI', [
-        'php_path' => $phpPath,
-        'pid' => $pid,
-        'command' => $cmd
-    ]);
-
-    // Store PID in lock file
-    @file_put_contents($lockFile, json_encode([
-        'pid' => $pid,
-        'started_at' => time()
-    ]));
-
-    return response()->json([
-        'success' => true,
-        'message' => "Scheduler started successfully (PID: $pid)"
-    ]);
-}
-
 
     /**
      * Stop scheduler
      */
     public function stopScheduler()
     {
-        if (!$this->isSchedulerRunning()) {
+        if (! $this->isSchedulerRunning()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Scheduler is not running'
+                'message' => 'Scheduler is not running',
             ], 400);
         }
 
@@ -284,14 +283,14 @@ public function startScheduler()
             if (file_exists($lockFile)) {
                 $data = json_decode(file_get_contents($lockFile), true);
                 $pid = $data['pid'] ?? null;
-                
+
                 if ($pid) {
                     posix_kill($pid, SIGTERM);
                     sleep(1);
                     posix_kill($pid, SIGKILL);
                 }
             }
-            
+
             exec("pkill -f 'schedule:work'");
         }
 
@@ -304,7 +303,7 @@ public function startScheduler()
 
         return response()->json([
             'success' => true,
-            'message' => 'Scheduler stopped successfully'
+            'message' => 'Scheduler stopped successfully',
         ]);
     }
 
@@ -327,8 +326,8 @@ public function startScheduler()
             'data' => [
                 'running' => $isRunning,
                 'started_at' => $startedAt ? date('Y-m-d H:i:s', $startedAt) : null,
-                'uptime' => $startedAt ? $this->formatUptime(time() - $startedAt) : null
-            ]
+                'uptime' => $startedAt ? $this->formatUptime(time() - $startedAt) : null,
+            ],
         ]);
     }
 
@@ -339,17 +338,17 @@ public function startScheduler()
     {
         if (PHP_OS_FAMILY === 'Windows') {
             $output = shell_exec('tasklist /FI "IMAGENAME eq php.exe" /NH | findstr /I "php.exe"');
-            if (!$output) {
+            if (! $output) {
                 return false;
             }
-            
+
             $processes = explode("\n", trim($output));
             foreach ($processes as $process) {
                 if (stripos($process, 'php.exe') !== false) {
                     $pid = preg_replace('/\s+/', ' ', trim($process));
                     $parts = explode(' ', $pid);
                     if (isset($parts[1])) {
-                        $checkCmd = 'wmic process where ProcessId=' . $parts[1] . ' get CommandLine 2>nul';
+                        $checkCmd = 'wmic process where ProcessId='.$parts[1].' get CommandLine 2>nul';
                         $cmdLine = shell_exec($checkCmd);
                         if (stripos($cmdLine, 'schedule:work') !== false) {
                             return true;
@@ -357,10 +356,12 @@ public function startScheduler()
                     }
                 }
             }
+
             return false;
         } else {
             $output = shell_exec('ps aux | grep "schedule:work" | grep -v grep');
-            return !empty($output);
+
+            return ! empty($output);
         }
     }
 
@@ -375,10 +376,18 @@ public function startScheduler()
         $secs = $seconds % 60;
 
         $parts = [];
-        if ($days > 0) $parts[] = "{$days}d";
-        if ($hours > 0) $parts[] = "{$hours}h";
-        if ($minutes > 0) $parts[] = "{$minutes}m";
-        if ($secs > 0 || empty($parts)) $parts[] = "{$secs}s";
+        if ($days > 0) {
+            $parts[] = "{$days}d";
+        }
+        if ($hours > 0) {
+            $parts[] = "{$hours}h";
+        }
+        if ($minutes > 0) {
+            $parts[] = "{$minutes}m";
+        }
+        if ($secs > 0 || empty($parts)) {
+            $parts[] = "{$secs}s";
+        }
 
         return implode(' ', $parts);
     }
@@ -390,10 +399,10 @@ public function startScheduler()
     {
         $failedJob = DB::table('failed_jobs')->where('uuid', $jobId)->first();
 
-        if (!$failedJob) {
+        if (! $failedJob) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed job not found'
+                'message' => 'Failed job not found',
             ], 404);
         }
 
@@ -404,7 +413,7 @@ public function startScheduler()
             'attempts' => 0,
             'reserved_at' => null,
             'available_at' => time(),
-            'created_at' => time()
+            'created_at' => time(),
         ]);
 
         // Delete from failed jobs
@@ -414,7 +423,7 @@ public function startScheduler()
 
         return response()->json([
             'success' => true,
-            'message' => 'Job has been re-queued successfully'
+            'message' => 'Job has been re-queued successfully',
         ]);
     }
 
@@ -425,10 +434,10 @@ public function startScheduler()
     {
         $deleted = DB::table('failed_jobs')->where('uuid', $jobId)->delete();
 
-        if (!$deleted) {
+        if (! $deleted) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed job not found'
+                'message' => 'Failed job not found',
             ], 404);
         }
 
@@ -436,7 +445,7 @@ public function startScheduler()
 
         return response()->json([
             'success' => true,
-            'message' => 'Failed job deleted successfully'
+            'message' => 'Failed job deleted successfully',
         ]);
     }
 }

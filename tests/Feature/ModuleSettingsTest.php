@@ -115,7 +115,7 @@ class ModuleSettingsTest extends TestCase
     public function test_nested_settings_do_not_query_the_database(): void
     {
         DB::enableQueryLog();
-        new DemoToastConf();
+        new DemoToastConf;
         $this->assertSame([], DB::getQueryLog());
     }
 
@@ -144,11 +144,17 @@ class DemoSettingsConf extends BaseConf
     protected ?string $identifier = 'iquesters/settings-demo';
 
     protected string $mode;
+
     protected int $tabs;
+
     protected bool $enabled;
+
     protected ?string $note;
+
     protected array $scopes;
+
     protected DemoToastConf $toast;
+
     /** @var DemoProviderConf[] */
     protected array $providers;
 
@@ -159,7 +165,7 @@ class DemoSettingsConf extends BaseConf
         $default_values->enabled = false;
         $default_values->note = null;
         $default_values->scopes = ['email', 'profile'];
-        $default_values->providers = ['google' => new DemoProviderConf()];
+        $default_values->providers = ['google' => new DemoProviderConf];
     }
 
     protected function rules(): array
@@ -173,6 +179,7 @@ class DemoToastConf extends BaseConf
     protected ?string $identifier = 'toast';
 
     protected string $position;
+
     protected int $duration;
 
     protected function prepareDefault(BaseConf $default_values)

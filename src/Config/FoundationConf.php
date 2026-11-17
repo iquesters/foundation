@@ -2,8 +2,8 @@
 
 namespace Iquesters\Foundation\Config;
 
-use Iquesters\Foundation\Support\BaseConf;
 use Iquesters\Foundation\Enums\Module;
+use Iquesters\Foundation\Support\BaseConf;
 
 /**
  * Foundation's DB-backed settings (see docs/developer/configuration.md).

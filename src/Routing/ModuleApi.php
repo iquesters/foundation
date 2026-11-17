@@ -64,7 +64,7 @@ final class ModuleApi
         }
 
         if ($limit = config("foundation.api.rate_limits.{$prefix}.{$version}")) {
-            $middleware[] = 'throttle:' . $limit;
+            $middleware[] = 'throttle:'.$limit;
         }
 
         return $middleware;

@@ -42,7 +42,7 @@ final class PackageAsset
             return null;
         }
 
-        $file = realpath($root . DIRECTORY_SEPARATOR . $path);
+        $file = realpath($root.DIRECTORY_SEPARATOR.$path);
 
         if ($file === false || ! is_file($file)) {
             return null;
@@ -50,7 +50,7 @@ final class PackageAsset
 
         // Must be inside the public directory (compare with a trailing separator
         // so "/public-other" doesn't pass as "/public").
-        $rootPrefix = rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $rootPrefix = rtrim($root, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
         if (! str_starts_with($file, $rootPrefix)) {
             return null;
         }
@@ -82,17 +82,17 @@ final class PackageAsset
     public static function url(string $publicDir, string $publishedDir, string $path, string $routeName): string
     {
         $path = ltrim($path, '/');
-        $source = rtrim($publicDir, '/\\') . '/' . $path;
+        $source = rtrim($publicDir, '/\\').'/'.$path;
 
         if (! is_file($source)) {
             return route($routeName, ['path' => $path]);
         }
 
         $version = (string) filemtime($source);
-        $published = public_path(trim($publishedDir, '/') . '/' . $path);
+        $published = public_path(trim($publishedDir, '/').'/'.$path);
 
         if (self::isPublishedCopyCurrent($source, $published)) {
-            return asset(trim($publishedDir, '/') . '/' . $path) . '?v=' . $version;
+            return asset(trim($publishedDir, '/').'/'.$path).'?v='.$version;
         }
 
         return route($routeName, ['path' => $path, 'v' => $version]);
@@ -119,7 +119,7 @@ final class PackageAsset
         if ($file === null) {
             // "../" in an asset path is an attempt to read files outside public/.
             if (str_contains(str_replace('\\', '/', $path), '../') || str_contains($path, "\0")) {
-                static::logWarning('Blocked asset path traversal attempt', [
+                self::logWarning('Blocked asset path traversal attempt', [
                     'path' => $path,
                     'ip' => request()?->ip(),
                     'user_agent' => request()?->userAgent(),
@@ -134,7 +134,7 @@ final class PackageAsset
         return response()->file($file, [
             'Content-Type' => self::MIME_TYPES[$extension],
             'Cache-Control' => 'public, max-age=31536000, immutable',
-            'Last-Modified' => gmdate('D, d M Y H:i:s', filemtime($file)) . ' GMT',
+            'Last-Modified' => gmdate('D, d M Y H:i:s', filemtime($file)).' GMT',
             'X-Content-Type-Options' => 'nosniff',
         ]);
     }

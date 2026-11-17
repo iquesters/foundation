@@ -2,10 +2,10 @@
 
 namespace Iquesters\Foundation\Services;
 
-use Throwable;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\Models\Entity;
 use Iquesters\Foundation\System\Traits\Loggable;
+use Throwable;
 
 class TableSchemaGenerator
 {
@@ -59,7 +59,7 @@ class TableSchemaGenerator
 
             return $schema;
         } catch (Throwable $throwable) {
-            $this->logError('Failed to generate table schema: ' . $throwable->getMessage());
+            $this->logError('Failed to generate table schema: '.$throwable->getMessage());
             throw $throwable;
         }
     }
@@ -80,16 +80,16 @@ class TableSchemaGenerator
         }
 
         if (substr($tableName, -1) === 'y') {
-            return substr($tableName, 0, -1) . 'ies';
+            return substr($tableName, 0, -1).'ies';
         }
 
         if (
             in_array(substr($tableName, -1), ['s', 'x', 'z'], true) ||
             in_array(substr($tableName, -2), ['sh', 'ch'], true)
         ) {
-            return $tableName . 'es';
+            return $tableName.'es';
         }
 
-        return $tableName . 's';
+        return $tableName.'s';
     }
 }

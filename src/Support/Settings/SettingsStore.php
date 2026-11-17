@@ -25,7 +25,7 @@ final class SettingsStore
     /** Stored overrides for a module ([] when none). Cached until the next write. */
     public static function get(string $module): array
     {
-        if (!self::tableReady()) {
+        if (! self::tableReady()) {
             return [];
         }
 
@@ -61,7 +61,7 @@ final class SettingsStore
 
     public static function tableReady(): bool
     {
-        if (!self::$tableReady) {
+        if (! self::$tableReady) {
             try {
                 self::$tableReady = Schema::hasTable(self::TABLE);
             } catch (\Throwable) {
@@ -95,7 +95,7 @@ final class SettingsStore
      * ($ = settings group, @ = list/map. IDENTIFIER keys are metadata and skipped;
      * JSON and "true"/"false" values are decoded.)
      *
-     * @param iterable<array{0: string, 1: mixed}|object> $rows [key, value] pairs or rows with meta_key/meta_value
+     * @param  iterable<array{0: string, 1: mixed}|object>  $rows  [key, value] pairs or rows with meta_key/meta_value
      */
     public static function fromLegacyRows(iterable $rows): array
     {
@@ -122,7 +122,7 @@ final class SettingsStore
                 if ($i === count($path) - 1) {
                     $cursor[$segment] = $value;
                 } else {
-                    if (!isset($cursor[$segment]) || !is_array($cursor[$segment])) {
+                    if (! isset($cursor[$segment]) || ! is_array($cursor[$segment])) {
                         $cursor[$segment] = [];
                     }
                     $cursor = &$cursor[$segment];
@@ -136,6 +136,6 @@ final class SettingsStore
 
     private static function cacheKey(string $module): string
     {
-        return 'module_settings:' . str_replace(['/', '\\', ':', ' '], '_', $module);
+        return 'module_settings:'.str_replace(['/', '\\', ':', ' '], '_', $module);
     }
 }

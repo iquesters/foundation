@@ -29,14 +29,14 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        if (!Schema::hasTable('master_data') || !Schema::hasTable('master_data_metas')) {
+        if (! Schema::hasTable('master_data') || ! Schema::hasTable('master_data_metas')) {
             return;
         }
 
         // master_data key "{name}-conf" → module identifier, for installed modules.
         $modulesByConfKey = [];
         foreach (ConfProvider::registered() as $module => $class) {
-            $modulesByConfKey[Str::afterLast($module, '/') . '-conf'] = [$module, $class];
+            $modulesByConfKey[Str::afterLast($module, '/').'-conf'] = [$module, $class];
         }
 
         foreach (DB::table('master_data')->where('key', 'like', '%-conf')->get(['id', 'key']) as $conf) {
@@ -50,10 +50,10 @@ return new class extends Migration
 
             if (isset($modulesByConfKey[$conf->key])) {
                 [$module, $class] = $modulesByConfKey[$conf->key];
-                $overrides = (new $class())->overridesFrom($legacy);
+                $overrides = (new $class)->overridesFrom($legacy);
             } else {
                 // Module not installed in this app: keep its values as they were.
-                $module = 'iquesters/' . Str::beforeLast($conf->key, '-conf');
+                $module = 'iquesters/'.Str::beforeLast($conf->key, '-conf');
                 $overrides = $legacy;
             }
 

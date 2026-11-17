@@ -19,7 +19,7 @@ class FoundationServiceProvider extends BaseServiceProvider
         parent::register();
 
         // Code-level settings with no DB equivalent (admin roles, API limits).
-        $this->mergeConfigFrom(__DIR__ . '/../config/foundation.php', 'foundation');
+        $this->mergeConfigFrom(__DIR__.'/../config/foundation.php', 'foundation');
     }
 
     public function boot(): void

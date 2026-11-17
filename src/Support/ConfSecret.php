@@ -45,7 +45,7 @@ class ConfSecret
             return $value;
         }
 
-        return self::PREFIX . Crypt::encryptString($value);
+        return self::PREFIX.Crypt::encryptString($value);
     }
 
     /** Decrypts a stored value. Plain (legacy) values pass through unchanged. */

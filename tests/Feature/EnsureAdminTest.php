@@ -2,7 +2,11 @@
 
 namespace Iquesters\Foundation\Tests\Feature;
 
+use Illuminate\Foundation\Auth\User;
 use Illuminate\Support\Facades\Route;
+use Iquesters\Foundation\Enums\Module;
+use Iquesters\Foundation\Http\Middleware\EnsureAdmin;
+use Iquesters\Foundation\Support\ConfProvider;
 use Iquesters\Foundation\Tests\TestCase;
 
 class EnsureAdminTest extends TestCase
@@ -43,19 +47,21 @@ class EnsureAdminTest extends TestCase
         $this->actingAs($this->makeUser('super-admin'))->get('/_admin-only')->assertOk();
 
         $this->setAdminRoles(' , ');
-        $this->assertSame(['super-admin', 'admin'], \Iquesters\Foundation\Http\Middleware\EnsureAdmin::roles());
+        $this->assertSame(['super-admin', 'admin'], EnsureAdmin::roles());
     }
 
     /** Set the DB-backed conf value for this request (ConfProvider reuses the instance). */
     private function setAdminRoles(string $roles): void
     {
-        \Iquesters\Foundation\Support\ConfProvider::from(\Iquesters\Foundation\Enums\Module::FOUNDATION)->admin_roles = $roles;
+        ConfProvider::from(Module::FOUNDATION)->admin_roles = $roles;
     }
 
     public function test_user_model_without_roles_fails_closed(): void
     {
-        $user = new class extends \Illuminate\Foundation\Auth\User {
+        $user = new class extends User
+        {
             protected $table = 'users';
+
             protected $guarded = [];
         };
         $user = $user->newQuery()->create(['name' => 'x', 'email' => 'noroles@example.test', 'password' => 'x']);

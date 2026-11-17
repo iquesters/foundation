@@ -2,9 +2,8 @@
 
 namespace Iquesters\Foundation\System\Package;
 
-use Iquesters\Foundation\System\Package\NamespaceResolver;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 
 abstract class PackageInfo
 {
@@ -13,57 +12,78 @@ abstract class PackageInfo
      |--------------------------------------------------*/
     private const VENDOR_NAME = 'iquesters';
 
-    protected const ROUTES_WEB_PATH       = 'routes/web.php';
-    protected const MIGRATIONS_PATH       = 'database/migrations';
-    protected const VIEWS_PATH            = 'resources/views';
-    protected const CONFIG_DIR            = 'config';
-    protected const DIRECTORY_SEPARATOR   = '/';
+    protected const ROUTES_WEB_PATH = 'routes/web.php';
+
+    protected const MIGRATIONS_PATH = 'database/migrations';
+
+    protected const VIEWS_PATH = 'resources/views';
+
+    protected const CONFIG_DIR = 'config';
+
+    protected const DIRECTORY_SEPARATOR = '/';
 
     /* -------------------------------------------------
      | Properties
      |--------------------------------------------------*/
     protected string $module_name = '';
+
     protected NamespaceResolver $resolver;
 
     // Default paths
     protected string $default_migrations_path;
+
     protected string $default_views_path;
+
     protected string $default_config_path;
+
     protected string $default_routes_path;
 
     // Custom paths (optional overrides)
     protected ?string $custom_migrations_path = null;
+
     protected ?string $custom_views_path = null;
+
     protected ?string $custom_config_path = null;
+
     protected ?string $custom_routes_path = null;
 
     // Auto-discovered classes (can be overridden)
     protected ?array $auto_providers = null;
+
     protected ?array $auto_commands = null;
+
     protected ?array $auto_middleware_aliases = null;
+
     protected ?array $auto_seeder_bindings = null;
 
     // Manual overrides (only if you want to skip auto-discovery)
     protected ?array $specific_providers = null;
+
     protected ?array $specific_commands = null;
+
     protected ?array $specific_middleware_aliases = null;
+
     protected ?array $specific_models = null;
 
     // Optional overrides set in definePackageInfo()
     /** View namespace when it differs from the module name (e.g. 'usermanagement'). */
     protected ?string $view_namespace = null;
+
     /** Route files loaded in addition to routes/web.php, relative to the package root. */
     protected array $extra_routes_paths = [];
 
     // Common properties
     protected ?string $package_name = null;
+
     protected ?string $conf_name = null;
+
     protected ?string $laravel_config_name = null;
-    
+
     // ConfProvider integration (auto-discovered)
     protected ?string $auto_conf_class = null;
+
     protected $auto_conf_module = null;
-    
+
     // Publishing (auto-discovered)
     protected ?array $auto_publishable_assets = null;
 
@@ -88,7 +108,7 @@ abstract class PackageInfo
     /* -------------------------------------------------
      | Auto-Discovery Methods
      |--------------------------------------------------*/
-    
+
     /**
      * Auto-discover all service providers in Providers namespace
      */
@@ -98,15 +118,15 @@ abstract class PackageInfo
         $providersNamespace = $this->resolver->getProvidersNamespace();
         $providersPath = $this->namespaceToPath($providersNamespace);
 
-        if (!is_dir($providersPath)) {
+        if (! is_dir($providersPath)) {
             return $providers;
         }
 
         $files = File::files($providersPath);
-        
+
         foreach ($files as $file) {
-            $className = $providersNamespace . '\\' . $file->getFilenameWithoutExtension();
-            
+            $className = $providersNamespace.'\\'.$file->getFilenameWithoutExtension();
+
             if (class_exists($className) && $this->isServiceProvider($className)) {
                 $providers[] = $className;
             }
@@ -124,21 +144,21 @@ abstract class PackageInfo
         $consoleNamespace = $this->resolver->getConsoleNamespace();
         $consolePath = $this->namespaceToPath($consoleNamespace);
 
-        if (!is_dir($consolePath)) {
+        if (! is_dir($consolePath)) {
             return $commands;
         }
 
         $files = File::files($consolePath);
-        
+
         foreach ($files as $file) {
-            $className = $consoleNamespace . '\\' . $file->getFilenameWithoutExtension();
-            
+            $className = $consoleNamespace.'\\'.$file->getFilenameWithoutExtension();
+
             if (class_exists($className) && $this->isCommand($className)) {
                 // Skip SeederCommand - it needs special handling
                 if (class_basename($className) === 'SeederCommand') {
                     continue;
                 }
-                
+
                 $commands[] = $className;
             }
         }
@@ -153,55 +173,57 @@ abstract class PackageInfo
     protected function autoDiscoverSeederBindings(): array
     {
         $bindings = [];
-        
+
         // Seeders are in database/seeders, not src/Database/Seeders
         $packageRoot = $this->getPackagePath();
-        $seederPath = $packageRoot . '/database/seeders';
+        $seederPath = $packageRoot.'/database/seeders';
 
-if (!is_dir($seederPath)) {
-            \Log::debug("Seeders directory not found", [
+        if (! is_dir($seederPath)) {
+            \Log::debug('Seeders directory not found', [
                 'module' => $this->module_name,
-                'path' => $seederPath
+                'path' => $seederPath,
             ]);
+
             return $bindings;
         }
 
         // Use namespace for the seeder class
         $seederNamespace = $this->resolver->getSeedersNamespace();
-        $expectedSeederName = $this->resolver->getModuleNamespace() . 'Seeder';
-        $seederClass = $seederNamespace . '\\' . $expectedSeederName;
+        $expectedSeederName = $this->resolver->getModuleNamespace().'Seeder';
+        $seederClass = $seederNamespace.'\\'.$expectedSeederName;
 
-if (!class_exists($seederClass)) {
-            \Log::warning("Seeder class not found", [
+        if (! class_exists($seederClass)) {
+            \Log::warning('Seeder class not found', [
                 'module' => $this->module_name,
                 'expected_class' => $seederClass,
-                'seeder_path' => $seederPath
+                'seeder_path' => $seederPath,
             ]);
+
             return $bindings;
         }
 
         // Look for SeederCommand in module's Console namespace
-        $seederCommandClass = $this->resolver->getConsoleNamespace() . '\\SeederCommand';
-        
+        $seederCommandClass = $this->resolver->getConsoleNamespace().'\\SeederCommand';
+
         // If not found in module, use Foundation's SeederCommand
-        if (!class_exists($seederCommandClass)) {
+        if (! class_exists($seederCommandClass)) {
             $seederCommandClass = 'Iquesters\\Foundation\\Console\\SeederCommand';
         }
-        
+
         if (class_exists($seederCommandClass)) {
             $bindings[] = [
-                'binding_name' => 'command.' . $this->module_name . '.seed',
+                'binding_name' => 'command.'.$this->module_name.'.seed',
                 'command_class' => $seederCommandClass,
-                'seeder_class' => $seederClass
+                'seeder_class' => $seederClass,
             ];
-            
+
         } else {
-            \Log::error("SeederCommand class not found", [
+            \Log::error('SeederCommand class not found', [
                 'module' => $this->module_name,
                 'tried_classes' => [
-                    $this->resolver->getConsoleNamespace() . '\\SeederCommand',
-                    'Iquesters\\Foundation\\Console\\SeederCommand'
-                ]
+                    $this->resolver->getConsoleNamespace().'\\SeederCommand',
+                    'Iquesters\\Foundation\\Console\\SeederCommand',
+                ],
             ]);
         }
 
@@ -217,20 +239,20 @@ if (!class_exists($seederClass)) {
         $middlewareNamespace = $this->resolver->getMiddlewareNamespace();
         $middlewarePath = $this->namespaceToPath($middlewareNamespace);
 
-        if (!is_dir($middlewarePath)) {
+        if (! is_dir($middlewarePath)) {
             return $aliases;
         }
 
         $files = File::files($middlewarePath);
-        
+
         foreach ($files as $file) {
-            $className = $middlewareNamespace . '\\' . $file->getFilenameWithoutExtension();
-            
+            $className = $middlewareNamespace.'\\'.$file->getFilenameWithoutExtension();
+
             if (class_exists($className)) {
                 // Convert ValidatePlatformVersion -> validate.platform.version
                 $alias = $this->generateMiddlewareAlias($file->getFilenameWithoutExtension());
                 $aliases[$alias] = $className;
-                
+
             }
         }
 
@@ -243,8 +265,8 @@ if (!class_exists($seederClass)) {
     protected function autoDiscoverConfClass(): ?string
     {
         $configNamespace = $this->resolver->getConfigNamespace();
-        $expectedConfName = $this->resolver->getModuleNamespace() . 'Conf';
-        $confClass = $configNamespace . '\\' . $expectedConfName;
+        $expectedConfName = $this->resolver->getModuleNamespace().'Conf';
+        $confClass = $configNamespace.'\\'.$expectedConfName;
 
         if (class_exists($confClass)) {
             return $confClass;
@@ -260,9 +282,9 @@ if (!class_exists($seederClass)) {
     {
         // Try local Module enum first
         $enumsNamespace = $this->resolver->getEnumsNamespace();
-        $moduleEnumClass = $enumsNamespace . '\\Module';
+        $moduleEnumClass = $enumsNamespace.'\\Module';
 
-        if (!class_exists($moduleEnumClass)) {
+        if (! class_exists($moduleEnumClass)) {
             // Fallback to Foundation's Module enum
             $moduleEnumClass = 'Iquesters\\Foundation\\Enums\\Module';
         }
@@ -270,23 +292,24 @@ if (!class_exists($seederClass)) {
         if (class_exists($moduleEnumClass)) {
             // Try uppercase snake case: foundation -> FOUNDATION
             $moduleName = strtoupper(Str::snake($this->module_name));
-            
+
             if (defined("{$moduleEnumClass}::{$moduleName}")) {
                 $enumValue = constant("{$moduleEnumClass}::{$moduleName}");
+
                 return $enumValue;
             }
-            
+
             // If not found, log available constants for debugging
             try {
                 $reflection = new \ReflectionClass($moduleEnumClass);
                 $constants = $reflection->getConstants();
-                \Log::warning("Module constant not found", [
+                \Log::warning('Module constant not found', [
                     'expected_constant' => $moduleName,
                     'available_constants' => array_keys($constants),
-                    'enum_class' => $moduleEnumClass
+                    'enum_class' => $moduleEnumClass,
                 ]);
             } catch (\ReflectionException $e) {
-                \Log::warning("Could not reflect Module enum", ['error' => $e->getMessage()]);
+                \Log::warning('Could not reflect Module enum', ['error' => $e->getMessage()]);
             }
         }
 
@@ -300,19 +323,19 @@ if (!class_exists($seederClass)) {
     {
         $assets = [];
         $packageRoot = $this->getPackagePath();
-        $tag = $this->conf_name . '-config';
+        $tag = $this->conf_name.'-config';
 
         // Config file
         if (file_exists($this->default_config_path)) {
-            $assets[$tag][$this->default_config_path] = config_path($this->conf_name . '.php');
+            $assets[$tag][$this->default_config_path] = config_path($this->conf_name.'.php');
         }
 
         // Views (look for layouts/package.blade.php as example)
-        $packageLayoutPath = $packageRoot . '/resources/views/layouts/package.blade.php';
+        $packageLayoutPath = $packageRoot.'/resources/views/layouts/package.blade.php';
         if (file_exists($packageLayoutPath)) {
-            $viewTag = $this->conf_name . '-views';
+            $viewTag = $this->conf_name.'-views';
             $assets[$viewTag][$packageLayoutPath] = resource_path(
-                'views/vendor/' . $this->conf_name . '/layouts/package.blade.php'
+                'views/vendor/'.$this->conf_name.'/layouts/package.blade.php'
             );
         }
 
@@ -322,31 +345,31 @@ if (!class_exists($seederClass)) {
     /* -------------------------------------------------
      | Helper Methods
      |--------------------------------------------------*/
-    
+
     /**
      * Convert namespace to filesystem path
      */
     protected function namespaceToPath(string $namespace): string
     {
         $packageRoot = $this->getPackagePath();
-        
+
         // Get the base namespace (Iquesters\Foundation)
         $baseNamespace = $this->resolver->getNamespace();
-        
+
         // Remove base namespace prefix
         // Iquesters\Foundation\Console -> Console
         // Iquesters\Foundation\Database\Seeders -> Database\Seeders
-        if (strpos($namespace, $baseNamespace . '\\') === 0) {
+        if (strpos($namespace, $baseNamespace.'\\') === 0) {
             $relativePath = substr($namespace, strlen($baseNamespace) + 1);
         } else {
             $relativePath = $namespace;
         }
-        
+
         // Convert namespace separators to directory separators
         $relativePath = str_replace('\\', DIRECTORY_SEPARATOR, $relativePath);
-        
+
         // Assuming PSR-4: src/{RelativePath}
-        return $packageRoot . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . $relativePath;
+        return $packageRoot.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.$relativePath;
     }
 
     /**
@@ -356,8 +379,9 @@ if (!class_exists($seederClass)) {
     {
         try {
             $reflection = new \ReflectionClass($className);
-            return $reflection->isSubclassOf('Illuminate\\Support\\ServiceProvider') 
-                && !$reflection->isAbstract();
+
+            return $reflection->isSubclassOf('Illuminate\\Support\\ServiceProvider')
+                && ! $reflection->isAbstract();
         } catch (\ReflectionException $e) {
             return false;
         }
@@ -370,8 +394,9 @@ if (!class_exists($seederClass)) {
     {
         try {
             $reflection = new \ReflectionClass($className);
-            return $reflection->isSubclassOf('Illuminate\\Console\\Command') 
-                && !$reflection->isAbstract();
+
+            return $reflection->isSubclassOf('Illuminate\\Console\\Command')
+                && ! $reflection->isAbstract();
         } catch (\ReflectionException $e) {
             return false;
         }
@@ -389,7 +414,7 @@ if (!class_exists($seederClass)) {
     /* -------------------------------------------------
      | Path Collection Methods
      |--------------------------------------------------*/
-    
+
     protected function collectPaths(
         string $type,
         ?string $customPath,
@@ -409,7 +434,7 @@ if (!class_exists($seederClass)) {
 
         return $paths;
     }
-    
+
     public function getMigrationsPaths(): array
     {
         return $this->collectPaths(
@@ -450,7 +475,7 @@ if (!class_exists($seederClass)) {
         );
 
         foreach ($this->extra_routes_paths as $relative) {
-            $path = $this->getPackagePath() . '/' . ltrim($relative, '/');
+            $path = $this->getPackagePath().'/'.ltrim($relative, '/');
             if (file_exists($path)) {
                 $paths[] = $path;
             }
@@ -462,7 +487,7 @@ if (!class_exists($seederClass)) {
     /* -------------------------------------------------
      | Getters (with fallback to auto-discovery)
      |--------------------------------------------------*/
-    
+
     public function getProviders(): ?array
     {
         return $this->specific_providers ?? $this->auto_providers;
@@ -511,16 +536,16 @@ if (!class_exists($seederClass)) {
      */
     public function getApi(): ?array
     {
-        $composer = json_decode((string) @file_get_contents($this->getPackagePath() . '/composer.json'), true);
+        $composer = json_decode((string) @file_get_contents($this->getPackagePath().'/composer.json'), true);
         $api = $composer['extra']['platform']['api'] ?? null;
 
-        if (!is_array($api) || empty($api['prefix']) || empty($api['versions']) || !is_array($api['versions'])) {
+        if (! is_array($api) || empty($api['prefix']) || empty($api['versions']) || ! is_array($api['versions'])) {
             return null;
         }
 
         $versions = [];
         foreach ($api['versions'] as $version => $file) {
-            $path = $this->getPackagePath() . '/' . ltrim((string) $file, '/');
+            $path = $this->getPackagePath().'/'.ltrim((string) $file, '/');
             if (file_exists($path)) {
                 $versions[(string) $version] = $path;
             }
@@ -542,17 +567,17 @@ if (!class_exists($seederClass)) {
     /* -------------------------------------------------
      | Initialization
      |--------------------------------------------------*/
-    
+
     protected function initialize(): void
     {
         $this->package_name = Str::studly($this->module_name);
         $this->conf_name = strtolower($this->module_name);
 
         $packageRoot = $this->getPackagePath();
-        $this->default_migrations_path = $packageRoot . '/' . static::MIGRATIONS_PATH;
-        $this->default_views_path = $packageRoot . '/' . static::VIEWS_PATH;
-        $this->default_config_path = $packageRoot . '/' . static::CONFIG_DIR . '/' . $this->conf_name . '.php';
-        $this->default_routes_path = $packageRoot . '/' . static::ROUTES_WEB_PATH;
+        $this->default_migrations_path = $packageRoot.'/'.static::MIGRATIONS_PATH;
+        $this->default_views_path = $packageRoot.'/'.static::VIEWS_PATH;
+        $this->default_config_path = $packageRoot.'/'.static::CONFIG_DIR.'/'.$this->conf_name.'.php';
+        $this->default_routes_path = $packageRoot.'/'.static::ROUTES_WEB_PATH;
 
         // Auto-discover everything
         $this->auto_providers = $this->autoDiscoverProviders();
@@ -576,7 +601,7 @@ if (!class_exists($seederClass)) {
     {
         $path = dirname((new \ReflectionClass($this))->getFileName());
 
-        while (!file_exists($path . '/composer.json')) {
+        while (! file_exists($path.'/composer.json')) {
             $path = dirname($path);
         }
 

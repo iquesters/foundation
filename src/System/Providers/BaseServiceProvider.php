@@ -2,11 +2,12 @@
 
 namespace Iquesters\Foundation\System\Providers;
 
-use Illuminate\Support\ServiceProvider;
-use Iquesters\Foundation\System\Package\NamespaceResolver;
-use Iquesters\Foundation\Support\ConfProvider;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
+use Iquesters\Foundation\Routing\ModuleApi;
+use Iquesters\Foundation\Support\ConfProvider;
+use Iquesters\Foundation\System\Package\NamespaceResolver;
 use Iquesters\Foundation\System\Package\PackageInfo;
 
 abstract class BaseServiceProvider extends ServiceProvider
@@ -45,7 +46,7 @@ abstract class BaseServiceProvider extends ServiceProvider
      */
     protected function onPackageDiscover(callable $callback): void
     {
-        if (!$this->app->runningInConsole() || ($_SERVER['argv'][1] ?? null) !== 'package:discover') {
+        if (! $this->app->runningInConsole() || ($_SERVER['argv'][1] ?? null) !== 'package:discover') {
             return;
         }
 
@@ -69,7 +70,7 @@ abstract class BaseServiceProvider extends ServiceProvider
         $moduleName = $this->detectModuleName();
         $packageInfoClass = $this->detectPackageInfoClass($moduleName);
 
-if (!class_exists($packageInfoClass)) {
+        if (! class_exists($packageInfoClass)) {
             throw new \RuntimeException("PackageInfo class not found: {$packageInfoClass}");
         }
 
@@ -88,7 +89,7 @@ if (!class_exists($packageInfoClass)) {
 
         if ($confClass && $confModule) {
             ConfProvider::register($confModule, $confClass);
-            
+
         } else {
             Log::debug('ConfProvider not registered (no config class or module found)', [
                 'conf_class' => $confClass,
@@ -111,7 +112,7 @@ if (!class_exists($packageInfoClass)) {
                 $bindingName = $binding['binding_name'] ?? $binding['command_class'];
                 $commandClass = $binding['command_class'];
                 $seederClass = $binding['seeder_class'];
-                
+
                 // Bind the SeederCommand with its required constructor parameter
                 $this->app->bind($bindingName, function ($app) use ($commandClass, $seederClass) {
                     return new $commandClass($seederClass);
@@ -139,11 +140,11 @@ if (!class_exists($packageInfoClass)) {
 
     protected function registerPackageCommands(): void
     {
-        if (!$this->app->runningInConsole()) {
+        if (! $this->app->runningInConsole()) {
             return;
         }
 
-$info = $this->packageInfo();
+        $info = $this->packageInfo();
         $commands = $info->getConsoleCommands();
         $bindings = $info->getSeederBindings();
 
@@ -159,7 +160,7 @@ $info = $this->packageInfo();
             $this->commands($allCommands);
             Log::debug('Registered commands', [
                 'count' => count($allCommands),
-                'commands' => $allCommands
+                'commands' => $allCommands,
             ]);
         }
     }
@@ -233,7 +234,7 @@ $info = $this->packageInfo();
         $api = $this->packageInfo()->getApi();
 
         foreach ($api['versions'] ?? [] as $version => $routeFile) {
-            \Iquesters\Foundation\Routing\ModuleApi::register($api['prefix'], $version, $routeFile);
+            ModuleApi::register($api['prefix'], $version, $routeFile);
         }
     }
 
@@ -253,11 +254,11 @@ $info = $this->packageInfo();
 
     protected function publishPackageAssets(): void
     {
-        if (!$this->app->runningInConsole()) {
+        if (! $this->app->runningInConsole()) {
             return;
         }
 
-$info = $this->packageInfo();
+        $info = $this->packageInfo();
         $assets = $info->getPublishableAssets();
 
         if ($assets) {
@@ -275,9 +276,9 @@ $info = $this->packageInfo();
         $namespaceParts = explode('\\', static::class);
         $providerClassName = end($namespaceParts);
 
-$moduleName = Str::kebab(Str::beforeLast($providerClassName, 'ServiceProvider'));
+        $moduleName = Str::kebab(Str::beforeLast($providerClassName, 'ServiceProvider'));
 
-return $moduleName;
+        return $moduleName;
     }
 
     private function detectPackageInfoClass(string $moduleName): string
@@ -287,6 +288,6 @@ return $moduleName;
         $studlyModule = $resolver->getModuleNamespace();
         $packageInfoClass = "{$packageInfoNamespace}\\{$studlyModule}PackageInfo";
 
-return $packageInfoClass;
+        return $packageInfoClass;
     }
 }

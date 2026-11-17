@@ -2,11 +2,10 @@
 
 namespace Iquesters\Foundation\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Iquesters\Foundation\Constants\EntityStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Iquesters\Foundation\Constants\EntityStatus;
 use Iquesters\Foundation\Support\UserModel;
 
 class MasterData extends Model
@@ -19,7 +18,7 @@ class MasterData extends Model
         'parent_id',
         'status',
         'created_by',
-        'updated_by'
+        'updated_by',
     ];
 
     protected $table = 'master_data';
@@ -37,7 +36,7 @@ class MasterData extends Model
     public function collect_children()
     {
         return $this->children()->where([
-            'status' => EntityStatus::ACTIVE
+            'status' => EntityStatus::ACTIVE,
         ]);
     }
 
@@ -45,6 +44,7 @@ class MasterData extends Model
     {
         return $this->belongsTo(UserModel::name(), 'created_by');
     }
+
     public function refUpdatedBy()
     {
         return $this->belongsTo(UserModel::name(), 'updated_by');
@@ -70,7 +70,7 @@ class MasterData extends Model
                 'meta_value' => $value,
                 'status' => EntityStatus::ACTIVE,
                 'created_by' => $userId,
-                'updated_by' => $userId
+                'updated_by' => $userId,
             ]
         );
     }

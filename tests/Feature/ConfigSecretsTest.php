@@ -84,8 +84,11 @@ class DemoSecretsConf extends BaseConf
     protected ?string $identifier = 'iquesters/demo';
 
     protected ?string $client_secret;
+
     protected ?string $access_token;
+
     protected string $phone_number_id;
+
     protected string $app_name;
 
     protected function prepareDefault(BaseConf $default_values)

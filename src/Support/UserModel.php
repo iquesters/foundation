@@ -19,12 +19,12 @@ final class UserModel
 
     public static function query(): Builder
     {
-        return static::name()::query();
+        return self::name()::query();
     }
 
     /** Resolve a route parameter (id, or an already-bound model) to a user. */
     public static function findOrFail(mixed $user): Model
     {
-        return $user instanceof Model ? $user : static::query()->findOrFail($user);
+        return $user instanceof Model ? $user : self::query()->findOrFail($user);
     }
 }

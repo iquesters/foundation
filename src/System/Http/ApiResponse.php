@@ -9,7 +9,7 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Standardized API Response Handler
  * Provides consistent, industry-standard response structure across all API endpoints
- * 
+ *
  * Response Structure:
  * {
  *   "success": boolean,
@@ -37,13 +37,7 @@ class ApiResponse
     /**
      * Success response structure (2xx)
      *
-     * @param mixed $data
-     * @param string $message
-     * @param int $statusCode
-     * @param array $meta
-     * @param array $links
-     * @param array $uiContext
-     * @return JsonResponse
+     * @param  mixed  $data
      */
     public static function success(
         $data = null,
@@ -60,8 +54,8 @@ class ApiResponse
             'response_schema' => [
                 'data' => $data,
                 'errors' => null,
-                'meta' => !empty($meta) ? (object)$meta : null,
-                'links' => !empty($links) ? (object)$links : null,
+                'meta' => ! empty($meta) ? (object) $meta : null,
+                'links' => ! empty($links) ? (object) $links : null,
             ],
             'ui_context' => self::buildUIContext($uiContext),
         ];
@@ -72,12 +66,7 @@ class ApiResponse
     /**
      * Error response structure (4xx, 5xx)
      *
-     * @param string $message
-     * @param int $statusCode
-     * @param mixed $errors
-     * @param array $meta
-     * @param array $uiContext
-     * @return JsonResponse
+     * @param  mixed  $errors
      */
     public static function error(
         string $message = 'Request failed',
@@ -93,7 +82,7 @@ class ApiResponse
             'response_schema' => [
                 'data' => null,
                 'errors' => self::normalizeErrors($errors),
-                'meta' => !empty($meta) ? (object)$meta : null,
+                'meta' => ! empty($meta) ? (object) $meta : null,
                 'links' => null,
             ],
             'ui_context' => self::buildUIContext($uiContext),
@@ -104,13 +93,6 @@ class ApiResponse
 
     /**
      * Redirect response structure (3xx)
-     *
-     * @param string $redirectUrl
-     * @param string $message
-     * @param int $statusCode
-     * @param array $meta
-     * @param array $uiContext
-     * @return JsonResponse
      */
     public static function redirect(
         string $redirectUrl,
@@ -121,7 +103,7 @@ class ApiResponse
     ): JsonResponse {
         // Merge redirect URL into UI context
         $uiContext['redirect'] = $redirectUrl;
-        
+
         $response = [
             'success' => true,
             'status' => $statusCode,
@@ -131,8 +113,8 @@ class ApiResponse
                     'redirect_url' => $redirectUrl,
                 ],
                 'errors' => null,
-                'meta' => !empty($meta) ? (object)$meta : null,
-                'links' => (object)[
+                'meta' => ! empty($meta) ? (object) $meta : null,
+                'links' => (object) [
                     'redirect' => $redirectUrl,
                 ],
             ],
@@ -146,14 +128,7 @@ class ApiResponse
     /**
      * Paginated response structure
      *
-     * @param mixed $data
-     * @param int $total
-     * @param int $perPage
-     * @param int $currentPage
-     * @param string $message
-     * @param array $links
-     * @param array $uiContext
-     * @return JsonResponse
+     * @param  mixed  $data
      */
     public static function paginated(
         $data,
@@ -181,13 +156,13 @@ class ApiResponse
                 'from' => $from,
                 'to' => $to,
                 'has_more' => $currentPage < $lastPage,
-            ]
+            ],
         ];
 
         // Build pagination links
         $baseUrl = request()->url();
         $queryParams = request()->query();
-        
+
         $paginationLinks = [
             'first' => self::buildPaginationUrl($baseUrl, $queryParams, 0, $perPage),
             'last' => self::buildPaginationUrl($baseUrl, $queryParams, $lastOffset, $perPage),
@@ -207,14 +182,10 @@ class ApiResponse
     /**
      * Created response (201)
      *
-     * @param mixed $data
-     * @param string $message
-     * @param string|null $resourceUrl
-     * @param array $uiContext
-     * @return JsonResponse
+     * @param  mixed  $data
      */
     public static function created(
-        $data = null, 
+        $data = null,
         string $message = 'Resource created successfully',
         ?string $resourceUrl = null,
         array $uiContext = []
@@ -225,7 +196,7 @@ class ApiResponse
         }
 
         $response = self::success($data, $message, HttpStatusCode::HTTP_CREATED, [], $links, $uiContext);
-        
+
         if ($resourceUrl) {
             $response->header('Location', $resourceUrl);
         }
@@ -236,11 +207,7 @@ class ApiResponse
     /**
      * Accepted response (202) - For async operations
      *
-     * @param mixed $data
-     * @param string $message
-     * @param string|null $statusUrl
-     * @param array $uiContext
-     * @return JsonResponse
+     * @param  mixed  $data
      */
     public static function accepted(
         $data = null,
@@ -258,8 +225,6 @@ class ApiResponse
 
     /**
      * No content response (204)
-     *
-     * @return Response
      */
     public static function noContent(): Response
     {
@@ -268,9 +233,6 @@ class ApiResponse
 
     /**
      * Not modified response (304)
-     *
-     * @param array $meta
-     * @return JsonResponse
      */
     public static function notModified(array $meta = []): JsonResponse
     {
@@ -279,11 +241,6 @@ class ApiResponse
 
     /**
      * Permanent redirect (301)
-     *
-     * @param string $url
-     * @param string $message
-     * @param array $uiContext
-     * @return JsonResponse
      */
     public static function movedPermanently(
         string $url,
@@ -295,11 +252,6 @@ class ApiResponse
 
     /**
      * Temporary redirect (302)
-     *
-     * @param string $url
-     * @param string $message
-     * @param array $uiContext
-     * @return JsonResponse
      */
     public static function found(
         string $url,
@@ -311,11 +263,6 @@ class ApiResponse
 
     /**
      * See other redirect (303)
-     *
-     * @param string $url
-     * @param string $message
-     * @param array $uiContext
-     * @return JsonResponse
      */
     public static function seeOther(
         string $url,
@@ -327,11 +274,6 @@ class ApiResponse
 
     /**
      * Temporary redirect (307) - Method preserved
-     *
-     * @param string $url
-     * @param string $message
-     * @param array $uiContext
-     * @return JsonResponse
      */
     public static function temporaryRedirect(
         string $url,
@@ -343,11 +285,6 @@ class ApiResponse
 
     /**
      * Permanent redirect (308) - Method preserved
-     *
-     * @param string $url
-     * @param string $message
-     * @param array $uiContext
-     * @return JsonResponse
      */
     public static function permanentRedirect(
         string $url,
@@ -360,10 +297,7 @@ class ApiResponse
     /**
      * Bad request response (400)
      *
-     * @param string $message
-     * @param mixed $errors
-     * @param array $uiContext
-     * @return JsonResponse
+     * @param  mixed  $errors
      */
     public static function badRequest(
         string $message = 'Bad request',
@@ -375,10 +309,6 @@ class ApiResponse
 
     /**
      * Unauthorized response (401)
-     *
-     * @param string $message
-     * @param array $uiContext
-     * @return JsonResponse
      */
     public static function unauthorized(
         string $message = 'Unauthorized',
@@ -389,10 +319,6 @@ class ApiResponse
 
     /**
      * Forbidden response (403)
-     *
-     * @param string $message
-     * @param array $uiContext
-     * @return JsonResponse
      */
     public static function forbidden(
         string $message = 'Forbidden',
@@ -403,10 +329,6 @@ class ApiResponse
 
     /**
      * Not found response (404)
-     *
-     * @param string $message
-     * @param array $uiContext
-     * @return JsonResponse
      */
     public static function notFound(
         string $message = 'Resource not found',
@@ -417,22 +339,17 @@ class ApiResponse
 
     /**
      * Method not allowed response (405)
-     *
-     * @param string $message
-     * @param array $allowedMethods
-     * @param array $uiContext
-     * @return JsonResponse
      */
     public static function methodNotAllowed(
         string $message = 'Method not allowed',
         array $allowedMethods = [],
         array $uiContext = []
     ): JsonResponse {
-        $meta = !empty($allowedMethods) ? ['allowed_methods' => $allowedMethods] : [];
-        
+        $meta = ! empty($allowedMethods) ? ['allowed_methods' => $allowedMethods] : [];
+
         $response = self::error($message, HttpStatusCode::HTTP_METHOD_NOT_ALLOWED, null, $meta, $uiContext);
-        
-        if (!empty($allowedMethods)) {
+
+        if (! empty($allowedMethods)) {
             $response->header('Allow', implode(', ', $allowedMethods));
         }
 
@@ -442,10 +359,7 @@ class ApiResponse
     /**
      * Conflict response (409)
      *
-     * @param string $message
-     * @param mixed $errors
-     * @param array $uiContext
-     * @return JsonResponse
+     * @param  mixed  $errors
      */
     public static function conflict(
         string $message = 'Conflict',
@@ -457,11 +371,6 @@ class ApiResponse
 
     /**
      * Validation error response (422)
-     *
-     * @param array $errors
-     * @param string $message
-     * @param array $uiContext
-     * @return JsonResponse
      */
     public static function validationError(
         array $errors,
@@ -474,10 +383,7 @@ class ApiResponse
     /**
      * Too many requests response (429)
      *
-     * @param string $message
-     * @param int|null $retryAfter Seconds to wait before retry
-     * @param array $uiContext
-     * @return JsonResponse
+     * @param  int|null  $retryAfter  Seconds to wait before retry
      */
     public static function tooManyRequests(
         string $message = 'Too many requests',
@@ -490,7 +396,7 @@ class ApiResponse
         }
 
         $response = self::error($message, HttpStatusCode::HTTP_TOO_MANY_REQUESTS, null, $meta, $uiContext);
-        
+
         if ($retryAfter !== null) {
             $response->header('Retry-After', $retryAfter);
         }
@@ -501,10 +407,7 @@ class ApiResponse
     /**
      * Server error response (500)
      *
-     * @param string $message
-     * @param mixed $errors
-     * @param array $uiContext
-     * @return JsonResponse
+     * @param  mixed  $errors
      */
     public static function serverError(
         string $message = 'Internal server error',
@@ -516,11 +419,6 @@ class ApiResponse
 
     /**
      * Service unavailable response (503)
-     *
-     * @param string $message
-     * @param int|null $retryAfter
-     * @param array $uiContext
-     * @return JsonResponse
      */
     public static function serviceUnavailable(
         string $message = 'Service unavailable',
@@ -533,7 +431,7 @@ class ApiResponse
         }
 
         $response = self::error($message, HttpStatusCode::HTTP_SERVICE_UNAVAILABLE, null, $meta, $uiContext);
-        
+
         if ($retryAfter !== null) {
             $response->header('Retry-After', $retryAfter);
         }
@@ -544,17 +442,12 @@ class ApiResponse
     /**
      * Generic response by status code
      *
-     * @param int $statusCode
-     * @param mixed $data
-     * @param string $message
-     * @param array $meta
-     * @param array $uiContext
-     * @return JsonResponse
+     * @param  mixed  $data
      */
     public static function byStatusCode(
         int $statusCode,
         $data = null,
-        string $message = null,
+        ?string $message = null,
         array $meta = [],
         array $uiContext = []
     ): JsonResponse {
@@ -573,9 +466,6 @@ class ApiResponse
 
     /**
      * Build UI context structure
-     *
-     * @param array $context
-     * @return array
      */
     private static function buildUIContext(array $context = []): array
     {
@@ -583,19 +473,18 @@ class ApiResponse
             'component' => $context['component'] ?? null,
             'action' => $context['action'] ?? null,
             'redirect' => $context['redirect'] ?? null,
-            'toast' => isset($context['toast']) ? (object)$context['toast'] : null,
-            'modal' => isset($context['modal']) ? (object)$context['modal'] : null,
+            'toast' => isset($context['toast']) ? (object) $context['toast'] : null,
+            'modal' => isset($context['modal']) ? (object) $context['modal'] : null,
             'refresh' => $context['refresh'] ?? false,
             'close' => $context['close'] ?? false,
-            'custom' => isset($context['custom']) ? (object)$context['custom'] : null,
+            'custom' => isset($context['custom']) ? (object) $context['custom'] : null,
         ];
     }
 
     /**
      * Normalize errors to consistent format
      *
-     * @param mixed $errors
-     * @return array|null
+     * @param  mixed  $errors
      */
     private static function normalizeErrors($errors): ?array
     {
@@ -618,18 +507,12 @@ class ApiResponse
         }
 
         return [
-            'message' => (string)$errors,
+            'message' => (string) $errors,
         ];
     }
 
     /**
      * Build pagination URL
-     *
-     * @param string $baseUrl
-     * @param array $queryParams
-     * @param int $offset
-     * @param int $length
-     * @return string
      */
     private static function buildPaginationUrl(
         string $baseUrl,
@@ -644,13 +527,11 @@ class ApiResponse
             'length' => $length,
         ]);
 
-        return $baseUrl . '?' . http_build_query($params);
+        return $baseUrl.'?'.http_build_query($params);
     }
 
     /**
      * Get request ID from headers or generate new one
-     *
-     * @return string|null
      */
     private static function getRequestId(): ?string
     {
@@ -659,9 +540,6 @@ class ApiResponse
 
     /**
      * Get default message for status code
-     *
-     * @param int $statusCode
-     * @return string
      */
     private static function getDefaultMessageForStatusCode(int $statusCode): string
     {

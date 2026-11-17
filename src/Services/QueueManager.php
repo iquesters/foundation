@@ -5,6 +5,7 @@ namespace Iquesters\Foundation\Services;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
+
 class QueueManager
 {
     /**
@@ -21,7 +22,7 @@ class QueueManager
                     ->where('status', 'active')
                     ->pluck('meta_value', 'meta_key')
                     ->toArray();
-                
+
                 return array_merge((array) $queue, ['metas' => $metas]);
             })
             ->toArray();
@@ -33,19 +34,19 @@ class QueueManager
     public function getQueueJobCount(string $queueName): array
     {
         $total = DB::table('jobs')->where('queue', $queueName)->count();
-        
+
         // Jobs with reserved_at are currently processing
         $processing = DB::table('jobs')
             ->where('queue', $queueName)
             ->whereNotNull('reserved_at')
             ->count();
-        
+
         $waiting = $total - $processing;
-        
+
         return [
             'total' => $total,
             'waiting' => $waiting,
-            'processing' => $processing
+            'processing' => $processing,
         ];
     }
 
@@ -69,7 +70,7 @@ class QueueManager
     // public function startWorker(string $queueName, array $options = []): bool
     // {
     //     $queue = DB::table('queues')->where('name', $queueName)->first();
-        
+
     //     if (!$queue) {
     //         Log::error("Queue not found: {$queueName}");
     //         return false;
@@ -126,108 +127,111 @@ class QueueManager
 
     //     return true;
     // }
-    
-public function startWorker(string $queueName, array $options = []): bool
-{
-    $queue = DB::table('queues')->where('name', $queueName)->first();
-    
-    if (!$queue) {
-        Log::error("Queue not found: {$queueName}");
-        return false;
-    }
 
-    $metas = DB::table('queue_metas')
-        ->where('ref_parent', $queue->id)
-        ->where('status', 'active')
-        ->pluck('meta_value', 'meta_key')
-        ->toArray();
+    public function startWorker(string $queueName, array $options = []): bool
+    {
+        $queue = DB::table('queues')->where('name', $queueName)->first();
 
-    $maxWorkers = (int) ($metas['max_workers'] ?? 1);
-    $runningWorkers = $this->getRunningWorkersCount($queueName);
+        if (! $queue) {
+            Log::error("Queue not found: {$queueName}");
 
-    // CRITICAL: Check if we're already at max workers
-    if ($runningWorkers >= $maxWorkers) {
-        Log::debug("Max workers already running for queue: {$queueName}", [
-            'running' => $runningWorkers,
-            'max' => $maxWorkers
-        ]);
-        return false;
-    }
+            return false;
+        }
 
-    $timeout = (int) ($metas['timeout'] ?? 120);
-    $tries = (int) ($metas['max_tries'] ?? 3);
-    $sleep = (int) ($metas['sleep'] ?? 3);
-    $memory = (int) ($metas['memory'] ?? 128);
-    $connection = $this->resolveConnection($metas);
-    Log::debug("Attempting to start worker", [
-        'queue' => $queueName,
-        'connection' => $connection,
-        'max_workers' => $maxWorkers,
-        'running_workers' => $runningWorkers,
-        'timeout' => $timeout,
-        'tries' => $tries,
-        'sleep' => $sleep,
-        'memory' => $memory
-    ]);
-    try {
-        $this->forkWorkerProcess($connection, $queueName, $timeout, $tries, $sleep, $memory);
+        $metas = DB::table('queue_metas')
+            ->where('ref_parent', $queue->id)
+            ->where('status', 'active')
+            ->pluck('meta_value', 'meta_key')
+            ->toArray();
 
-        Log::info("Worker started for queue: {$queueName}", [
-            'connection' => $connection,
-            'running_workers' => $runningWorkers + 1,
-            'max_workers' => $maxWorkers
-        ]);
+        $maxWorkers = (int) ($metas['max_workers'] ?? 1);
+        $runningWorkers = $this->getRunningWorkersCount($queueName);
 
-        return true;
-    } catch (\Exception $e) {
-        Log::error("Failed to start worker", [
+        // CRITICAL: Check if we're already at max workers
+        if ($runningWorkers >= $maxWorkers) {
+            Log::debug("Max workers already running for queue: {$queueName}", [
+                'running' => $runningWorkers,
+                'max' => $maxWorkers,
+            ]);
+
+            return false;
+        }
+
+        $timeout = (int) ($metas['timeout'] ?? 120);
+        $tries = (int) ($metas['max_tries'] ?? 3);
+        $sleep = (int) ($metas['sleep'] ?? 3);
+        $memory = (int) ($metas['memory'] ?? 128);
+        $connection = $this->resolveConnection($metas);
+        Log::debug('Attempting to start worker', [
             'queue' => $queueName,
-            'error' => $e->getMessage()
+            'connection' => $connection,
+            'max_workers' => $maxWorkers,
+            'running_workers' => $runningWorkers,
+            'timeout' => $timeout,
+            'tries' => $tries,
+            'sleep' => $sleep,
+            'memory' => $memory,
         ]);
-        return false;
-    }
-}
+        try {
+            $this->forkWorkerProcess($connection, $queueName, $timeout, $tries, $sleep, $memory);
 
-/**
- * Fork a worker process in the background
- */
-private function forkWorkerProcess(string $connection, string $queue, int $timeout, int $tries, int $sleep, int $memory): void
-{
-    $phpBinary = PHP_BINARY;
-    $artisan = base_path('artisan');
-    
-    $command = sprintf(
-        '%s %s queue:work %s --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
-        escapeshellarg($phpBinary),
-        escapeshellarg($artisan),
-        escapeshellarg($connection),
-        escapeshellarg($queue),
-        $timeout,
-        $tries,
-        $sleep,
-        $memory
-    );
-    
-    if (PHP_OS_FAMILY === 'Windows') {
-        // Windows - completely detached process
-        $windowsCommand = sprintf(
-            'start /B "" "%s" "%s" queue:work %s --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
-            $phpBinary,
-            $artisan,
-            $connection,
-            $queue,
+            Log::info("Worker started for queue: {$queueName}", [
+                'connection' => $connection,
+                'running_workers' => $runningWorkers + 1,
+                'max_workers' => $maxWorkers,
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Failed to start worker', [
+                'queue' => $queueName,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
+     * Fork a worker process in the background
+     */
+    private function forkWorkerProcess(string $connection, string $queue, int $timeout, int $tries, int $sleep, int $memory): void
+    {
+        $phpBinary = PHP_BINARY;
+        $artisan = base_path('artisan');
+
+        $command = sprintf(
+            '%s %s queue:work %s --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
+            escapeshellarg($phpBinary),
+            escapeshellarg($artisan),
+            escapeshellarg($connection),
+            escapeshellarg($queue),
             $timeout,
             $tries,
             $sleep,
             $memory
         );
-        
-        pclose(popen($windowsCommand, 'r'));
-    } else {
-        // Linux - background process with output redirect
-        exec($command . ' > /dev/null 2>&1 &');
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            // Windows - completely detached process
+            $windowsCommand = sprintf(
+                'start /B "" "%s" "%s" queue:work %s --queue=%s --timeout=%d --tries=%d --sleep=%d --memory=%d --max-jobs=1 --stop-when-empty',
+                $phpBinary,
+                $artisan,
+                $connection,
+                $queue,
+                $timeout,
+                $tries,
+                $sleep,
+                $memory
+            );
+
+            pclose(popen($windowsCommand, 'r'));
+        } else {
+            // Linux - background process with output redirect
+            exec($command.' > /dev/null 2>&1 &');
+        }
     }
-}
 
     /**
      * Resolve queue connection from queue metas.
@@ -242,7 +246,7 @@ private function forkWorkerProcess(string $connection, string $queue, int $timeo
 
         $availableConnections = array_keys(config('queue.connections', []));
 
-        if (!in_array($connection, $availableConnections, true)) {
+        if (! in_array($connection, $availableConnections, true)) {
             Log::warning('Invalid queue connection configured, falling back to database', [
                 'configured_connection' => $connection,
                 'fallback' => 'database',
@@ -278,12 +282,13 @@ private function forkWorkerProcess(string $connection, string $queue, int $timeo
             // Calculate how many workers we can start
             // We want to start workers up to max_workers, but only if there are jobs waiting
             $availableSlots = $maxWorkers - $runningWorkers;
-            
+
             if ($availableSlots <= 0) {
                 Log::debug("Queue {$queueName} already at max workers", [
                     'running' => $runningWorkers,
-                    'max' => $maxWorkers
+                    'max' => $maxWorkers,
                 ]);
+
                 continue;
             }
 
@@ -295,7 +300,7 @@ private function forkWorkerProcess(string $connection, string $queue, int $timeo
                 'waiting_jobs' => $jobCounts['waiting'],
                 'running_workers' => $runningWorkers,
                 'max_workers' => $maxWorkers,
-                'workers_to_start' => $workersToStart
+                'workers_to_start' => $workersToStart,
             ]);
 
             for ($i = 0; $i < $workersToStart; $i++) {
@@ -325,9 +330,9 @@ private function forkWorkerProcess(string $connection, string $queue, int $timeo
                 'jobs' => $jobCounts,
                 'workers' => [
                     'running' => $runningWorkers,
-                    'max' => (int) ($queue['metas']['max_workers'] ?? 1)
+                    'max' => (int) ($queue['metas']['max_workers'] ?? 1),
                 ],
-                'config' => $queue['metas']
+                'config' => $queue['metas'],
             ];
         }
 

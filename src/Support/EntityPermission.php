@@ -4,6 +4,7 @@ namespace Iquesters\Foundation\Support;
 
 use Illuminate\Contracts\Auth\Authenticatable;
 use Iquesters\Foundation\Http\Middleware\EnsureAdmin;
+use Spatie\Permission\Exceptions\PermissionDoesNotExist;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -54,7 +55,7 @@ final class EntityPermission
 
         try {
             return $user->hasPermissionTo(self::name($table, $action));
-        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist) {
+        } catch (PermissionDoesNotExist) {
             return false;
         }
     }

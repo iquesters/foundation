@@ -42,7 +42,7 @@ class EncryptConfigSecretsCommand extends Command
             }
 
             foreach ($plain as $path) {
-                $this->line(($this->option('dry-run') ? '[dry-run] ' : '') . "Encrypting {$row->module}: {$path}");
+                $this->line(($this->option('dry-run') ? '[dry-run] ' : '')."Encrypting {$row->module}: {$path}");
             }
 
             if (! $this->option('dry-run')) {
@@ -52,7 +52,7 @@ class EncryptConfigSecretsCommand extends Command
             $total += count($plain);
         }
 
-        $this->info("{$total} secret value(s) " . ($this->option('dry-run') ? 'would be encrypted.' : 'encrypted.'));
+        $this->info("{$total} secret value(s) ".($this->option('dry-run') ? 'would be encrypted.' : 'encrypted.'));
 
         return self::SUCCESS;
     }

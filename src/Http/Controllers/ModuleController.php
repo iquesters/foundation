@@ -2,15 +2,14 @@
 
 namespace Iquesters\Foundation\Http\Controllers;
 
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Log;
 use Iquesters\Foundation\Models\Module;
 use Spatie\Permission\Models\Role;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 
 class ModuleController extends Controller
 {
-
     /**
      * Show form to assign modules to roles
      */
@@ -18,10 +17,10 @@ class ModuleController extends Controller
     {
         $modules = Module::active()->get();
         $roles = Role::all();
-        
+
         $selectedRoleId = $request->role_id;
         $selectedRole = $selectedRoleId ? Role::find($selectedRoleId) : null;
-        
+
         return view('foundation::modules.assign-to-role', compact('modules', 'roles', 'selectedRole'));
     }
 
@@ -38,14 +37,14 @@ class ModuleController extends Controller
 
             // Get all modules
             $allModules = Module::all();
-            
+
             // Update each module's role assignment
             foreach ($allModules as $module) {
                 $assignedRoleIds = $module->getAssignedRoleIds();
-                
+
                 if (in_array($module->id, $request->modules ?? [])) {
                     // Add role to module if not already assigned
-                    if (!in_array($role->id, $assignedRoleIds)) {
+                    if (! in_array($role->id, $assignedRoleIds)) {
                         $assignedRoleIds[] = $role->id;
                         $module->assignRoles($assignedRoleIds);
                     }
@@ -67,14 +66,14 @@ class ModuleController extends Controller
 
             return redirect()->route('modules.assign-to-role', ['role_id' => $role->id])
                 ->with('success', 'Modules assigned to role successfully');
-                
+
         } catch (\Exception $e) {
             Log::error('Error assigning modules to role', [
                 'role_id' => $role->id,
                 'error' => $e->getMessage(),
                 'user_id' => auth()->id(),
             ]);
-            
+
             return redirect()->back()->with('error', 'Failed to assign modules to role');
         }
     }
@@ -87,7 +86,7 @@ class ModuleController extends Controller
         $modules = Module::all()->filter(function ($module) use ($role) {
             return $module->isAssignedToRole($role);
         });
-        
+
         return response()->json($modules);
     }
 }

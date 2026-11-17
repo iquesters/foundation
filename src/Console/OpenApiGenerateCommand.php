@@ -8,11 +8,12 @@ use Iquesters\Foundation\OpenApi\OpenApiGenerator;
 class OpenApiGenerateCommand extends Command
 {
     protected $signature = 'api:openapi';
+
     protected $description = 'Generate OpenAPI specification';
 
     public function handle(): int
     {
-        $spec = (new OpenApiGenerator())->generate();
+        $spec = (new OpenApiGenerator)->generate();
 
         file_put_contents(
             storage_path('openapi.json'),

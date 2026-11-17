@@ -8,6 +8,7 @@ use Iquesters\Foundation\Routing\ApiRouteRegistry;
 class ApiRouteDoctorCommand extends Command
 {
     protected $signature = 'api:doctor';
+
     protected $description = 'Diagnose API routing issues';
 
     public function handle(): int

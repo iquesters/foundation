@@ -2,6 +2,8 @@
 
 namespace Iquesters\Foundation\Contracts;
 
+use Illuminate\Database\Eloquent\Model;
+
 /**
  * Supplies the Eloquent model classes that store generated form and table
  * schemas. Foundation generates schemas but does not own their storage;
@@ -9,9 +11,9 @@ namespace Iquesters\Foundation\Contracts;
  */
 interface SchemaModels
 {
-    /** @return class-string<\Illuminate\Database\Eloquent\Model> */
+    /** @return class-string<Model> */
     public function formSchemaModel(): string;
 
-    /** @return class-string<\Illuminate\Database\Eloquent\Model> */
+    /** @return class-string<Model> */
     public function tableSchemaModel(): string;
 }

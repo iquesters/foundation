@@ -46,7 +46,7 @@ class ConfProvider
      */
     public static function from(string $module): BaseConf
     {
-        if (!isset(static::$registry[$module])) {
+        if (! isset(static::$registry[$module])) {
             throw new InvalidArgumentException("No config registered for module: {$module}");
         }
 
@@ -56,7 +56,7 @@ class ConfProvider
             return new (static::$registry[$module])();
         }
 
-        if (!isset($instances[$module])) {
+        if (! isset($instances[$module])) {
             $instances[$module] = new (static::$registry[$module])();
         }
 
@@ -84,14 +84,14 @@ class ConfProvider
 
     private static function instances(): ?ArrayObject
     {
-        if (!function_exists('app') || !app()->bound('config')) {
+        if (! function_exists('app') || ! app()->bound('config')) {
             return null;
         }
 
         $app = app();
 
-        if (!$app->bound(self::INSTANCES)) {
-            $app->scoped(self::INSTANCES, fn () => new ArrayObject());
+        if (! $app->bound(self::INSTANCES)) {
+            $app->scoped(self::INSTANCES, fn () => new ArrayObject);
         }
 
         return $app->make(self::INSTANCES);

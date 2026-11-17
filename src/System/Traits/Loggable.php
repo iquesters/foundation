@@ -24,7 +24,9 @@ trait Loggable
         $key = "{$classShort}::{$method}";
 
         $logMessage = "[$classShort::{$method}({$line})] 👉 STARTED";
-        if ($message) $logMessage .= " - {$message}";
+        if ($message) {
+            $logMessage .= " - {$message}";
+        }
 
         Log::info($logMessage, $context);
         self::$methodStartTimes[$key] = microtime(true);
@@ -38,8 +40,9 @@ trait Loggable
         [$classShort, $method, $line] = static::logCaller(2);
         $key = "{$classShort}::{$method}";
 
-        if (!isset(self::$methodStartTimes[$key])) {
+        if (! isset(self::$methodStartTimes[$key])) {
             Log::warning("[$classShort::{$method}({$line})] No start time found");
+
             return;
         }
 
@@ -47,7 +50,9 @@ trait Loggable
         unset(self::$methodStartTimes[$key]);
 
         $logMessage = "[$classShort::{$method}({$line})] ✅ COMPLETED";
-        if ($message) $logMessage .= " - {$message}";
+        if ($message) {
+            $logMessage .= " - {$message}";
+        }
 
         Log::info($logMessage, $context + [
             'duration_ms' => round($durationMs, 2),

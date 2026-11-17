@@ -24,6 +24,7 @@ class StringUtils
     public static function toPascalCase(string $string): string
     {
         $pascal = str_replace(' ', '', ucwords(str_replace('-', ' ', $string)));
+
         return $pascal;
     }
 }

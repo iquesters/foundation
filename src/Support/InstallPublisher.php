@@ -16,14 +16,14 @@ use Illuminate\Support\Facades\Schema;
 final class InstallPublisher
 {
     /**
-     * @param string      $tag        vendor:publish tag, e.g. 'sanctum-migrations'
-     * @param string      $fileSuffix published file name ending, e.g. '_create_personal_access_tokens_table.php'
-     * @param string|null $table      table the migration creates (skip when it already exists)
+     * @param  string  $tag  vendor:publish tag, e.g. 'sanctum-migrations'
+     * @param  string  $fileSuffix  published file name ending, e.g. '_create_personal_access_tokens_table.php'
+     * @param  string|null  $table  table the migration creates (skip when it already exists)
      * @return string|null message for the console, or null when nothing was done
      */
     public static function migration(string $tag, string $fileSuffix, ?string $table = null): ?string
     {
-        if (glob(database_path('migrations') . '/*' . $fileSuffix)) {
+        if (glob(database_path('migrations').'/*'.$fileSuffix)) {
             return null;
         }
 
@@ -37,8 +37,8 @@ final class InstallPublisher
     }
 
     /**
-     * @param string $tag  vendor:publish tag, e.g. 'sanctum-config'
-     * @param string $file config file name, e.g. 'sanctum.php'
+     * @param  string  $tag  vendor:publish tag, e.g. 'sanctum-config'
+     * @param  string  $file  config file name, e.g. 'sanctum.php'
      */
     public static function config(string $tag, string $file): ?string
     {

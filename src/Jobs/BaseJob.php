@@ -10,7 +10,7 @@ use Iquesters\Foundation\System\Traits\Loggable;
 
 abstract class BaseJob implements ShouldQueue
 {
-    use Queueable, InteractsWithQueue, SerializesModels, Loggable;
+    use InteractsWithQueue, Loggable, Queueable, SerializesModels;
 
     /**
      * Number of times the job may be attempted
@@ -36,25 +36,25 @@ abstract class BaseJob implements ShouldQueue
      * Store the response data from job processing
      */
     protected mixed $jobResponse = null;
-    
+
     final public function __construct(...$arguments)
     {
         // Use short class name as queue name
         $this->queue = (new \ReflectionClass(static::class))->getShortName();
-        $this->logDebug('Job initialized' . $this->ctx([
+        $this->logDebug('Job initialized'.$this->ctx([
             'job_class' => static::class,
-            'queue' => $this->queue
+            'queue' => $this->queue,
         ]));
-        
+
         // Call child initializer
         $this->initialize(...$arguments);
     }
-    
+
     /**
      * Child jobs implement this instead of a constructor
      */
     abstract protected function initialize(...$arguments): void;
-    
+
     /**
      * Process webhook - must be implemented by child classes
      */
@@ -72,7 +72,7 @@ abstract class BaseJob implements ShouldQueue
             $this->afterHandle();
 
         } catch (\Throwable $e) {
-            $this->logError('Job failed' . $this->ctx([
+            $this->logError('Job failed'.$this->ctx([
                 'job_class' => static::class,
                 'error' => $e->getMessage(),
             ]));
@@ -82,7 +82,7 @@ abstract class BaseJob implements ShouldQueue
             throw $e; // Always rethrow; Laravel manages the rest
         }
     }
-    
+
     /**
      * Determine the time at which the job should timeout.
      */
@@ -104,7 +104,7 @@ abstract class BaseJob implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        $this->logError('Job failed permanently' . $this->ctx([
+        $this->logError('Job failed permanently'.$this->ctx([
             'job_class' => static::class,
             'job_id' => $this->job?->getJobId(),
             'attempts' => $this->attempts(),
@@ -124,10 +124,10 @@ abstract class BaseJob implements ShouldQueue
      */
     protected function beforeHandle(): void
     {
-        $this->logDebug('Job starting' . $this->ctx([
+        $this->logDebug('Job starting'.$this->ctx([
             'job_class' => static::class,
             'job_id' => $this->job?->getJobId(),
-            'attempt' => $this->attempts()
+            'attempt' => $this->attempts(),
         ]));
     }
 
@@ -136,11 +136,11 @@ abstract class BaseJob implements ShouldQueue
      */
     protected function afterHandle(): void
     {
-        $this->logDebug('Job completed successfully' . $this->ctx([
+        $this->logDebug('Job completed successfully'.$this->ctx([
             'job_class' => static::class,
             'job_id' => $this->job?->getJobId(),
             'attempts' => $this->attempts(),
-            'response' => $this->jobResponse
+            'response' => $this->jobResponse,
         ]));
     }
 
@@ -149,12 +149,12 @@ abstract class BaseJob implements ShouldQueue
      */
     protected function onRetry(\Throwable $exception): void
     {
-        $this->logWarning('Job attempt failed' . $this->ctx([
+        $this->logWarning('Job attempt failed'.$this->ctx([
             'job_class' => static::class,
-            'job_id'    => $this->job?->getJobId(),
-            'attempt'   => $this->attempts(),
-            'error'     => $exception->getMessage(),
-            'next_retry_in' => $this->backoff . ' seconds'
+            'job_id' => $this->job?->getJobId(),
+            'attempt' => $this->attempts(),
+            'error' => $exception->getMessage(),
+            'next_retry_in' => $this->backoff.' seconds',
         ]));
     }
 
@@ -176,6 +176,6 @@ abstract class BaseJob implements ShouldQueue
 
     protected function ctx(array $context): string
     {
-        return ' | context=' . json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return ' | context='.json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 }

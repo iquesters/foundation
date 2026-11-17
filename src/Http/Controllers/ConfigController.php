@@ -36,7 +36,7 @@ class ConfigController extends Controller
     {
         $conf = $this->confFor($module);
 
-        if (!$conf) {
+        if (! $conf) {
             return redirect()->back()->with('error', 'This module has no settings.');
         }
 
@@ -51,10 +51,11 @@ class ConfigController extends Controller
 
             if (in_array($path, $reset, true)) {
                 data_set($changes, $path, $row['default']);
+
                 continue;
             }
 
-            if (!array_key_exists($field, $submitted)) {
+            if (! array_key_exists($field, $submitted)) {
                 continue;
             }
 
@@ -67,8 +68,9 @@ class ConfigController extends Controller
 
             if ($row['type'] === 'array') {
                 $decoded = json_decode((string) $value, true);
-                if (!is_array($decoded)) {
+                if (! is_array($decoded)) {
                     $errors["settings.{$field}"] = 'Must be valid JSON (a list or object).';
+
                     continue;
                 }
                 $value = $decoded;
@@ -88,7 +90,7 @@ class ConfigController extends Controller
         } catch (ValidationException $e) {
             $messages = [];
             foreach ($e->errors() as $path => $list) {
-                $messages['settings.' . $this->fieldName($path)] = $list[0];
+                $messages['settings.'.$this->fieldName($path)] = $list[0];
             }
 
             return redirect()->back()->withErrors($messages)->withInput();

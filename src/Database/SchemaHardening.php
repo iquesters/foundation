@@ -37,7 +37,7 @@ final class SchemaHardening
             $t->unique(['ref_parent', 'meta_key']);
         });
 
-        static::logInfo("Unique (ref_parent, meta_key) added to {$table}", ['duplicate_rows_removed' => $removed]);
+        self::logInfo("Unique (ref_parent, meta_key) added to {$table}", ['duplicate_rows_removed' => $removed]);
     }
 
     /** Widen a column to LONGTEXT (values over 255 chars were being truncated). */
@@ -83,7 +83,7 @@ final class SchemaHardening
                 $t->foreign($column)->references('id')->on('users')->nullOnDelete();
             });
 
-            static::logInfo("{$table}.{$column} is now a nullable FK to users", ['rows_set_to_null' => $nulled]);
+            self::logInfo("{$table}.{$column} is now a nullable FK to users", ['rows_set_to_null' => $nulled]);
         }
     }
 

@@ -29,12 +29,12 @@ abstract class ModuleAssets
     {
         static $paths = [];
 
-        return $paths[static::class] ??= self::packageRoot() . '/public';
+        return $paths[static::class] ??= self::packageRoot().'/public';
     }
 
     public static function routeName(): string
     {
-        return static::slug() . '.asset';
+        return static::slug().'.asset';
     }
 
     /**
@@ -50,12 +50,12 @@ abstract class ModuleAssets
         Route::get("/module-assets/{$slug}/{path}", $serve)->where('path', '.*')->name(static::routeName());
 
         // Legacy URL, kept for hard-coded links (when assets are not published).
-        Route::get("/vendor/{$slug}/{path}", $serve)->where('path', '.*')->name(static::routeName() . '.legacy');
+        Route::get("/vendor/{$slug}/{path}", $serve)->where('path', '.*')->name(static::routeName().'.legacy');
     }
 
     public static function url(string $file): string
     {
-        return PackageAsset::url(static::publicPath(), 'vendor/' . static::slug(), ltrim($file, '/'), static::routeName());
+        return PackageAsset::url(static::publicPath(), 'vendor/'.static::slug(), ltrim($file, '/'), static::routeName());
     }
 
     /**
@@ -80,7 +80,7 @@ abstract class ModuleAssets
     {
         $path = dirname((new \ReflectionClass(static::class))->getFileName());
 
-        while (!file_exists($path . '/composer.json') && dirname($path) !== $path) {
+        while (! file_exists($path.'/composer.json') && dirname($path) !== $path) {
             $path = dirname($path);
         }
 

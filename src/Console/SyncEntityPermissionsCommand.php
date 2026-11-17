@@ -27,10 +27,10 @@ class SyncEntityPermissionsCommand extends Command
 
         foreach ($tables as $table) {
             EntityPermission::ensureFor($table);
-            $this->line("  {$table}: " . implode(', ', EntityPermission::names($table)));
+            $this->line("  {$table}: ".implode(', ', EntityPermission::names($table)));
         }
 
-        $this->info($tables->count() . ' entity table(s) synced.');
+        $this->info($tables->count().' entity table(s) synced.');
 
         return self::SUCCESS;
     }

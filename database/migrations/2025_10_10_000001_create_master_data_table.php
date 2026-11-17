@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('master_data', function (Blueprint $table) {
             $table->id();
             $table->string('key');
-            $table->longText('value')->default(NULL);
+            $table->longText('value')->default(null);
             $table->bigInteger('parent_id')->default(0);
             $table->string('status')->default('unknown');
             $table->bigInteger('created_by')->default(0);

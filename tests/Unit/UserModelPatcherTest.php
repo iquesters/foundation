@@ -57,7 +57,7 @@ PHP;
     {
         [$source, $changes] = UserModelPatcher::patchSource(self::STOCK_L13, [self::TRAIT], ['uid', 'phone', 'status']);
 
-        $this->assertStringContainsString("use Illuminate\\Notifications\\Notifiable;\nuse " . self::TRAIT . ";", $source);
+        $this->assertStringContainsString("use Illuminate\\Notifications\\Notifiable;\nuse ".self::TRAIT.';', $source);
         $this->assertStringContainsString('use HasFactory, Notifiable, HasUserManagement;', $source);
         $this->assertStringContainsString("#[Fillable(['name', 'email', 'password', 'uid', 'phone', 'status'])]", $source);
         $this->assertSame(['Added trait HasUserManagement', 'Made fillable: uid, phone, status'], $changes);
@@ -96,7 +96,7 @@ PHP;
     {
         $file = tempnam(sys_get_temp_dir(), 'umt');
         file_put_contents($file, $source);
-        exec(escapeshellarg(PHP_BINARY) . ' -l ' . escapeshellarg($file) . ' 2>&1', $output, $exit);
+        exec(escapeshellarg(PHP_BINARY).' -l '.escapeshellarg($file).' 2>&1', $output, $exit);
         unlink($file);
 
         $this->assertSame(0, $exit, implode("\n", $output));

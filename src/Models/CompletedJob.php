@@ -40,7 +40,7 @@ class CompletedJob extends Model
             if (empty($job->uuid)) {
                 $job->uuid = (string) Str::uuid();
             }
-            
+
             if (empty($job->completed_at)) {
                 $job->completed_at = now();
             }
@@ -69,15 +69,15 @@ class CompletedJob extends Model
     public function getJobClassName(): ?string
     {
         $payload = $this->getDecodedPayload();
-        
+
         if (isset($payload['displayName'])) {
             return $payload['displayName'];
         }
-        
+
         if (isset($payload['data']['commandName'])) {
             return $payload['data']['commandName'];
         }
-        
+
         return null;
     }
 
@@ -111,7 +111,7 @@ class CompletedJob extends Model
     public static function getStatsForQueue(string $queueName, int $days = 7): array
     {
         $startDate = now()->subDays($days)->startOfDay();
-        
+
         return [
             'total' => static::forQueue($queueName)
                 ->where('completed_at', '>=', $startDate)
@@ -131,7 +131,7 @@ class CompletedJob extends Model
     public static function cleanup(int $daysToKeep = 30): int
     {
         $cutoffDate = now()->subDays($daysToKeep);
-        
+
         return static::where('completed_at', '<', $cutoffDate)->delete();
     }
 }
