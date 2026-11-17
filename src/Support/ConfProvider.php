@@ -25,6 +25,18 @@ class ConfProvider
         static::forget($module);
     }
 
+    /** Whether $module has a registered (root) settings class. */
+    public static function isRegistered(string $module): bool
+    {
+        return isset(static::$registry[$module]);
+    }
+
+    /** @return array<string, class-string<BaseConf>> module => settings class */
+    public static function registered(): array
+    {
+        return static::$registry;
+    }
+
     /**
      * Resolve the BaseConf for a module.
      *

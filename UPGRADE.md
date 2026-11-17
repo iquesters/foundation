@@ -25,6 +25,7 @@ as one 2.0 set).
 4. Clear caches: `php artisan optimize:clear`.
 
 ### Breaking changes
+- **Settings storage:** settings move to the `module_settings` table (`php artisan migrate` converts them). Only changed values are stored; defaults come from the code. Review stored settings read with `??` (e.g. `signin_flow`, `recaptcha.enabled`): they now take effect, before they were silently ignored.
 - **Admin roles** come from the DB setting `admin_roles` (foundation conf, default `super-admin,admin`),
   editable on the config screen. `config('foundation.admin_roles')` / `FOUNDATION_ADMIN_ROLES` are gone.
   `super-admin` is always allowed. In code, use `EnsureAdmin::roles()`.

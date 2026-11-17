@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follo
 
 ## [Unreleased] – 2.0.0
 
+### Settings engine
+- **Breaking:** module settings are stored in a new `module_settings` table (JSON per module, only values that differ from the code defaults) instead of `master_data_metas`. The migration converts existing values; old rows are kept.
+- Typed, validated settings: `BaseConf` converts stored values to the declared property types, applies `rules()`, falls back to the default for invalid values (logged), and saves through `update()` (throws `ValidationException`).
+- Seeders no longer write settings, so admin changes can't be overwritten; new defaults reach existing installs.
+- `isset()` / `??` on settings now see the real value (they always returned the fallback before).
+- Nested settings no longer query the database (removes the `No master_data entry found` log noise).
+- Admin settings screen with typed inputs, defaults and reset; `conf:encrypt-secrets` works on `module_settings`.
+
 ### Housekeeping
 - Removed commented-out code and emoji from log messages; added Pint/Larastan (`composer format|lint|analyse`), a test CI workflow (PHP 8.3/8.4 × Laravel 12/13), `.gitattributes`, `SECURITY.md`, `CONTRIBUTING.md`, `UPGRADE.md` and composer metadata.
 

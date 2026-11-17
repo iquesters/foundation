@@ -1,5 +1,44 @@
 # Configuration (Developer)
 
+## How module settings work
+
+Every module has one **settings class** (`src/Config/{Module}Conf.php`, extends `BaseConf`):
+
+```php
+class UserManagementConf extends BaseConf
+{
+    protected ?string $identifier = Module::USER_MGMT;
+
+    protected string $auth_form_type;            // typed setting
+    protected RecaptchaConf $recaptcha;          // nested group (its own class)
+    /** @var OAuthConf[] */
+    protected array $o_auth_providers;           // map of groups, keyed (e.g. "google")
+
+    protected function prepareDefault(BaseConf $d)
+    {
+        $d->auth_form_type = 'classic';          // defaults live in code
+    }
+
+    protected function rules(): array
+    {
+        return ['auth_form_type' => 'in:classic,schema,both'];   // Laravel validation rules
+    }
+}
+```
+
+- **Reading:** `ConfProvider::from(Module::USER_MGMT)->auth_form_type` (one instance per request; `isset()` / `??` work).
+- **Storage:** table `module_settings`, one JSON document per module holding **only values that differ from the
+  defaults**. Defaults always come from `prepareDefault()`, so a new default in an update applies automatically, and
+  seeders never touch settings.
+- **Types:** stored values are converted to the declared type (bool, int, float, string, nullable, list, nested group,
+  map of groups). A value that can't be converted, or breaks a rule, is logged and the **default** is used.
+- **Writing:** `ConfProvider::from($module)->update(['recaptcha' => ['enabled' => true]], $userId)` validates (types +
+  rules) and throws `ValidationException` on bad input; nothing is saved then.
+- **Secrets:** keys containing `secret`, `token`, `password`, `api_key` are encrypted at rest (`enc:`), decrypted in memory.
+- **Admin screen:** `/modules/config/{module}` shows every setting with its default, typed inputs and *Reset to default*.
+- **Upgrading from 1.x:** migration `create_module_settings_table` converts the old `master_data_metas` rows (keeping
+  only non-default values); the old rows are left untouched.
+
 Foundation has two kinds of settings.
 
 ## DB-backed conf (runtime, editable)

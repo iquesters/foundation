@@ -25,4 +25,9 @@ class FoundationConf extends BaseConf
     {
         $default_values->admin_roles = 'super-admin,admin';
     }
+
+    protected function rules(): array
+    {
+        return ['admin_roles' => 'string|max:500'];
+    }
 }

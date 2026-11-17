@@ -3,56 +3,75 @@
 namespace Iquesters\Foundation\Console;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Iquesters\Foundation\Support\ConfSecret;
+use Iquesters\Foundation\Support\Settings\SettingsStore;
 
 /**
- * One-time (and safe to re-run) migration: encrypts plain-text secret values
- * already stored in master_data_metas for module configs (*-conf).
+ * Safe to re-run: encrypts plain-text secret values (keys containing
+ * secret/token/password/api_key, see ConfSecret) in the stored module
+ * settings (module_settings). Settings saved through BaseConf::update() or
+ * the admin screen are already encrypted; this catches values imported or
+ * edited directly in the database.
  */
 class EncryptConfigSecretsCommand extends Command
 {
     protected $signature = 'conf:encrypt-secrets {--dry-run : List what would be encrypted without writing}';
 
-    protected $description = 'Encrypt plain-text secret config values (secret/token/password/api_key keys) in master_data_metas';
+    protected $description = 'Encrypt plain-text secret values in the stored module settings';
 
     public function handle(): int
     {
-        $confIds = DB::table('master_data')->where('key', 'like', '%-conf')->pluck('id');
+        if (! SettingsStore::tableReady()) {
+            $this->warn('The module_settings table does not exist yet: run `php artisan migrate` first.');
 
-        $rows = DB::table('master_data_metas')
-            ->whereIn('ref_parent', $confIds)
-            ->get(['id', 'meta_key', 'meta_value']);
+            return self::FAILURE;
+        }
 
-        $count = 0;
+        $total = 0;
 
-        foreach ($rows as $row) {
-            if (! ConfSecret::isSensitive($row->meta_key)
-                || $row->meta_value === null
-                || $row->meta_value === ''
-                || ConfSecret::isEncrypted($row->meta_value)) {
+        foreach (DB::table(SettingsStore::TABLE)->get(['module', 'settings']) as $row) {
+            $settings = json_decode((string) $row->settings, true);
+            if (! is_array($settings)) {
                 continue;
             }
 
-            $this->line(($this->option('dry-run') ? '[dry-run] ' : '') . "Encrypting {$row->meta_key} (meta id {$row->id})");
-
-            if (! $this->option('dry-run')) {
-                DB::table('master_data_metas')
-                    ->where('id', $row->id)
-                    ->update(['meta_value' => ConfSecret::encrypt($row->meta_value)]);
+            $plain = $this->plainSecrets($settings);
+            if ($plain === []) {
+                continue;
             }
 
-            $count++;
+            foreach ($plain as $path) {
+                $this->line(($this->option('dry-run') ? '[dry-run] ' : '') . "Encrypting {$row->module}: {$path}");
+            }
+
+            if (! $this->option('dry-run')) {
+                SettingsStore::put($row->module, $settings); // put() encrypts secrets and clears the cache
+            }
+
+            $total += count($plain);
         }
 
-        if ($count > 0 && ! $this->option('dry-run')) {
-            // Config is cached with rememberForever; drop it so encrypted values are reloaded.
-            Cache::flush();
-        }
-
-        $this->info("{$count} secret value(s) " . ($this->option('dry-run') ? 'would be encrypted.' : 'encrypted.'));
+        $this->info("{$total} secret value(s) " . ($this->option('dry-run') ? 'would be encrypted.' : 'encrypted.'));
 
         return self::SUCCESS;
+    }
+
+    /** Dot paths of sensitive values that are stored in plain text. */
+    private function plainSecrets(array $values, string $prefix = ''): array
+    {
+        $paths = [];
+
+        foreach ($values as $key => $value) {
+            $path = $prefix === '' ? (string) $key : "{$prefix}.{$key}";
+
+            if (is_array($value)) {
+                array_push($paths, ...$this->plainSecrets($value, $path));
+            } elseif (is_string($value) && $value !== '' && ConfSecret::isSensitive((string) $key) && ! ConfSecret::isEncrypted($value)) {
+                $paths[] = $path;
+            }
+        }
+
+        return $paths;
     }
 }
