@@ -20,7 +20,8 @@ final class SettingsStore
 {
     public const TABLE = 'module_settings';
 
-    private static bool $tableReady = false;
+    /** Container key for "the settings table exists" (per application instance). */
+    private const READY_KEY = 'foundation.settings.table_ready';
 
     /** Stored overrides for a module ([] when none). Cached until the next write. */
     public static function get(string $module): array
@@ -59,17 +60,31 @@ final class SettingsStore
         Cache::forget(self::cacheKey($module));
     }
 
+    /**
+     * Remembered on the application instance, not in a static: a static outlives
+     * the app (each test's fresh database, queue workers, Octane) and would skip
+     * the check for a database that does not have the table yet.
+     */
     public static function tableReady(): bool
     {
-        if (! self::$tableReady) {
-            try {
-                self::$tableReady = Schema::hasTable(self::TABLE);
-            } catch (\Throwable) {
-                return false;
-            }
+        $app = app();
+
+        if ($app->bound(self::READY_KEY) && $app->make(self::READY_KEY) === true) {
+            return true;
         }
 
-        return self::$tableReady;
+        try {
+            $ready = Schema::hasTable(self::TABLE);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        // Only "exists" is remembered: a missing table is checked again (it appears after migrate).
+        if ($ready) {
+            $app->instance(self::READY_KEY, true);
+        }
+
+        return $ready;
     }
 
     /** Recursively encrypt string values under sensitive keys (already-encrypted values pass through). */
