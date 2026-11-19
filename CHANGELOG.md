@@ -3,6 +3,87 @@
 All notable changes to this package are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Business entities:** one record made of several entity tables, e.g. a customer with its address (`has_one`) and its company (`belongs_to`).
+  - **Admin builder** at Admin → Business Entities (`/business-entity`, admins only):
+    - choose the root entity and linked parts;
+    - pick their fields and meta fields;
+    - save to generate a form schema (`business-{slug}-form`) and a table schema (`business-{slug}-table`) that use the business entity API in iquesters/user-interface.
+  - **Storage:** `business_entities` and `business_entity_metas` tables (migration `2026_11_18_000001`), with the `BusinessEntity` and `BusinessEntityMeta` models.
+  - **Definition checks:**
+    - `BusinessEntityDefinition` checks the structure, the write order, the link columns and the flat field keys (`{alias}__{field}`);
+    - `BusinessEntityDefinitionValidator` checks the definition against the registered entities and their tables. Each part's table always comes from its entity.
+  - **Docs:** `docs/developer/business-entities.md`.
+- `FormSchemaGenerator::build()` and `TableSchemaGenerator::build()`: generate a schema for any resource (display name, schema entity key, endpoints). `generate(Entity)` output is unchanged.
+- **Entity data API, moved here from iquesters/user-interface:** foundation is now the core data module and user-interface keeps presentation.
+  - **API:** `/api/foundation/v1/entity/{list|show|store|update|delete}/...` (`DynamicEntityController`) and the new `/api/foundation/v1/business-entity/...` (`BusinessEntityDataController`).
+  - **Services:**
+    - `Services\Entity\*`: repository, schema resolver, validator, normalizer, scope, presenter, error mapper;
+    - `Services\BusinessEntity\BusinessEntityRecords`;
+    - `Http\Query\DynamicEntityListQuery` and `ParsesListQuery`;
+    - `Constants\EntityListParams` and `Contracts\EntityScopeResolver`.
+  - **Business entity records:**
+    - one transaction per save, in link order, with link columns filled in automatically;
+    - each part is validated with its entity's rules, and all errors are reported together;
+    - `entity.{table}.{action}` permission is needed on every part's table;
+    - delete soft-deletes the parts the record owns and keeps shared ones.
+  - **Docs:** `docs/developer/entity-api.md` and `docs/developer/business-entity-api.md`.
+- **Foundation's own `public/` files:** served at `/module-assets/foundation/...` and published to `public/vendor/foundation` with the `laravel-assets` tag (`Support\Assets`).
+- **Business entities: all stored Laravel relations** (definition version 2; version 1 is read unchanged):
+  - **Types:** `has_one`, `belongs_to`, `morph_one`, `has_many`, `morph_many`, `belongs_to_many`, `morph_to_many`, `morphed_by_many`. `has_*_through` and `morph_to` are not offered, because they have nothing to store.
+  - **Modes:** *compose* (rows edited inside the record) or *reference* (points at existing rows, picked in the form).
+  - **Lists of rows** (`"{alias}": [...]`): on update the sent list replaces the current rows.
+  - **References and pivots:** synced; the new `GET business-entity/options/{slug}/{alias}` lists their choices.
+  - **Platform models:** users, roles and permissions can be referenced, e.g. roles through Spatie's `model_has_roles` (`BusinessEntityModels`; modules register their own).
+    - An entity over a model's table (e.g. `users`) uses the model's morph class (`App\Models\User`) in morph columns, so a "user with roles" business entity reads and writes the same roles as Spatie.
+  - **Extensible:** relation types are `Relations\RelationType` descriptions in `Relations\RelationTypes`; modules add their own with the `business-entity.relation-types` tag.
+  - **Configuration only:** every table, column and pivot a link uses must exist. A missing pivot is reported (`InvalidBusinessEntityDefinition::$missingPivots`), never created.
+  - **Generated forms:** a `repeater` field for a list of rows; a `select` or `checkbox` field with `optionsFrom.url` for a reference.
+- **Business entity builder (#29):**
+  - an "Add entity" picker in the UI modal, with entities already used disabled and a primary (root) choice;
+  - each relation as a sentence;
+  - link, morph and pivot column pickers, with suggestions;
+  - a "Needs pivot table" warning with a link to create the pivot entity;
+  - a **review step** that checks the definition on the server (`POST /business-entity/check`) and shows the whole structure before saving;
+  - `GET /business-entity/columns?table=` for the column pickers.
+- **Business entity records name their references:** `"labels": {"roles": ["Admin", "Editor"], "company": "Acme"}`, read from each reference's label column. Record components use it, e.g. a user's roles as badges.
+- **Business entity screens, plain language:**
+  - **Builder:** a "How it works" guide; numbered sections (Details, Where it appears, Entities and how they link, Review and save); help text under each field and each screens option.
+  - **Errors:** problems are listed one per line and named after the part, e.g. "Roles: the link table model_has_roles has no column "user_id" in the link table. Pick one of its columns."
+  - **Success messages** say what is ready.
+  - **List page:** an "Appears as" column and a friendlier empty state.
+- **"Use the form in" can be undone:**
+  - The table's own form is remembered and put back when the option is cleared or the business entity is deleted.
+  - Regenerating that entity's table keeps the business entity's form.
+  - Deleting a business entity also deactivates its generated form and list.
+- **Business entity screens:**
+  - `output` can be *a form and its own list* (default), *a form only*, or *API only*. "API only" is for a module's own form.
+  - **Use the form in** an existing table: that table's Create button and rows open the business entity's form (`use_in_table`).
+  - The builder has both options. Definition files take the keys `output` and `use_in_table`.
+- Generated forms:
+  - `password` and `tel` inputs get their own types; passwords were a plain text field before.
+  - A password is required on create; on edit it is left out when blank ("leave blank to keep").
+- **Definition files:** `business-entity:export` and `business-entity:sync [path] [--dry-run]`, in `database/business-entities/*.json`, with entities named by table.
+- **Events:** `BusinessEntityDefinitionChanged` and `BusinessEntityRecordSaved`.
+- **`BusinessEntityService`:** creating, updating, deleting and syncing definitions, shared by the builder and the commands.
+- **Schema generation services (#30):**
+  - `Services\Schema\EntitySchemaService` generates, stores and re-finds an entity's form and table schemas (moved out of `EntityController`);
+  - `Services\Schema\GeneratedSchemaStore` stores generated schemas for entities and business entities;
+  - `Support\EntityTableName` provides entity table names;
+  - `FormSchemaGenerator::formFields()`, and `build()` takes extra ready-made fields.
+
+### Changed
+- **Module APIs accept the web login from the app's own pages.** Sanctum's `EnsureFrontendRequestsAreStateful` is added to every `/api/{module}/{version}` route, so apps no longer need `$middleware->statefulApi()`.
+  - Before this, in an app without it, module tables showed "Unauthenticated." and option lists (e.g. Roles) stayed empty.
+  - This only applies to requests from Sanctum's stateful domains (with CSRF on writes); token callers are unchanged.
+- Requires `laravel/sanctum` `^4.0` (the entity API uses `auth:sanctum`).
+- Generated entity form schemas use `/api/foundation/v1/entity/...`. Schemas generated before still work through user-interface's deprecated aliases.
+- `EntityController` only handles requests; schema work goes through `EntitySchemaService`.
+  - Creating an entity now reuses a generated schema with the same slug (or the same table as its `entity`) instead of creating a duplicate.
+  - "Generate table schema" no longer fails when the form schema uid was cached on the entity.
+
 ## [2.0.2] – 2026-11-17
 
 ### Fixed
