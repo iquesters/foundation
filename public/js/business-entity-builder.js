@@ -98,7 +98,9 @@
         /** A new part's link: to the primary entity by default. */
         function newLink(part) {
             const to = parts[0]?.alias || '';
-            const type = part.source === 'model' ? 'belongs_to_many' : 'has_one';
+            // Spatie roles and permissions are assigned through model_has_{table} (polymorphic).
+            const spatie = part.source === 'model' && ['role', 'permission'].includes(part.model);
+            const type = part.source !== 'model' ? 'has_one' : (spatie && types.has('morph_to_many') ? 'morph_to_many' : 'belongs_to_many');
 
             return normalizeLink({ type, to, mode: part.source === 'model' ? 'reference' : undefined });
         }
@@ -597,7 +599,7 @@
                 link.to = targets[0]?.alias || '';
             }
             to.addEventListener('change', () => { link.to = to.value; link.foreign_key = ''; suggestKeys(part); render(); });
-            row.append(col('col-6 col-md-4', labelled('Belongs to record of', to)));
+            row.append(col('col-6 col-md-4', labelled('Linked to', to)));
 
             if (type.modes.length > 1 && part.source !== 'model') {
                 const mode = el('select', { className: 'form-select form-select-sm' }, type.modes.map(m => el('option', {
@@ -648,7 +650,7 @@
 
             const table = textInput(link.pivot.table, 'e.g. customer_tag', value => { link.pivot.table = value; syncInput(); });
             table.setAttribute('list', 'beKnownTables');
-            table.addEventListener('change', () => { loadColumns(link.pivot.table); render(); });
+            table.addEventListener('change', () => { loadColumns(link.pivot.table); fitPivotColumns(part); render(); });
             nodes.push(col('col-12 col-md-4', labelled('Pivot table', table)));
             nodes.push(col('col-6 col-md-4', labelled(`${parent ? nameOf(parent) : 'Record'} id column`, columnSelect(columns, link.pivot.foreign_pivot_key, value => { link.pivot.foreign_pivot_key = value; render(); }))));
             nodes.push(col('col-6 col-md-4', labelled(`${nameOf(part)} id column`, columnSelect(columns, link.pivot.related_pivot_key, value => { link.pivot.related_pivot_key = value; render(); }))));
@@ -671,8 +673,46 @@
             tableColumns.set(table, 'loading');
             fetch(`${urls.columns}?table=${encodeURIComponent(table)}`, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
                 .then(r => r.json())
-                .then(result => { tableColumns.set(table, { exists: Boolean(result.exists), columns: result.columns || [] }); render(); })
+                .then(result => {
+                    tableColumns.set(table, { exists: Boolean(result.exists), columns: result.columns || [] });
+                    parts.forEach(part => { if (part.link?.pivot?.table === table) fitPivotColumns(part); });
+                    render();
+                })
                 .catch(() => tableColumns.delete(table));
+        }
+
+        /**
+         * Once a pivot table's columns are known, keep only columns it has:
+         * the parent's key ({parent}_id or model_id), this part's key
+         * ({part}_id), and a *_type column, which makes the link polymorphic.
+         */
+        function fitPivotColumns(part) {
+            const info = tableColumns.get(part.link.pivot.table);
+            if (!info || info === 'loading' || !info.exists) return;
+
+            const columns = info.columns;
+            const pivot = part.link.pivot;
+            const parent = partByAlias(part.link.to);
+            const singular = name => String(name || '').replace(/ies$/, 'y').replace(/s$/, '');
+            const first = (...candidates) => candidates.find(c => c && columns.includes(c)) || '';
+            const idColumns = columns.filter(c => /_id$/.test(c));
+            const typeColumn = columns.find(c => /_type$/.test(c)) || '';
+
+            if (!columns.includes(pivot.related_pivot_key)) {
+                pivot.related_pivot_key = first(`${singular(tableOf(part))}_id`) || '';
+            }
+            if (!columns.includes(pivot.foreign_pivot_key)) {
+                pivot.foreign_pivot_key = first(parent ? `${singular(tableOf(parent))}_id` : '', typeColumn ? typeColumn.replace(/_type$/, '_id') : '', 'model_id')
+                    || idColumns.find(c => c !== pivot.related_pivot_key) || '';
+            }
+
+            const morph = typeOf(part)?.morph;
+            if (typeColumn && !morph && types.has('morph_to_many')) {
+                part.link.type = 'morph_to_many';
+            }
+            if (typeColumn && !columns.includes(pivot.morph_type)) {
+                pivot.morph_type = typeColumn;
+            }
         }
 
         function columnSelect(columns, value, onChange, emptyLabel = 'Select column…') {
