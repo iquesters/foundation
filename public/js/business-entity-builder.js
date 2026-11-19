@@ -626,7 +626,7 @@
             }
 
             if (type.morph) {
-                keys.append(col('col-6 col-md-4', labelled('Type value', textInput(link.morph_class, type.morph === 'parent' ? (parent ? `default: ${tableOf(parent)}` : '') : `default: ${tableOf(part)}`, value => { link.morph_class = value; syncInput(); }))));
+                keys.append(col('col-6 col-md-4', labelled('Type value', textInput(link.morph_class, 'automatic (model class or table)', value => { link.morph_class = value; syncInput(); }))));
             }
 
             if (link.mode === 'reference') {

@@ -78,7 +78,10 @@ final class BusinessEntityDefinitionValidator
             }
 
             $patches[$alias] = ['table' => $table, 'entity_uid' => $entity->uid, 'entity' => null];
-            $morphClasses[$alias] = $table;
+            // An entity over a platform model's table (e.g. users) is stored in
+            // morph columns as that model (App\Models\User), like Spatie does.
+            $modelKey = $models->keyForTable($table);
+            $morphClasses[$alias] = $modelKey !== null ? $models->morphClass($modelKey) : $table;
 
             $fieldNames = array_keys(self::mainFields($entity));
             $metaKeys = array_keys(self::metaFields($entity));

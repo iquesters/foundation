@@ -56,7 +56,12 @@ Every non-root part links **to** an earlier part, its "parent". The parent must 
 - **compose:** the rows are created and edited inside the record.
 - **reference:** the record points at rows that already exist. They are picked in the form, and the part has no fields of its own.
 
-**Morph type value:** `morph_class`. It defaults to the morph class of the side it describes: the entity's table name, or the model's `getMorphClass()`. Set it when the existing rows use a class name (e.g. `App\Models\Customer`).
+**Morph type value:** `morph_class`. It defaults to the morph class of the side it describes:
+- a model part: the model's `getMorphClass()`;
+- an entity whose table belongs to a registered model (e.g. the `users` entity): that model's morph class, `App\Models\User`, as Spatie stores it;
+- any other entity: its table name.
+
+Set it when the existing rows use something else.
 
 **Not offered,** because there is nothing to store for them:
 - `has_one_through` and `has_many_through` are read paths: chain two links instead;

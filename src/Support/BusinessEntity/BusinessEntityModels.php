@@ -66,6 +66,18 @@ final class BusinessEntityModels
         return $this->instance($key)->getMorphClass();
     }
 
+    /** The key of the registered model stored in this table, if any (e.g. "users" → "user"). */
+    public function keyForTable(string $table): ?string
+    {
+        foreach (array_keys($this->models) as $key) {
+            if ($this->table($key) === $table) {
+                return $key;
+            }
+        }
+
+        return null;
+    }
+
     /** For the builder: [{key, label, table}]. */
     public function describe(): array
     {

@@ -5,6 +5,7 @@ namespace Iquesters\Foundation\Tests\Feature;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -301,6 +302,41 @@ class BusinessEntityRelationsTest extends TestCase
         $this->assertSame('checkbox', $fields['tags']['type']);
         $this->assertSame('checkbox', $fields['roles']['type']);
         $this->assertArrayHasKey('customer__name', $fields->all());
+    }
+
+    public function test_a_user_entity_gets_roles_that_spatie_sees(): void
+    {
+        $admin = $this->makeUser('super-admin');
+        Sanctum::actingAs($admin);
+        $this->registerEntity('users', 'users', [
+            'name' => ['name' => 'name', 'type' => 'string', 'required' => true],
+            'email' => ['name' => 'email', 'type' => 'string', 'input_type' => 'email', 'required' => true],
+            'password' => ['name' => 'password', 'type' => 'string', 'required' => true],
+        ]);
+        $sales = Role::findOrCreate('sales', 'web');
+
+        $businessEntity = app(BusinessEntityService::class)->create(['name' => 'User Access'], ['parts' => [
+            ['alias' => 'user', 'entity' => 'users', 'fields' => ['name', 'email', 'password']],
+            ['alias' => 'roles', 'model' => 'role', 'link' => ['type' => 'morph_to_many', 'to' => 'user',
+                'pivot' => ['table' => 'model_has_roles', 'foreign_pivot_key' => 'model_id', 'related_pivot_key' => 'role_id', 'morph_type' => 'model_type']]],
+        ]]);
+
+        // The user's morph class, as Spatie stores it, not the table name.
+        $userClass = config('auth.providers.users.model');
+        $this->assertSame((new $userClass)->getMorphClass(), $businessEntity->parsedDefinition()->part('roles')['link']['morph_class']);
+
+        $record = $this->postJson(self::BASE.'/store/user-access', [
+            'user__name' => 'Ravi', 'user__email' => 'ravi@example.test', 'user__password' => 'secret-123', 'roles' => [(string) $sales->id],
+        ])->assertCreated()->json('response_schema.data');
+
+        $this->assertNull($record['user__password']);
+        $user = $userClass::where('email', 'ravi@example.test')->firstOrFail();
+        $this->assertTrue(Hash::check('secret-123', $user->password));
+        $this->assertTrue($user->fresh()->hasRole('sales'));
+
+        // An existing user's roles, e.g. the admin's, are shown and edited the same way.
+        $adminRecord = $this->getJson(self::BASE."/show/user-access/{$admin->id}")->assertOk()->json('response_schema.data');
+        $this->assertSame([(string) Role::findByName('super-admin', 'web')->id], $adminRecord['roles']);
     }
 
     public function test_definition_files_export_and_sync(): void

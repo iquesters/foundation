@@ -37,6 +37,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follo
   - **Lists of rows** (`"{alias}": [...]`): on update the sent list replaces the current rows.
   - **References and pivots:** synced; the new `GET business-entity/options/{slug}/{alias}` lists their choices.
   - **Platform models:** users, roles and permissions can be referenced, e.g. roles through Spatie's `model_has_roles` (`BusinessEntityModels`; modules register their own).
+    - An entity over a model's table (e.g. `users`) uses the model's morph class (`App\Models\User`) in morph columns, so a "user with roles" business entity reads and writes the same roles as Spatie.
   - **Extensible:** relation types are `Relations\RelationType` descriptions in `Relations\RelationTypes`; modules add their own with the `business-entity.relation-types` tag.
   - **Configuration only:** every table, column and pivot a link uses must exist. A missing pivot is reported (`InvalidBusinessEntityDefinition::$missingPivots`), never created.
   - **Generated forms:** a `repeater` field for a list of rows; a `select` or `checkbox` field with `optionsFrom.url` for a reference.
