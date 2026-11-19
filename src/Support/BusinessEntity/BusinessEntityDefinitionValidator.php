@@ -3,6 +3,7 @@
 namespace Iquesters\Foundation\Support\BusinessEntity;
 
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Iquesters\Foundation\Constants\EntityStatus;
 use Iquesters\Foundation\Models\Entity;
@@ -42,7 +43,7 @@ final class BusinessEntityDefinitionValidator
         foreach ($definition->parts() as $alias => $part) {
             if ($part['model'] !== null) {
                 if (! $models->has($part['model'])) {
-                    $errors[] = "Part \"{$alias}\": unknown model \"{$part['model']}\".";
+                    $errors[] = "{$this->partName($part)}: \"{$part['model']}\" isn't a platform model this app knows.";
 
                     continue;
                 }
@@ -50,7 +51,7 @@ final class BusinessEntityDefinitionValidator
                 $table = $models->table($part['model']);
 
                 if (! Schema::hasTable($table)) {
-                    $errors[] = "Part \"{$alias}\": the {$part['model']} table ({$table}) does not exist.";
+                    $errors[] = "{$this->partName($part)}: the {$part['model']} table ({$table}) doesn't exist in this database.";
 
                     continue;
                 }
@@ -64,7 +65,7 @@ final class BusinessEntityDefinitionValidator
             $entity = $this->findEntity($part);
 
             if (! $entity) {
-                $errors[] = "Part \"{$alias}\": entity ".($part['entity'] ? "\"{$part['entity']}\" " : '').'not found.';
+                $errors[] = "{$this->partName($part)}: the entity ".($part['entity'] ? "\"{$part['entity']}\" " : '')."doesn't exist (or was deleted).";
 
                 continue;
             }
@@ -72,7 +73,7 @@ final class BusinessEntityDefinitionValidator
             $table = self::tableOf($entity);
 
             if (! $table || ! Schema::hasTable($table)) {
-                $errors[] = "Part \"{$alias}\": entity \"{$entity->entity_name}\" is not published yet (it has no table).";
+                $errors[] = "{$this->partName($part)}: the entity \"{$entity->entity_name}\" isn't published yet. Publish it first (Entities → {$entity->entity_name} → Publish) so its table exists.";
 
                 continue;
             }
@@ -88,13 +89,13 @@ final class BusinessEntityDefinitionValidator
 
             foreach ($part['fields'] as $field) {
                 if (! in_array($field['field'], $fieldNames, true)) {
-                    $errors[] = "Part \"{$alias}\": \"{$field['field']}\" is not a field of {$entity->entity_name}.";
+                    $errors[] = "{$this->partName($part)}: \"{$field['field']}\" is not a field of {$entity->entity_name}.";
                 }
             }
 
             foreach ($part['meta_fields'] as $field) {
                 if (! in_array($field['meta_key'], $metaKeys, true)) {
-                    $errors[] = "Part \"{$alias}\": \"{$field['meta_key']}\" is not a meta field of {$entity->entity_name}.";
+                    $errors[] = "{$this->partName($part)}: \"{$field['meta_key']}\" is not a meta field of {$entity->entity_name}.";
                 }
             }
         }
@@ -120,8 +121,9 @@ final class BusinessEntityDefinitionValidator
         $missingPivots = [];
         $patches = [];
         $has = fn (string $table, ?string $column) => $column !== null && Schema::hasColumn($table, $column);
-        $missing = function (string $alias, string $table, ?string $column, string $what) use (&$errors) {
-            $errors[] = "Part \"{$alias}\": {$what} \"{$column}\" does not exist in table {$table}.";
+        $missing = function (string $alias, string $table, ?string $column, string $what) use (&$errors, $definition) {
+            $name = $this->partName($definition->part($alias));
+            $errors[] = "{$name}: the table {$table} has no column \"{$column}\" {$what}. Pick one of its columns.";
         };
 
         foreach ($definition->parts() as $alias => $part) {
@@ -139,16 +141,16 @@ final class BusinessEntityDefinitionValidator
             switch ($type->holder()) {
                 case RelationType::HOLDER_SELF:
                     if (! $has($table, $link['foreign_key'])) {
-                        $missing($alias, $table, $link['foreign_key'], 'link column');
+                        $missing($alias, $table, $link['foreign_key'], 'to store the link');
                     }
                     if ($type->morph() !== null && ! $has($table, $link['morph_type'])) {
-                        $missing($alias, $table, $link['morph_type'], 'morph type column');
+                        $missing($alias, $table, $link['morph_type'], 'for the record type');
                     }
                     break;
 
                 case RelationType::HOLDER_PARENT:
                     if (! $has($parentTable, $link['foreign_key'])) {
-                        $missing($alias, $parentTable, $link['foreign_key'], 'link column');
+                        $missing($alias, $parentTable, $link['foreign_key'], 'to store the link');
                     }
                     break;
 
@@ -157,14 +159,14 @@ final class BusinessEntityDefinitionValidator
                     $columns = array_values(array_filter([$pivot['foreign_pivot_key'], $pivot['related_pivot_key'], $pivot['morph_type'] ?? null]));
 
                     if (! Schema::hasTable($pivot['table'])) {
-                        $errors[] = "Part \"{$alias}\": pivot table {$pivot['table']} does not exist. Create it as an entity (columns: ".implode(', ', $columns).') and publish it; a business entity never creates tables.';
+                        $errors[] = "{$this->partName($part)}: the link table \"{$pivot['table']}\" doesn't exist yet. Create it as an entity with the columns ".implode(', ', $columns).', publish it, then come back. A business entity never creates tables.';
                         $missingPivots[] = ['part' => $alias, 'table' => $pivot['table'], 'columns' => $columns];
                         break;
                     }
 
                     foreach ($columns as $column) {
                         if (! $has($pivot['table'], $column)) {
-                            $missing($alias, $pivot['table'], $column, 'pivot column');
+                            $missing($alias, $pivot['table'], $column, 'in the link table');
                         }
                     }
                     break;
@@ -176,13 +178,13 @@ final class BusinessEntityDefinitionValidator
 
             if ($definition->isReference($alias)) {
                 if (! $has($table, 'id')) {
-                    $errors[] = "Part \"{$alias}\": table {$table} has no id column, so it can't be referenced.";
+                    $errors[] = "{$this->partName($part)}: the table {$table} has no id column, so its records can't be picked.";
                 }
 
                 if ($link['label_column'] === null) {
                     $patch['label_column'] = collect(self::LABEL_COLUMNS)->first(fn ($c) => $has($table, $c));
                 } elseif (! $has($table, $link['label_column'])) {
-                    $missing($alias, $table, $link['label_column'], 'label column');
+                    $missing($alias, $table, $link['label_column'], 'to show records by');
                 }
             }
 
@@ -192,6 +194,12 @@ final class BusinessEntityDefinitionValidator
         }
 
         return [array_values(array_unique($errors)), $missingPivots, $patches];
+    }
+
+    /** How a part is named in messages: its label, else its alias in words ("Address"). */
+    private function partName(array $part): string
+    {
+        return $part['label'] ?? Str::headline($part['alias']);
     }
 
     private function findEntity(array $part): ?Entity

@@ -323,7 +323,7 @@
             const primary = el('input', { type: 'checkbox', className: 'form-check-input', id: 'bePickPrimary', checked: first, disabled: first });
             body.append(el('div', { className: 'form-check mb-3' }, [
                 primary,
-                el('label', { className: 'form-check-label', htmlFor: 'bePickPrimary', textContent: 'Primary entity (the root: a record\'s uid is its uid)' }),
+                el('label', { className: 'form-check-label', htmlFor: 'bePickPrimary', textContent: 'Make it the primary entity (each record is one of its rows)' }),
             ]));
 
             const search = el('input', { type: 'search', className: 'form-control form-control-sm mb-2', placeholder: 'Search entities…' });
@@ -349,7 +349,7 @@
             });
 
             if (models.length && !first) {
-                list.append(el('div', { className: 'list-group-item small text-muted bg-body-tertiary', textContent: 'Platform models (reference only: pick existing records)' }));
+                list.append(el('div', { className: 'list-group-item small text-muted bg-body-tertiary', textContent: 'Platform records (users, roles…): picked in the form, never edited here' }));
                 models.forEach(model => {
                     const isUsed = used.has(`model:${model.key}`);
                     addItem(model.key, model.label, model.table, isUsed, isUsed ? 'already added' : '',
@@ -364,7 +364,7 @@
                 items.forEach(item => item.classList.toggle('d-none', q !== '' && !item.dataset.search.includes(q)));
             });
 
-            openModal('Add entity', body, []);
+            openModal('Add an entity', body, []);
             setTimeout(() => search.focus(), 300);
         }
 
@@ -419,8 +419,8 @@
 
         async function review() {
             syncInput();
-            const body = el('div', { className: 'be-review' }, [el('div', { className: 'text-muted small', textContent: 'Checking against the database…' })]);
-            openModal('Review business entity', body, []);
+            const body = el('div', { className: 'be-review' }, [el('div', { className: 'text-muted small', textContent: 'Checking that every table and column exists…' })]);
+            openModal('Check before saving', body, []);
 
             let result;
             try {
@@ -435,7 +435,7 @@
                     result = { valid: false, errors: Object.values(result?.errors || { e: [result?.message || 'Check failed.'] }).flat() };
                 }
             } catch (e) {
-                result = { valid: false, errors: ['The definition could not be checked. Try again.'] };
+                result = { valid: false, errors: ['We couldn\'t check it right now. Check your connection and try again.'] };
             }
 
             body.replaceChildren(...reviewContent(result));
@@ -450,14 +450,14 @@
             const nodes = [];
 
             if (!result.valid) {
-                const alert = el('div', { className: 'alert alert-danger small' }, [el('div', { className: 'fw-medium mb-1', textContent: 'Fix these before saving:' })]);
+                const alert = el('div', { className: 'alert alert-danger small' }, [el('div', { className: 'fw-medium mb-1', textContent: 'Please fix these first, then review again:' })]);
                 const ul = el('ul', { className: 'mb-0 ps-3' });
                 (result.errors || []).forEach(error => ul.append(el('li', { textContent: error })));
                 alert.append(ul);
                 nodes.push(alert);
                 (result.missing_pivots || []).forEach(pivot => nodes.push(pivotHelp(pivot.table, pivot.columns)));
             } else {
-                nodes.push(el('div', { className: 'alert alert-success small py-2', textContent: 'Everything this business entity uses exists. Saving stores the definition and generates its form and table; no tables are created or changed.' }));
+                nodes.push(el('div', { className: 'alert alert-success small py-2', textContent: 'All good. Everything it uses exists. Saving creates its screens (as chosen above); no database tables are created or changed.' }));
             }
 
             const tree = el('ul', { className: 'be-tree list-unstyled small mb-0' });
@@ -486,8 +486,8 @@
 
         function pivotHelp(table, columns) {
             const box = el('div', { className: 'alert alert-warning small' });
-            box.append(el('div', { className: 'fw-medium', textContent: `Needs pivot table "${table}"` }));
-            box.append(el('div', { textContent: `Create it as an entity with the columns ${columns.join(', ')}, publish it, then come back. A business entity never creates tables.` }));
+            box.append(el('div', { className: 'fw-medium', textContent: `The link table "${table}" doesn't exist yet` }));
+            box.append(el('div', { textContent: `Create it as an entity with the columns ${columns.join(', ')}, publish it, then come back here. (A business entity never creates tables itself.)` }));
             if (urls.createEntity) {
                 const link = el('a', { href: urls.createEntity, target: '_blank', rel: 'noopener', className: 'btn btn-sm btn-outline-dark mt-2' }, [el('i', { className: 'fas fa-fw fa-plus me-1' }), document.createTextNode('Create pivot entity')]);
                 box.append(link);
@@ -500,7 +500,7 @@
 
         function render() {
             if (!parts.length) {
-                root.replaceChildren(el('div', { className: 'be-empty text-muted small border rounded p-3', textContent: 'Start with "Add entity": the first one is the primary entity.' }));
+                root.replaceChildren(el('div', { className: 'be-empty text-muted small border rounded p-3', textContent: 'Nothing added yet. Click "Add entity" and choose the primary entity: each record will be one of its rows (e.g. users).' }));
             } else {
                 root.replaceChildren(...parts.map(renderPart));
             }
@@ -539,8 +539,8 @@
             }
 
             const row = el('div', { className: 'row g-2' });
-            row.append(col('col-6 col-md-4', labelled('Alias', aliasInput(part))));
-            row.append(col('col-6 col-md-4', labelled('Label', textInput(part.label, 'optional', value => { part.label = value; renderPreview(); syncInput(); }))));
+            row.append(col('col-6 col-md-4', labelled('Short name', aliasInput(part), 'Used in field keys, e.g. customer, address.')));
+            row.append(col('col-6 col-md-4', labelled('Label', textInput(part.label, 'optional', value => { part.label = value; renderPreview(); syncInput(); }), 'Shown in the form and in messages.')));
             body.append(row);
 
             if (index > 0 && part.link) {
@@ -590,7 +590,7 @@
                 suggestKeys(part);
                 render();
             });
-            row.append(col('col-12 col-md-5', labelled('Relation', typeSelect)));
+            row.append(col('col-12 col-md-5', labelled('How they relate', typeSelect)));
 
             const to = el('select', { className: 'form-select form-select-sm' });
             const targets = treeParts(index);
@@ -607,7 +607,7 @@
                     textContent: m === 'compose' ? 'Fill in on the form' : 'Pick an existing record',
                 })));
                 mode.addEventListener('change', () => { link.mode = mode.value; render(); });
-                row.append(col('col-6 col-md-3', labelled('How', mode)));
+                row.append(col('col-6 col-md-3', labelled('In the form', mode)));
             }
             wrap.append(row);
 
@@ -636,7 +636,10 @@
             }
 
             wrap.append(keys);
-            wrap.append(el('div', { className: 'form-text', textContent: storageText(part) }));
+            wrap.append(el('div', { className: 'form-text' }, [
+                el('i', { className: 'fas fa-fw fa-database me-1' }),
+                document.createTextNode(`Saved as: ${storageText(part)}. Columns are filled in for you when the tables use common names; change them only if yours differ.`),
+            ]));
 
             return wrap;
         }
@@ -651,7 +654,7 @@
             const table = textInput(link.pivot.table, 'e.g. customer_tag', value => { link.pivot.table = value; syncInput(); });
             table.setAttribute('list', 'beKnownTables');
             table.addEventListener('change', () => { loadColumns(link.pivot.table); fitPivotColumns(part); render(); });
-            nodes.push(col('col-12 col-md-4', labelled('Pivot table', table)));
+            nodes.push(col('col-12 col-md-4', labelled('Link table (pivot)', table, 'The table that pairs the two records.')));
             nodes.push(col('col-6 col-md-4', labelled(`${parent ? nameOf(parent) : 'Record'} id column`, columnSelect(columns, link.pivot.foreign_pivot_key, value => { link.pivot.foreign_pivot_key = value; render(); }))));
             nodes.push(col('col-6 col-md-4', labelled(`${nameOf(part)} id column`, columnSelect(columns, link.pivot.related_pivot_key, value => { link.pivot.related_pivot_key = value; render(); }))));
             if (type.morph) {
@@ -746,7 +749,7 @@
             group.append(el('div', { className: 'small text-muted mb-1', textContent: title }));
 
             if (!options.length) {
-                group.append(el('div', { className: 'small text-muted fst-italic', textContent: 'None available' }));
+                group.append(el('div', { className: 'small text-muted fst-italic', textContent: 'This entity has no fields to choose.' }));
 
                 return group;
             }
@@ -789,7 +792,7 @@
             });
 
             if (!items.length) {
-                preview.replaceChildren(el('li', { className: 'text-muted fst-italic', textContent: 'No fields selected yet' }));
+                preview.replaceChildren(el('li', { className: 'text-muted fst-italic', textContent: 'Nothing yet: tick the fields to show on each entity card.' }));
 
                 return;
             }
@@ -905,11 +908,13 @@
             return el('div', { className }, [child]);
         }
 
-        function labelled(text, control) {
+        function labelled(text, control, help = '') {
             const id = control.id || `be-${Math.random().toString(36).slice(2)}`;
             control.id = id;
+            const nodes = [el('label', { className: 'form-label small mb-1', htmlFor: id, textContent: text }), control];
+            if (help) nodes.push(el('div', { className: 'form-text', textContent: help }));
 
-            return el('div', {}, [el('label', { className: 'form-label small mb-1', htmlFor: id, textContent: text }), control]);
+            return el('div', {}, nodes);
         }
 
         function textInput(value, placeholder, onInput) {

@@ -2,6 +2,7 @@
 
 namespace Iquesters\Foundation\Services;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\Constants\Constant as FormSchemaConstant;
 use Iquesters\Foundation\Constants\EntityStatus;
@@ -77,14 +78,33 @@ class BusinessEntitySchemaGenerator
         return $schema;
     }
 
+    /** A form and its own list (default). */
+    public const OUTPUT_FORM_TABLE = 'form_table';
+
+    /** A form only, e.g. used in an existing table (meta use_in_table). */
+    public const OUTPUT_FORM = 'form';
+
+    /** No screens: the API only, for a module's own hand-made form. */
+    public const OUTPUT_API = 'api';
+
+    public const OUTPUTS = [self::OUTPUT_FORM_TABLE, self::OUTPUT_FORM, self::OUTPUT_API];
+
     /**
-     * Create or update both stored schemas and remember their uids.
+     * Create or update the stored schemas and remember their uids, as the
+     * business entity's meta "output" asks:
+     * - form_table: the form and its own list table;
+     * - form: the form only;
+     * - api: no schemas (the API works the same).
+     * Schemas it no longer wants are deactivated. Meta use_in_table (a table
+     * schema slug, e.g. "user-table") makes that existing table open this
+     * form for Create and for its rows.
      *
-     * @return array{form_schema_uid: string, table_schema_uid: string}
+     * @return array{form_schema_uid: ?string, table_schema_uid: ?string}
      */
     public function sync(BusinessEntity $businessEntity, ?BusinessEntityDefinition $definition = null): array
     {
         $definition ??= $businessEntity->parsedDefinition();
+        $output = self::outputOf($businessEntity);
         $name = $businessEntity->name;
         $attributes = fn (string $slug, string $label, array $schema) => [
             'slug' => $slug,
@@ -93,21 +113,124 @@ class BusinessEntitySchemaGenerator
             'schema' => $schema,
             'status' => EntityStatus::ACTIVE,
         ];
+        $formFind = ['uid' => $businessEntity->getMeta('form_schema_uid'), 'slugs' => [self::formSlug($businessEntity)]];
+        $tableFind = ['uid' => $businessEntity->getMeta('table_schema_uid'), 'slugs' => [self::tableSlug($businessEntity)]];
+        $formUid = null;
+        $tableUid = null;
 
-        $form = $this->store->save(GeneratedSchemaStore::FORM,
-            ['uid' => $businessEntity->getMeta('form_schema_uid'), 'slugs' => [self::formSlug($businessEntity)]],
-            $attributes(self::formSlug($businessEntity), 'Form', $this->formSchema($businessEntity, $definition))
-        );
+        if ($output === self::OUTPUT_API) {
+            $this->deactivate(GeneratedSchemaStore::FORM, $formFind);
+        } else {
+            $formUid = $this->store->save(GeneratedSchemaStore::FORM, $formFind,
+                $attributes(self::formSlug($businessEntity), 'Form', $this->formSchema($businessEntity, $definition))
+            )->uid;
+        }
 
-        $table = $this->store->save(GeneratedSchemaStore::TABLE,
-            ['uid' => $businessEntity->getMeta('table_schema_uid'), 'slugs' => [self::tableSlug($businessEntity)]],
-            $attributes(self::tableSlug($businessEntity), 'Table', $this->tableSchema($businessEntity, $definition, $form->uid))
-        );
+        if ($output === self::OUTPUT_FORM_TABLE) {
+            $tableUid = $this->store->save(GeneratedSchemaStore::TABLE, $tableFind,
+                $attributes(self::tableSlug($businessEntity), 'Table', $this->tableSchema($businessEntity, $definition, $formUid))
+            )->uid;
+        } else {
+            $this->deactivate(GeneratedSchemaStore::TABLE, $tableFind);
+        }
 
-        $businessEntity->setMeta('form_schema_uid', $form->uid);
-        $businessEntity->setMeta('table_schema_uid', $table->uid);
+        $businessEntity->setMeta('form_schema_uid', $formUid);
+        $businessEntity->setMeta('table_schema_uid', $tableUid);
 
-        return ['form_schema_uid' => $form->uid, 'table_schema_uid' => $table->uid];
+        if ($formUid !== null && ($useIn = $businessEntity->getMeta('use_in_table'))) {
+            $this->useFormInTable($businessEntity, (string) $useIn);
+        }
+
+        return ['form_schema_uid' => $formUid, 'table_schema_uid' => $tableUid];
+    }
+
+    public static function outputOf(BusinessEntity $businessEntity): string
+    {
+        $output = $businessEntity->getMeta('output');
+
+        return in_array($output, self::OUTPUTS, true) ? $output : self::OUTPUT_FORM_TABLE;
+    }
+
+    /** A schema generated before that is no longer wanted. */
+    private function deactivate(string $kind, array $find): void
+    {
+        $this->store->find($kind, $find)?->update(['status' => 'inactive', 'updated_by' => auth()->id()]);
+    }
+
+    /**
+     * Make an existing table schema open this business entity's form: its
+     * Create button ("create.form") and its rows ("form_schema_uid" and the
+     * columns' "form-schema-uid"). The table keeps its own columns and data.
+     *
+     * The form the table opened before is remembered (meta
+     * use_in_table_previous_form), so restoreTable() can put it back when the
+     * business entity stops using the table or is deleted.
+     *
+     * @throws \InvalidArgumentException when the table schema doesn't exist
+     */
+    public function useFormInTable(BusinessEntity $businessEntity, string $tableSlug): void
+    {
+        $table = $this->store->find(GeneratedSchemaStore::TABLE, ['slugs' => [$tableSlug]]);
+
+        if (! $table) {
+            throw new \InvalidArgumentException("The table \"{$tableSlug}\" doesn't exist. Choose another table under \"Use the form in\".");
+        }
+
+        $formSlug = self::formSlug($businessEntity);
+        $schema = self::schemaArray($table);
+        $current = self::tableForm($schema);
+
+        if ($current !== null && $current !== $formSlug) {
+            $businessEntity->setMeta('use_in_table_previous_form', $current);
+        }
+
+        $table->update(['schema' => self::withTableForm($schema, $formSlug), 'updated_by' => auth()->id()]);
+    }
+
+    /** Give a table back the form it opened before this business entity used it. */
+    public function restoreTable(BusinessEntity $businessEntity, string $tableSlug): void
+    {
+        $table = $this->store->find(GeneratedSchemaStore::TABLE, ['slugs' => [$tableSlug]]);
+        $previous = $businessEntity->getMeta('use_in_table_previous_form');
+
+        if ($table && $previous && self::tableForm(self::schemaArray($table)) === self::formSlug($businessEntity)) {
+            $table->update(['schema' => self::withTableForm(self::schemaArray($table), $previous), 'updated_by' => auth()->id()]);
+        }
+
+        $businessEntity->setMeta('use_in_table_previous_form', null);
+    }
+
+    /** Turn off the generated form and list (the business entity is deleted). */
+    public function deactivateAll(BusinessEntity $businessEntity): void
+    {
+        $this->deactivate(GeneratedSchemaStore::FORM, ['uid' => $businessEntity->getMeta('form_schema_uid'), 'slugs' => [self::formSlug($businessEntity)]]);
+        $this->deactivate(GeneratedSchemaStore::TABLE, ['uid' => $businessEntity->getMeta('table_schema_uid'), 'slugs' => [self::tableSlug($businessEntity)]]);
+    }
+
+    private static function schemaArray(Model $table): array
+    {
+        return is_array($table->schema) ? $table->schema : (json_decode((string) $table->schema, true) ?: []);
+    }
+
+    /** The form a table schema opens (create button, else rows). */
+    private static function tableForm(array $schema): ?string
+    {
+        return $schema['create']['form'] ?? $schema['form_schema_uid'] ?? null;
+    }
+
+    private static function withTableForm(array $schema, string $formSlug): array
+    {
+        $schema['form_schema_uid'] = $formSlug;
+        $schema['create'] = ['form' => $formSlug] + (is_array($schema['create'] ?? null) ? $schema['create'] : []);
+        $schema['create']['form'] = $formSlug;
+
+        foreach ($schema['dt-options']['columns'] ?? [] as $i => $column) {
+            if (is_array($column) && isset($column['form-schema-uid'])) {
+                $schema['dt-options']['columns'][$i]['form-schema-uid'] = $formSlug;
+            }
+        }
+
+        return $schema;
     }
 
     /**

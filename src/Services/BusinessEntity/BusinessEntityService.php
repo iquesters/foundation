@@ -54,6 +54,7 @@ class BusinessEntityService
                 'updated_by' => auth()->id(),
             ]);
 
+            $this->saveScreenOptions($businessEntity, $attributes);
             $this->syncSchemas($businessEntity, $parsed);
 
             return $businessEntity;
@@ -80,6 +81,7 @@ class BusinessEntityService
                 'updated_by' => auth()->id(),
             ]);
 
+            $this->saveScreenOptions($businessEntity, $attributes);
             $this->syncSchemas($businessEntity, $parsed);
         });
 
@@ -90,9 +92,24 @@ class BusinessEntityService
     }
 
     /** Soft-deletes the definition only; records in the part tables are not touched. */
+    /**
+     * Soft-deletes the definition and turns off its screens: its own form and
+     * list are deactivated, and a table it was used in gets its old form back.
+     * Records in the part tables are not touched.
+     */
     public function delete(BusinessEntity $businessEntity): void
     {
-        $businessEntity->update(['status' => EntityStatus::DELETED, 'updated_by' => auth()->id()]);
+        DB::transaction(function () use ($businessEntity) {
+            $businessEntity->update(['status' => EntityStatus::DELETED, 'updated_by' => auth()->id()]);
+
+            if ($this->schemasAvailable()) {
+                if ($table = $businessEntity->getMeta('use_in_table')) {
+                    $this->schemas->restoreTable($businessEntity, $table);
+                }
+
+                $this->schemas->deactivateAll($businessEntity);
+            }
+        });
 
         static::logInfo('Business entity deleted', ['uid' => $businessEntity->uid]);
         BusinessEntityDefinitionChanged::dispatch($businessEntity, BusinessEntityDefinitionChanged::DELETED);
@@ -116,7 +133,8 @@ class BusinessEntityService
             throw new InvalidArgumentException('A definition file needs a "definition" object.');
         }
 
-        $attributes = ['name' => $file['name'], 'slug' => $slug, 'desc' => $file['desc'] ?? null];
+        $attributes = ['name' => $file['name'], 'slug' => $slug, 'desc' => $file['desc'] ?? null]
+            + array_intersect_key($file, array_flip(['output', 'use_in_table']));
         $existing = BusinessEntity::where('slug', $slug)->first();
 
         return $existing
@@ -131,16 +149,51 @@ class BusinessEntityService
             'name' => $businessEntity->name,
             'slug' => $businessEntity->slug,
             'desc' => $businessEntity->desc,
+            'output' => BusinessEntitySchemaGenerator::outputOf($businessEntity),
+            'use_in_table' => $businessEntity->getMeta('use_in_table'),
             'definition' => $businessEntity->parsedDefinition()->toPortableArray(),
         ], fn ($v) => $v !== null);
     }
 
+    /**
+     * Screen options (business entity metas, read by BusinessEntitySchemaGenerator):
+     * - output: "form_table" (default), "form" (no list of its own) or "api" (no screens);
+     * - use_in_table: a table schema slug whose Create button and rows open this form.
+     * Keys that are not given keep their current value.
+     */
+    private function saveScreenOptions(BusinessEntity $businessEntity, array $attributes): void
+    {
+        if (array_key_exists('output', $attributes)) {
+            $output = in_array($attributes['output'], BusinessEntitySchemaGenerator::OUTPUTS, true)
+                ? $attributes['output']
+                : BusinessEntitySchemaGenerator::OUTPUT_FORM_TABLE;
+            $businessEntity->setMeta('output', $output);
+        }
+
+        if (array_key_exists('use_in_table', $attributes)) {
+            $table = is_string($attributes['use_in_table']) ? trim($attributes['use_in_table']) : '';
+            $previous = $businessEntity->getMeta('use_in_table');
+
+            // No longer used in that table: it gets its own form back.
+            if ($previous && $previous !== $table && $this->schemasAvailable()) {
+                $this->schemas->restoreTable($businessEntity, $previous);
+            }
+
+            $businessEntity->setMeta('use_in_table', $table !== '' ? $table : null);
+        }
+    }
+
     public function syncSchemas(BusinessEntity $businessEntity, ?BusinessEntityDefinition $definition = null): void
     {
-        // Schemas are stored by iquesters/user-interface; without it there is nothing to generate.
-        if (app()->bound(SchemaModels::class)) {
+        if ($this->schemasAvailable()) {
             $this->schemas->sync($businessEntity, $definition);
         }
+    }
+
+    /** Schemas are stored by iquesters/user-interface; without it there is nothing to generate. */
+    private function schemasAvailable(): bool
+    {
+        return app()->bound(SchemaModels::class);
     }
 
     private function uniqueSlug(string $name): string

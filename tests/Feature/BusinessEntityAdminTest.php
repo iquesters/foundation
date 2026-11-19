@@ -70,7 +70,7 @@ class BusinessEntityAdminTest extends TestCase
 
         $this->actingAs($this->makeUser('super-admin'))
             ->post('/business-entity', $this->payload(['definition' => json_encode($definition)]))
-            ->assertSessionHasErrors(['definition' => 'Part "address": "no_such_field" is not a field of Address.']);
+            ->assertSessionHasErrors(['definition' => 'Address: "no_such_field" is not a field of Address.']);
 
         $this->assertDatabaseCount('business_entities', 0);
     }
@@ -104,12 +104,12 @@ class BusinessEntityAdminTest extends TestCase
             $validator->validate($definition);
             $this->fail('Unpublished entity accepted.');
         } catch (InvalidArgumentException $e) {
-            $this->assertStringContainsString('is not published yet', $e->getMessage());
+            $this->assertStringContainsString("isn't published yet", $e->getMessage());
         }
 
         $definition = $this->demoDefinition();
         $definition['parts'][1]['link']['foreign_key'] = 'owner_id';
-        $this->expectExceptionMessage('link column "owner_id" does not exist in table addresses');
+        $this->expectExceptionMessage('the table addresses has no column "owner_id" to store the link');
         $validator->validate($definition);
     }
 

@@ -11,10 +11,12 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Iquesters\Foundation\Constants\EntityStatus;
+use Iquesters\Foundation\Contracts\SchemaModels;
 use Iquesters\Foundation\Models\BusinessEntity;
 use Iquesters\Foundation\Models\Entity;
 use Iquesters\Foundation\Models\Module;
 use Iquesters\Foundation\Services\BusinessEntity\BusinessEntityService;
+use Iquesters\Foundation\Services\BusinessEntitySchemaGenerator;
 use Iquesters\Foundation\Support\BusinessEntity\BusinessEntityDefinition;
 use Iquesters\Foundation\Support\BusinessEntity\BusinessEntityDefinitionValidator;
 use Iquesters\Foundation\Support\BusinessEntity\BusinessEntityModels;
@@ -54,7 +56,7 @@ class BusinessEntityController extends Controller
         $businessEntity = $this->save(fn () => $this->service->create($data, $this->definitionInput($request)));
 
         return redirect()->route('business-entities.edit', $businessEntity->uid)
-            ->with('success', 'Business entity created, with its form and table.');
+            ->with('success', $this->savedMessage($businessEntity, true));
     }
 
     public function update(Request $request, string $uid)
@@ -64,14 +66,16 @@ class BusinessEntityController extends Controller
         $this->save(fn () => $this->service->update($businessEntity, $data, $this->definitionInput($request)));
 
         return redirect()->route('business-entities.edit', $businessEntity->uid)
-            ->with('success', 'Business entity updated, its form and table were regenerated.');
+            ->with('success', $this->savedMessage($businessEntity, false));
     }
 
     public function destroy(string $uid)
     {
-        $this->service->delete($this->find($uid));
+        $businessEntity = $this->find($uid);
+        $this->service->delete($businessEntity);
 
-        return redirect()->route('business-entities.index')->with('success', 'Business entity deleted. Its records were not changed.');
+        return redirect()->route('business-entities.index')
+            ->with('success', "\"{$businessEntity->name}\" was deleted. Its records are still in their tables, and any table that used its form has its own form back.");
     }
 
     /**
@@ -105,6 +109,20 @@ class BusinessEntityController extends Controller
         return response()->json(['exists' => true, 'columns' => Schema::getColumnListing($table)]);
     }
 
+    /** "Customer Profile" is saved: its form and list are ready. */
+    private function savedMessage(BusinessEntity $businessEntity, bool $created): string
+    {
+        $name = "\"{$businessEntity->name}\" is ".($created ? 'created' : 'saved');
+        $table = $businessEntity->getMeta('use_in_table');
+        $where = $table ? " The \"{$table}\" table now opens this form for Create and for its rows." : '';
+
+        return match (BusinessEntitySchemaGenerator::outputOf($businessEntity)) {
+            BusinessEntitySchemaGenerator::OUTPUT_API => "{$name}. Its API is ready (no screens were generated).",
+            BusinessEntitySchemaGenerator::OUTPUT_FORM => "{$name}. Its form is ready.{$where}",
+            default => "{$name}. Its form and list are ready: open them with Records.{$where}",
+        };
+    }
+
     private function find(string $uid): BusinessEntity
     {
         return BusinessEntity::where('uid', $uid)->notDeleted()->firstOrFail();
@@ -122,7 +140,9 @@ class BusinessEntityController extends Controller
             'ref_module' => ['nullable', 'integer', 'exists:modules,id'],
             'desc' => ['nullable', 'string', 'max:255'],
             'definition' => ['required', 'json'],
-        ]);
+            'output' => ['nullable', Rule::in(BusinessEntitySchemaGenerator::OUTPUTS)],
+            'use_in_table' => ['nullable', 'string', 'max:255'],
+        ]) + ['output' => null, 'use_in_table' => null];
     }
 
     private function definitionInput(Request $request): array
@@ -135,9 +155,29 @@ class BusinessEntityController extends Controller
     {
         try {
             return $save();
+        } catch (InvalidBusinessEntityDefinition $e) {
+            // One message per problem, listed on the page.
+            throw ValidationException::withMessages(['definition' => $e->problems]);
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['definition' => $e->getMessage()]);
         }
+    }
+
+    /** Table schemas a form can be used in (slug => name); none without iquesters/user-interface. */
+    private function tableSchemas(): array
+    {
+        if (! app()->bound(SchemaModels::class)) {
+            return [];
+        }
+
+        $model = app(SchemaModels::class)->tableSchemaModel();
+
+        return $model::query()
+            ->where('status', '<>', EntityStatus::DELETED)
+            ->where('slug', 'not like', 'business-%')
+            ->orderBy('name')
+            ->pluck('name', 'slug')
+            ->all();
     }
 
     /** View data: the entities, models and relation types the builder can use. */
@@ -183,6 +223,9 @@ class BusinessEntityController extends Controller
             'entities' => $entities,
             'models' => $models,
             'relationTypes' => app(RelationTypes::class)->describe(),
+            'tableSchemas' => $this->tableSchemas(),
+            'output' => $businessEntity ? BusinessEntitySchemaGenerator::outputOf($businessEntity) : BusinessEntitySchemaGenerator::OUTPUT_FORM_TABLE,
+            'useInTable' => $businessEntity?->getMeta('use_in_table'),
             'definition' => $businessEntity?->definition ?? ['version' => BusinessEntityDefinition::VERSION, 'parts' => []],
         ];
     }

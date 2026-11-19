@@ -130,7 +130,7 @@ class BusinessEntityRelationsTest extends TestCase
 
     public function test_a_missing_link_column_is_rejected(): void
     {
-        $this->expectExceptionMessage('link column "owner_id" does not exist in table notes');
+        $this->expectExceptionMessage('the table notes has no column "owner_id" to store the link');
 
         app(BusinessEntityDefinitionValidator::class)->validate($this->accountDefinition(['notes' => ['alias' => 'notes', 'entity' => 'notes', 'fields' => ['body'],
             'link' => ['type' => 'has_many', 'to' => 'customer', 'foreign_key' => 'owner_id']]]));
@@ -155,6 +155,8 @@ class BusinessEntityRelationsTest extends TestCase
             ->assertJsonPath('response_schema.data.notes.1.body', 'Sent quote')
             ->assertJsonPath('response_schema.data.comments.0.body', 'VIP')
             ->assertJsonPath('response_schema.data.company', $company)
+            ->assertJsonPath('response_schema.data.labels.company', 'Iquesters')
+            ->assertJsonPath('response_schema.data.labels.roles', ['sales'])
             ->assertJsonPath('response_schema.data.roles', [(string) $role->id])
             ->json('response_schema.data');
 

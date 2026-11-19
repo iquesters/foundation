@@ -3,7 +3,9 @@
 namespace Iquesters\Foundation\Services\Schema;
 
 use Illuminate\Support\Str;
+use Iquesters\Foundation\Models\BusinessEntity;
 use Iquesters\Foundation\Models\Entity;
+use Iquesters\Foundation\Services\BusinessEntitySchemaGenerator;
 use Iquesters\Foundation\Services\FormSchemaGenerator;
 use Iquesters\Foundation\Services\TableSchemaGenerator;
 use Iquesters\Foundation\Support\EntityTableName;
@@ -84,7 +86,28 @@ class EntitySchemaService
             static::logInfo("Entity {$kind} schema stored", ['entity_uid' => $entity->uid, 'previous_uid' => $previousUid, 'uid' => $record->uid]);
         }
 
+        if ($kind === GeneratedSchemaStore::TABLE) {
+            $this->keepBusinessEntityForms($record->slug);
+        }
+
         return $record->uid;
+    }
+
+    /**
+     * A regenerated table goes back to the entity's own form; a business
+     * entity that uses this table ("Use the form in") keeps its form there.
+     */
+    private function keepBusinessEntityForms(string $tableSlug): void
+    {
+        $users = BusinessEntity::active()
+            ->whereHas('metas', fn ($q) => $q->where('meta_key', 'use_in_table')->where('meta_value', $tableSlug))
+            ->get();
+
+        foreach ($users as $businessEntity) {
+            if (BusinessEntitySchemaGenerator::outputOf($businessEntity) !== BusinessEntitySchemaGenerator::OUTPUT_API) {
+                app(BusinessEntitySchemaGenerator::class)->useFormInTable($businessEntity, $tableSlug);
+            }
+        }
     }
 
     /** The entity's slug (one is derived and saved for older entities without one). */

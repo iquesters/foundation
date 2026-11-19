@@ -133,6 +133,8 @@ class FormSchemaGenerator
                 'time' => 'time',
                 'checkbox' => 'checkbox',
                 'select' => 'select',
+                'password' => 'password',
+                'tel' => 'tel',
             ];
 
             foreach ($fields as $field) {
@@ -165,6 +167,15 @@ class FormSchemaGenerator
                     $formField['messages'] = [
                         'required' => $fieldLabel.' is required',
                     ];
+                }
+
+                // A password is set on create; on edit, blank means "keep the current one".
+                if ($formField['type'] === 'password') {
+                    $formField['required'] = false;
+                    $formField['requiredIn'] = ['create'];
+                    $formField['omitIfEmpty'] = true;
+                    $formField['showIn'] = ['create', 'edit'];
+                    $formField['helpertext'] = 'Leave blank to keep the current password.';
                 }
 
                 if ($isMetaField) {

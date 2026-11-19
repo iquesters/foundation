@@ -35,6 +35,19 @@ You build it from published entities and platform models. The platform then give
    - the **fields** to show. Link columns are filled in automatically, so they can't be selected.
 4. **Review & create / save:** the server checks the whole definition against the database. You then see the structure at a glance: each part, its relation in words, where the link is stored, and its fields. **Confirm & save** stores it and generates the form schema (`business-{slug}-form`) and the table schema (`business-{slug}-table`).
 
+**Screens** (on the same page) decides what is generated:
+
+| Option | Generates | Use it when |
+|---|---|---|
+| A form and its own list | form + list table (default) | the business entity is a screen of its own |
+| A form only | form | records are listed elsewhere: pick **Use the form in** to make an existing table (e.g. Users) open this form for Create and for its rows |
+| API only | nothing | a module has its own hand-made form that saves through the API (e.g. user-management's Users form) |
+
+**Use the form in** changes the chosen table schema: it sets `form_schema_uid`, `create.form` and the columns' `form-schema-uid` to this form. The table keeps its own columns and data.
+- **Undoing it:** the form the table opened before is remembered (meta `use_in_table_previous_form`), and the table gets it back when you choose "No, only here" or delete the business entity.
+- **Regenerating** that entity's table schema (Entities → Generate table schema) keeps the business entity's form in it.
+- **Unwanted schemas:** when an option no longer wants a generated schema, it is deactivated. Deleting a business entity deactivates its form and list.
+
 **Records** on the list or edit page opens the generated table (`/list/{table schema uid}`). It has a Create button; clicking a row opens split view, and the form handles view, edit and delete.
 
 ## Relations
@@ -158,6 +171,8 @@ php artisan business-entity:export customer-account   # → database/business-en
 php artisan business-entity:sync                       # create or update every file (matched by slug)
 php artisan business-entity:sync --dry-run             # validate only
 ```
+
+A file can also set the screens: `"output": "form_table" | "form" | "api"` and `"use_in_table": "<table schema slug>"`. A module can ship a file and sync it from its seeder with `BusinessEntityService::upsertFromFile()`; user-management does this for `user-account`.
 
 **Files:**
 - they name entities by **table** (`"entity": "customers"`), because uids differ per install;

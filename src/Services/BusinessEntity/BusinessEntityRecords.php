@@ -814,11 +814,12 @@ class BusinessEntityRecords
             return $root;
         }))->values();
 
-        $referenceValues = $this->referenceValues($definition, $records);
+        [$referenceValues, $referenceLabels] = $this->referenceValues($definition, $records);
 
-        return $records->values()->map(function ($record, $i) use ($definition, $roots, $referenceValues) {
+        return $records->values()->map(function ($record, $i) use ($definition, $roots, $referenceValues, $referenceLabels) {
             $root = $roots[$i];
             $out = (object) array_intersect_key((array) $root, array_flip(['id', 'uid', 'status', 'created_by', 'updated_by', 'created_at', 'updated_at', 'detail_summary']));
+            $labels = [];
             $meta = [];
 
             foreach ($definition->fields() as $field) {
@@ -839,13 +840,19 @@ class BusinessEntityRecords
                 if ($definition->isRows($alias)) {
                     $out->{$alias} = array_map(fn ($row) => $this->presentRow($definition->part($alias), $row), $value ?? []);
                 } elseif (is_array($value)) {
-                    $out->{$alias} = array_values(array_filter(array_map(fn ($id) => $referenceValues[$alias][$id] ?? null, $value), fn ($v) => $v !== null));
+                    $known = array_values(array_filter($value, fn ($id) => isset($referenceValues[$alias][$id])));
+                    $out->{$alias} = array_map(fn ($id) => $referenceValues[$alias][$id], $known);
+                    $labels[$alias] = array_map(fn ($id) => $referenceLabels[$alias][$id], $known);
                 } else {
-                    $out->{$alias} = $value !== null ? ($referenceValues[$alias][$value] ?? null) : null;
+                    $known = $value !== null && isset($referenceValues[$alias][$value]);
+                    $out->{$alias} = $known ? $referenceValues[$alias][$value] : null;
+                    $labels[$alias] = $known ? $referenceLabels[$alias][$value] : null;
                 }
             }
 
             $out->meta = $meta;
+            // References in words (their label column), e.g. {"roles": ["Admin"], "company": "Acme"}.
+            $out->labels = (object) $labels;
             $out->parts = array_map(fn ($part) => $part ? ['id' => $part->id, 'uid' => $part->uid ?? null] : null, $record->__parts);
 
             return $out;
@@ -875,13 +882,15 @@ class BusinessEntityRecords
     }
 
     /**
-     * Referenced ids to the value the API uses (uid when the table has one).
+     * Referenced ids to the value the API uses (uid when the table has one)
+     * and to their label (the reference's label column), in one query per reference.
      *
-     * @return array<string, array<int, string>> alias => [id => value]
+     * @return array{0: array<string, array<int, string>>, 1: array<string, array<int, string>>} [alias => [id => value], alias => [id => label]]
      */
     private function referenceValues(BusinessEntityDefinition $definition, Collection $records): array
     {
         $values = [];
+        $labels = [];
 
         foreach ($definition->leafAliases() as $alias) {
             if (! $definition->isReference($alias)) {
@@ -891,13 +900,14 @@ class BusinessEntityRecords
             $table = $definition->part($alias)['table'];
             $ids = $records->flatMap(fn ($r) => (array) ($r->__leaves[$alias] ?? []))->filter()->unique()->values()->all();
             $valueColumn = $this->valueColumn($table);
+            $labelColumn = $definition->part($alias)['link']['label_column'] ?? $valueColumn;
+            $rows = $ids === [] ? collect() : DB::table($table)->whereIn('id', $ids)->get(array_unique(['id', $valueColumn, $labelColumn]));
 
-            $values[$alias] = $ids === [] ? [] : ($valueColumn === 'id'
-                ? array_combine($ids, array_map('strval', $ids))
-                : DB::table($table)->whereIn('id', $ids)->pluck($valueColumn, 'id')->map(fn ($v) => (string) $v)->all());
+            $values[$alias] = $rows->mapWithKeys(fn ($row) => [(int) $row->id => (string) $row->{$valueColumn}])->all();
+            $labels[$alias] = $rows->mapWithKeys(fn ($row) => [(int) $row->id => (string) ($row->{$labelColumn} ?? $row->{$valueColumn})])->all();
         }
 
-        return $values;
+        return [$values, $labels];
     }
 
     /** Root columns usable in filters/sort: "{root}__{field}" for selected fields, plus system columns. */

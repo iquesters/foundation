@@ -184,7 +184,7 @@ final class BusinessEntityDefinition
         }
 
         if ($errors !== []) {
-            throw new InvalidArgumentException(implode(' ', $errors));
+            throw new InvalidBusinessEntityDefinition($errors);
         }
 
         $definition = new self($parts, $types);
@@ -204,7 +204,7 @@ final class BusinessEntityDefinition
         }
 
         if ($errors !== []) {
-            throw new InvalidArgumentException(implode(' ', $errors));
+            throw new InvalidBusinessEntityDefinition($errors);
         }
 
         return $definition;

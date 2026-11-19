@@ -74,11 +74,13 @@ A key that is not sent leaves that part unchanged.
   "notes": [{"id": 4, "uid": "01J…", "body": "First call", "meta": {}}],
   "company": "01J…",
   "tags": ["01J…"],
+  "labels": {"company": "Acme", "tags": ["Gold"]},
   "parts": {"customer": {"id": 7, "uid": "01J…"}, "address": {"id": 3, "uid": "01J…"}, "company": null}
 }
 ```
 
 - `id`, `uid`, `status` and the timestamps are the root's.
+- `labels` gives each reference in words, from its label column (one name, or a list for many-to-many). Table components show them, e.g. a user's roles as badges.
 - A missing part gives `null` values.
 - Sensitive fields are redacted, as in the entity API.
 

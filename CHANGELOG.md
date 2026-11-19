@@ -48,6 +48,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follo
   - a "Needs pivot table" warning with a link to create the pivot entity;
   - a **review step** that checks the definition on the server (`POST /business-entity/check`) and shows the whole structure before saving;
   - `GET /business-entity/columns?table=` for the column pickers.
+- **Business entity records name their references:** `"labels": {"roles": ["Admin", "Editor"], "company": "Acme"}`, read from each reference's label column. Record components use it, e.g. a user's roles as badges.
+- **Business entity screens, plain language:**
+  - **Builder:** a "How it works" guide; numbered sections (Details, Where it appears, Entities and how they link, Review and save); help text under each field and each screens option.
+  - **Errors:** problems are listed one per line and named after the part, e.g. "Roles: the link table model_has_roles has no column "user_id" in the link table. Pick one of its columns."
+  - **Success messages** say what is ready.
+  - **List page:** an "Appears as" column and a friendlier empty state.
+- **"Use the form in" can be undone:**
+  - The table's own form is remembered and put back when the option is cleared or the business entity is deleted.
+  - Regenerating that entity's table keeps the business entity's form.
+  - Deleting a business entity also deactivates its generated form and list.
+- **Business entity screens:**
+  - `output` can be *a form and its own list* (default), *a form only*, or *API only*. "API only" is for a module's own form.
+  - **Use the form in** an existing table: that table's Create button and rows open the business entity's form (`use_in_table`).
+  - The builder has both options. Definition files take the keys `output` and `use_in_table`.
+- Generated forms:
+  - `password` and `tel` inputs get their own types; passwords were a plain text field before.
+  - A password is required on create; on edit it is left out when blank ("leave blank to keep").
 - **Definition files:** `business-entity:export` and `business-entity:sync [path] [--dry-run]`, in `database/business-entities/*.json`, with entities named by table.
 - **Events:** `BusinessEntityDefinitionChanged` and `BusinessEntityRecordSaved`.
 - **`BusinessEntityService`:** creating, updating, deleting and syncing definitions, shared by the builder and the commands.
