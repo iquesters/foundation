@@ -43,5 +43,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('store/{slug}', [BusinessEntityDataController::class, 'store'])->name('store');
         Route::put('update/{slug}/{uid}', [BusinessEntityDataController::class, 'update'])->name('update');
         Route::delete('delete/{slug}/{uid}', [BusinessEntityDataController::class, 'delete'])->name('delete');
+        // Choices for a reference part (entity.{table}.view on the referenced table).
+        Route::get('options/{slug}/{alias}', [BusinessEntityDataController::class, 'options'])->name('options');
     });
 });

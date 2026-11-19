@@ -31,15 +31,17 @@ class FormSchemaGenerator
      * @param  string  $entityName  display name, e.g. "Customer"
      * @param  string  $entityKey  the schema's "entity" value
      * @param  array<string, string>  $endpoints  mode (create/view/edit/delete) => URL, with a {uid} placeholder
+     * @param  array  $extraFields  ready-made form fields appended after the generated ones
      */
-    public function build(string $entityName, string $entityKey, array $endpoints, array $customFields, array $metaFields = []): array
+    public function build(string $entityName, string $entityKey, array $endpoints, array $customFields, array $metaFields = [], array $extraFields = []): array
     {
         $this->logMethodStart('Generating form schema');
 
         try {
             $fields = array_merge(
                 $this->buildFormSchemaFields($customFields, false),
-                $this->buildFormSchemaFields($this->filterDisplayableMetaFields($metaFields), true)
+                $this->buildFormSchemaFields($this->filterDisplayableMetaFields($metaFields), true),
+                $extraFields,
             );
 
             $modes = [
@@ -103,6 +105,15 @@ class FormSchemaGenerator
             $this->logError('Failed to generate form schema: '.$throwable->getMessage());
             throw $throwable;
         }
+    }
+
+    /**
+     * Form fields for entity field definitions (main fields by "name", meta
+     * fields by "meta_key"), e.g. the columns of a repeatable group.
+     */
+    public function formFields(array $fields, bool $isMetaField): array
+    {
+        return $this->buildFormSchemaFields($isMetaField ? $this->filterDisplayableMetaFields($fields) : $fields, $isMetaField);
     }
 
     private function buildFormSchemaFields(array $fields, bool $isMetaField): array

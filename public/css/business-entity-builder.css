@@ -32,3 +32,20 @@
         position: static;
     }
 }
+
+/* Relation in words ("Each Customer has many Notes"). */
+.be-sentence {
+    color: var(--bs-secondary-color);
+}
+
+/* Add entity picker (in the UI modal). */
+.be-picker-list {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+/* Review: the whole structure at a glance. */
+.be-tree > li + li {
+    border-top: 1px dashed var(--bs-border-color);
+    padding-top: .5rem;
+}

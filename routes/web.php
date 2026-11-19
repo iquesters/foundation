@@ -43,6 +43,9 @@ Route::middleware('web')->group(function () {
             Route::get('/', [BusinessEntityController::class, 'index'])->name('index');
             Route::get('/create', [BusinessEntityController::class, 'create'])->name('create');
             Route::post('/', [BusinessEntityController::class, 'store'])->name('store');
+            // Builder helpers: validate without saving (review step), and a table's columns.
+            Route::post('/check', [BusinessEntityController::class, 'check'])->name('check');
+            Route::get('/columns', [BusinessEntityController::class, 'columns'])->name('columns');
             Route::get('/{uid}/edit', [BusinessEntityController::class, 'edit'])->name('edit');
             Route::put('/{uid}', [BusinessEntityController::class, 'update'])->name('update');
             Route::delete('/{uid}', [BusinessEntityController::class, 'destroy'])->name('destroy');

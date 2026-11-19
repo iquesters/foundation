@@ -6,32 +6,65 @@ use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use Iquesters\Foundation\Constants\EntityStatus;
 use Iquesters\Foundation\Models\Entity;
+use Iquesters\Foundation\Support\BusinessEntity\Relations\RelationType;
 
 /**
- * Checks a business entity definition against the registered entities:
- * each part's entity exists and is published (its table exists), the
- * selected fields and meta keys are defined on it, and each link's foreign
- * key is a column of the right table. Each part's table is taken from its
- * entity, never from the submitted definition.
+ * Checks a business entity definition against the registered entities and
+ * the database, and resolves what the structure leaves open:
+ *
+ * - each entity part's entity exists and is published (its table exists);
+ *   the table and entity_uid always come from the entity ("entity": a table
+ *   name in definition files is resolved to its uid);
+ * - each model part is a registered model (BusinessEntityModels);
+ * - the selected fields and meta keys are defined on the entity;
+ * - every column and pivot table a link uses already exists, because a
+ *   business entity never creates storage. A missing pivot table is
+ *   reported in InvalidBusinessEntityDefinition::$missingPivots;
+ * - defaults: morph_class (the morph type value: the entity's table, or the
+ *   model's morph class) and a reference's label_column.
  */
 final class BusinessEntityDefinitionValidator
 {
-    /** @throws InvalidArgumentException with every problem found */
+    /** Columns tried, in order, as the label of a referenced record. */
+    public const LABEL_COLUMNS = ['name', 'title', 'label', 'display_name', 'email', 'code', 'uid', 'id'];
+
+    public function __construct(private readonly ?BusinessEntityModels $models = null) {}
+
+    /** @throws InvalidArgumentException with every problem found (InvalidBusinessEntityDefinition for database problems) */
     public function validate(array $data): BusinessEntityDefinition
     {
         $definition = BusinessEntityDefinition::fromArray($data);
+        $models = $this->models ?? app(BusinessEntityModels::class);
         $errors = [];
-        $tables = [];
-        $entities = [];
+        $patches = [];
+        $morphClasses = [];
 
         foreach ($definition->parts() as $alias => $part) {
-            $entity = Entity::with('metas')
-                ->where('uid', $part['entity_uid'])
-                ->where('status', '<>', EntityStatus::DELETED)
-                ->first();
+            if ($part['model'] !== null) {
+                if (! $models->has($part['model'])) {
+                    $errors[] = "Part \"{$alias}\": unknown model \"{$part['model']}\".";
+
+                    continue;
+                }
+
+                $table = $models->table($part['model']);
+
+                if (! Schema::hasTable($table)) {
+                    $errors[] = "Part \"{$alias}\": the {$part['model']} table ({$table}) does not exist.";
+
+                    continue;
+                }
+
+                $patches[$alias] = ['table' => $table, 'entity_uid' => null, 'entity' => null];
+                $morphClasses[$alias] = $models->morphClass($part['model']);
+
+                continue;
+            }
+
+            $entity = $this->findEntity($part);
 
             if (! $entity) {
-                $errors[] = "Part \"{$alias}\": entity not found.";
+                $errors[] = "Part \"{$alias}\": entity ".($part['entity'] ? "\"{$part['entity']}\" " : '').'not found.';
 
                 continue;
             }
@@ -44,8 +77,8 @@ final class BusinessEntityDefinitionValidator
                 continue;
             }
 
-            $tables[$alias] = $table;
-            $entities[$alias] = $entity;
+            $patches[$alias] = ['table' => $table, 'entity_uid' => $entity->uid, 'entity' => null];
+            $morphClasses[$alias] = $table;
 
             $fieldNames = array_keys(self::mainFields($entity));
             $metaKeys = array_keys(self::metaFields($entity));
@@ -63,23 +96,112 @@ final class BusinessEntityDefinitionValidator
             }
         }
 
-        if ($errors === []) {
-            $definition = $definition->withTables($tables);
+        if ($errors !== []) {
+            throw new InvalidBusinessEntityDefinition($errors);
+        }
 
-            foreach (array_keys($definition->parts()) as $alias) {
-                foreach (array_keys($definition->foreignKeys($alias)) as $column) {
-                    if (! Schema::hasColumn($tables[$alias], $column)) {
-                        $errors[] = "Part \"{$alias}\": link column \"{$column}\" does not exist in table {$tables[$alias]}.";
+        $definition = $definition->withPartData($patches);
+        [$errors, $missingPivots, $linkPatches] = $this->checkLinks($definition, $morphClasses);
+
+        if ($errors !== []) {
+            throw new InvalidBusinessEntityDefinition($errors, $missingPivots);
+        }
+
+        return $definition->withPartData($linkPatches);
+    }
+
+    /** @return array{0: string[], 1: array, 2: array} [errors, missing pivots, link patches] */
+    private function checkLinks(BusinessEntityDefinition $definition, array $morphClasses): array
+    {
+        $errors = [];
+        $missingPivots = [];
+        $patches = [];
+        $has = fn (string $table, ?string $column) => $column !== null && Schema::hasColumn($table, $column);
+        $missing = function (string $alias, string $table, ?string $column, string $what) use (&$errors) {
+            $errors[] = "Part \"{$alias}\": {$what} \"{$column}\" does not exist in table {$table}.";
+        };
+
+        foreach ($definition->parts() as $alias => $part) {
+            $link = $part['link'];
+
+            if ($link === null) {
+                continue;
+            }
+
+            $type = $definition->type($alias);
+            $table = $part['table'];
+            $parentTable = $definition->part($link['to'])['table'];
+            $patch = [];
+
+            switch ($type->holder()) {
+                case RelationType::HOLDER_SELF:
+                    if (! $has($table, $link['foreign_key'])) {
+                        $missing($alias, $table, $link['foreign_key'], 'link column');
                     }
+                    if ($type->morph() !== null && ! $has($table, $link['morph_type'])) {
+                        $missing($alias, $table, $link['morph_type'], 'morph type column');
+                    }
+                    break;
+
+                case RelationType::HOLDER_PARENT:
+                    if (! $has($parentTable, $link['foreign_key'])) {
+                        $missing($alias, $parentTable, $link['foreign_key'], 'link column');
+                    }
+                    break;
+
+                case RelationType::HOLDER_PIVOT:
+                    $pivot = $link['pivot'];
+                    $columns = array_values(array_filter([$pivot['foreign_pivot_key'], $pivot['related_pivot_key'], $pivot['morph_type'] ?? null]));
+
+                    if (! Schema::hasTable($pivot['table'])) {
+                        $errors[] = "Part \"{$alias}\": pivot table {$pivot['table']} does not exist. Create it as an entity (columns: ".implode(', ', $columns).') and publish it; a business entity never creates tables.';
+                        $missingPivots[] = ['part' => $alias, 'table' => $pivot['table'], 'columns' => $columns];
+                        break;
+                    }
+
+                    foreach ($columns as $column) {
+                        if (! $has($pivot['table'], $column)) {
+                            $missing($alias, $pivot['table'], $column, 'pivot column');
+                        }
+                    }
+                    break;
+            }
+
+            if ($type->morph() !== null && ($link['morph_class'] ?? null) === null) {
+                $patch['morph_class'] = $morphClasses[$type->morph() === 'parent' ? $link['to'] : $alias];
+            }
+
+            if ($definition->isReference($alias)) {
+                if (! $has($table, 'id')) {
+                    $errors[] = "Part \"{$alias}\": table {$table} has no id column, so it can't be referenced.";
                 }
+
+                if ($link['label_column'] === null) {
+                    $patch['label_column'] = collect(self::LABEL_COLUMNS)->first(fn ($c) => $has($table, $c));
+                } elseif (! $has($table, $link['label_column'])) {
+                    $missing($alias, $table, $link['label_column'], 'label column');
+                }
+            }
+
+            if ($patch !== []) {
+                $patches[$alias] = ['link' => $patch];
             }
         }
 
-        if ($errors !== []) {
-            throw new InvalidArgumentException(implode(' ', $errors));
+        return [array_values(array_unique($errors)), $missingPivots, $patches];
+    }
+
+    private function findEntity(array $part): ?Entity
+    {
+        $query = Entity::with('metas')->where('status', '<>', EntityStatus::DELETED);
+
+        if ($part['entity_uid'] !== null) {
+            return $query->where('uid', $part['entity_uid'])->first();
         }
 
-        return $definition;
+        // Portable definitions name the entity by its table (or entity name).
+        return $query->get()->first(fn (Entity $e) => self::tableOf($e) === $part['entity'])
+            ?? Entity::with('metas')->where('status', '<>', EntityStatus::DELETED)->where('entity_name', $part['entity'])->first();
     }
 
     /** The entity's table: the published name, else table_name (same rule as the entity API). */

@@ -2,15 +2,15 @@
 
 namespace Iquesters\Foundation\Services;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\Constants\Constant as FormSchemaConstant;
 use Iquesters\Foundation\Constants\EntityStatus;
-use Iquesters\Foundation\Contracts\SchemaModels;
 use Iquesters\Foundation\Models\BusinessEntity;
 use Iquesters\Foundation\Models\Entity;
+use Iquesters\Foundation\Services\Schema\GeneratedSchemaStore;
 use Iquesters\Foundation\Support\BusinessEntity\BusinessEntityDefinition;
 use Iquesters\Foundation\Support\BusinessEntity\BusinessEntityDefinitionValidator;
+use Iquesters\Foundation\Support\BusinessEntity\Relations\RelationType;
 
 /**
  * The form and table schema of a business entity: one form over all its
@@ -26,6 +26,7 @@ class BusinessEntitySchemaGenerator
     public function __construct(
         private readonly FormSchemaGenerator $forms,
         private readonly TableSchemaGenerator $tables,
+        private readonly GeneratedSchemaStore $store,
     ) {}
 
     /** Schema "entity" value; the UI table lists it from the business entity API. */
@@ -56,7 +57,7 @@ class BusinessEntitySchemaGenerator
             FormSchemaConstant::MODE_VIEW => "{$base}/show/{$slug}/{uid}",
             FormSchemaConstant::MODE_EDIT => "{$base}/update/{$slug}/{uid}",
             FormSchemaConstant::MODE_DELETE => "{$base}/delete/{$slug}/{uid}",
-        ], $fields, $metaFields);
+        ], $fields, $metaFields, $this->relationFields($businessEntity, $definition));
 
         // The record comes from the business entity API, not the single-table entity API.
         $schema['dataEndpoint'] = "{$base}/show/{$slug}/{uid}";
@@ -84,25 +85,23 @@ class BusinessEntitySchemaGenerator
     public function sync(BusinessEntity $businessEntity, ?BusinessEntityDefinition $definition = null): array
     {
         $definition ??= $businessEntity->parsedDefinition();
-        $models = app(SchemaModels::class);
         $name = $businessEntity->name;
+        $attributes = fn (string $slug, string $label, array $schema) => [
+            'slug' => $slug,
+            'name' => "{$name} {$label}",
+            'description' => 'Auto-generated '.strtolower($label)." for the {$name} business entity",
+            'schema' => $schema,
+            'status' => EntityStatus::ACTIVE,
+        ];
 
-        $form = $this->upsert(
-            $models->formSchemaModel(),
-            $businessEntity->getMeta('form_schema_uid'),
-            self::formSlug($businessEntity),
-            "{$name} Form",
-            "Auto-generated form for the {$name} business entity",
-            $this->formSchema($businessEntity, $definition)
+        $form = $this->store->save(GeneratedSchemaStore::FORM,
+            ['uid' => $businessEntity->getMeta('form_schema_uid'), 'slugs' => [self::formSlug($businessEntity)]],
+            $attributes(self::formSlug($businessEntity), 'Form', $this->formSchema($businessEntity, $definition))
         );
 
-        $table = $this->upsert(
-            $models->tableSchemaModel(),
-            $businessEntity->getMeta('table_schema_uid'),
-            self::tableSlug($businessEntity),
-            "{$name} Table",
-            "Auto-generated table for the {$name} business entity",
-            $this->tableSchema($businessEntity, $definition, $form->uid)
+        $table = $this->store->save(GeneratedSchemaStore::TABLE,
+            ['uid' => $businessEntity->getMeta('table_schema_uid'), 'slugs' => [self::tableSlug($businessEntity)]],
+            $attributes(self::tableSlug($businessEntity), 'Table', $this->tableSchema($businessEntity, $definition, $form->uid))
         );
 
         $businessEntity->setMeta('form_schema_uid', $form->uid);
@@ -149,34 +148,58 @@ class BusinessEntitySchemaGenerator
         return [$fields, $metaFields];
     }
 
-    /** @param class-string<Model> $model */
-    private function upsert(string $model, ?string $uid, string $slug, string $name, string $description, array $schema): Model
+    /**
+     * Form fields for the parts sent under their alias:
+     * - a list of rows (has_many, morph_many): a repeatable group ("type":
+     *   "repeater") whose columns are the part's selected fields;
+     * - a reference: a select (one) or checkboxes (many) whose options come
+     *   from the business entity options endpoint.
+     */
+    public function relationFields(BusinessEntity $businessEntity, BusinessEntityDefinition $definition): array
     {
-        $record = ($uid ? $model::where('uid', $uid)->first() : null) ?? $model::where('slug', $slug)->first();
+        $entities = Entity::whereIn('uid', array_filter(array_column($definition->parts(), 'entity_uid')))->get()->keyBy('uid');
+        $fields = [];
 
-        if ($record) {
-            $record->update([
-                'slug' => $slug,
-                'name' => $name,
-                'description' => $description,
-                'schema' => $schema,
-                'status' => EntityStatus::ACTIVE,
-                'updated_by' => auth()->id(),
-            ]);
+        foreach ($definition->leafAliases() as $alias) {
+            $part = $definition->part($alias);
+            $label = $part['label'] ?? Str::headline($alias);
 
-            return $record;
+            if ($definition->isRows($alias)) {
+                $entity = $entities[$part['entity_uid']] ?? null;
+                $main = $entity ? BusinessEntityDefinitionValidator::mainFields($entity) : [];
+                $meta = $entity ? BusinessEntityDefinitionValidator::metaFields($entity) : [];
+                // The entity's definition of each selected field, under the plain field name.
+                $pick = fn (array $defs, array $selected, string $key, string $idKey) => array_map(
+                    fn ($s) => array_merge($defs[$s[$key]] ?? [], [$idKey => $s[$key], 'display' => true], $s['label'] ? ['label' => $s['label']] : []),
+                    $selected
+                );
+
+                $fields[] = [
+                    'id' => $alias,
+                    'type' => 'repeater',
+                    'label' => $label,
+                    'addLabel' => 'Add '.Str::lower(Str::singular($label)),
+                    'fields' => array_merge(
+                        $this->forms->formFields($pick($main, $part['fields'], 'field', 'name'), false),
+                        $this->forms->formFields($pick($meta, $part['meta_fields'], 'meta_key', 'meta_key'), true),
+                    ),
+                ];
+
+                continue;
+            }
+
+            $many = $definition->type($alias)->cardinality() === RelationType::MANY;
+            $fields[] = [
+                'id' => $alias,
+                'type' => $many ? 'checkbox' : 'select',
+                'label' => $label,
+                'optionsFrom' => array_filter([
+                    'url' => url(self::API_PREFIX.'/options/'.$businessEntity->slug.'/'.$alias),
+                    'empty' => $many ? null : '— None —',
+                ]),
+            ];
         }
 
-        return $model::create([
-            'uid' => (string) Str::ulid(),
-            'slug' => $slug,
-            'name' => $name,
-            'description' => $description,
-            'schema' => $schema,
-            'extra_info' => [],
-            'status' => EntityStatus::ACTIVE,
-            'created_by' => auth()->id(),
-            'updated_by' => auth()->id(),
-        ]);
+        return $fields;
     }
 }

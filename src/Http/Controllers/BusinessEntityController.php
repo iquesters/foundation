@@ -2,38 +2,34 @@
 
 namespace Iquesters\Foundation\Http\Controllers;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Iquesters\Foundation\Constants\EntityStatus;
-use Iquesters\Foundation\Contracts\SchemaModels;
 use Iquesters\Foundation\Models\BusinessEntity;
 use Iquesters\Foundation\Models\Entity;
 use Iquesters\Foundation\Models\Module;
-use Iquesters\Foundation\Services\BusinessEntitySchemaGenerator;
+use Iquesters\Foundation\Services\BusinessEntity\BusinessEntityService;
 use Iquesters\Foundation\Support\BusinessEntity\BusinessEntityDefinition;
 use Iquesters\Foundation\Support\BusinessEntity\BusinessEntityDefinitionValidator;
-use Iquesters\Foundation\System\Traits\Loggable;
+use Iquesters\Foundation\Support\BusinessEntity\BusinessEntityModels;
+use Iquesters\Foundation\Support\BusinessEntity\InvalidBusinessEntityDefinition;
+use Iquesters\Foundation\Support\BusinessEntity\Relations\RelationTypes;
 
 /**
  * Admin screens for business entities: build one from registered entities
- * (root + linked parts + selected fields), save it, and (re)generate its form
- * and table schemas. Records are created and listed through the business
- * entity API in iquesters/user-interface.
+ * and platform models (root + linked parts + selected fields), review it,
+ * save it, and (re)generate its form and table schemas. Records are created
+ * and listed through the business entity API.
  */
 class BusinessEntityController extends Controller
 {
-    use Loggable;
-
-    public function __construct(
-        private readonly BusinessEntityDefinitionValidator $validator,
-        private readonly BusinessEntitySchemaGenerator $schemas,
-    ) {}
+    public function __construct(private readonly BusinessEntityService $service) {}
 
     public function index()
     {
@@ -55,27 +51,7 @@ class BusinessEntityController extends Controller
     public function store(Request $request)
     {
         $data = $this->validated($request);
-        $definition = $this->definition($request);
-
-        $businessEntity = DB::transaction(function () use ($data, $definition) {
-            $businessEntity = BusinessEntity::create([
-                'uid' => (string) Str::ulid(),
-                'ref_module' => $data['ref_module'] ?? null,
-                'name' => $data['name'],
-                'slug' => $this->uniqueSlug($data['name']),
-                'desc' => $data['desc'] ?? null,
-                'definition' => $definition->toArray(),
-                'status' => EntityStatus::ACTIVE,
-                'created_by' => auth()->id(),
-                'updated_by' => auth()->id(),
-            ]);
-
-            $this->syncSchemas($businessEntity, $definition);
-
-            return $businessEntity;
-        });
-
-        static::logInfo('Business entity created', ['uid' => $businessEntity->uid, 'slug' => $businessEntity->slug]);
+        $businessEntity = $this->save(fn () => $this->service->create($data, $this->definitionInput($request)));
 
         return redirect()->route('business-entities.edit', $businessEntity->uid)
             ->with('success', 'Business entity created, with its form and table.');
@@ -85,22 +61,7 @@ class BusinessEntityController extends Controller
     {
         $businessEntity = $this->find($uid);
         $data = $this->validated($request, $businessEntity);
-        $definition = $this->definition($request);
-
-        DB::transaction(function () use ($businessEntity, $data, $definition) {
-            // The slug stays: it is in the API URLs and the schema slugs.
-            $businessEntity->update([
-                'ref_module' => $data['ref_module'] ?? null,
-                'name' => $data['name'],
-                'desc' => $data['desc'] ?? null,
-                'definition' => $definition->toArray(),
-                'updated_by' => auth()->id(),
-            ]);
-
-            $this->syncSchemas($businessEntity, $definition);
-        });
-
-        static::logInfo('Business entity updated', ['uid' => $businessEntity->uid]);
+        $this->save(fn () => $this->service->update($businessEntity, $data, $this->definitionInput($request)));
 
         return redirect()->route('business-entities.edit', $businessEntity->uid)
             ->with('success', 'Business entity updated, its form and table were regenerated.');
@@ -108,12 +69,40 @@ class BusinessEntityController extends Controller
 
     public function destroy(string $uid)
     {
-        $businessEntity = $this->find($uid);
-        $businessEntity->update(['status' => EntityStatus::DELETED, 'updated_by' => auth()->id()]);
-
-        static::logInfo('Business entity deleted', ['uid' => $businessEntity->uid]);
+        $this->service->delete($this->find($uid));
 
         return redirect()->route('business-entities.index')->with('success', 'Business entity deleted. Its records were not changed.');
+    }
+
+    /**
+     * Validate a definition without saving it (the builder's review step):
+     * {valid, errors, missing_pivots, definition}.
+     */
+    public function check(Request $request): JsonResponse
+    {
+        $request->validate(['definition' => ['required', 'json']]);
+
+        try {
+            $definition = $this->service->validate($this->definitionInput($request));
+
+            return response()->json(['valid' => true, 'errors' => [], 'missing_pivots' => [], 'definition' => $definition->toArray()]);
+        } catch (InvalidBusinessEntityDefinition $e) {
+            return response()->json(['valid' => false, 'errors' => $e->problems, 'missing_pivots' => $e->missingPivots]);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['valid' => false, 'errors' => [$e->getMessage()], 'missing_pivots' => []]);
+        }
+    }
+
+    /** The columns of a table (link and pivot columns are picked from them): {exists, columns}. */
+    public function columns(Request $request): JsonResponse
+    {
+        $table = (string) $request->query('table', '');
+
+        if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $table) || ! Schema::hasTable($table)) {
+            return response()->json(['exists' => false, 'columns' => []]);
+        }
+
+        return response()->json(['exists' => true, 'columns' => Schema::getColumnListing($table)]);
     }
 
     private function find(string $uid): BusinessEntity
@@ -136,37 +125,22 @@ class BusinessEntityController extends Controller
         ]);
     }
 
-    /** The submitted definition, checked against the registered entities (errors on "definition"). */
-    private function definition(Request $request): BusinessEntityDefinition
+    private function definitionInput(Request $request): array
+    {
+        return (array) json_decode((string) $request->input('definition'), true);
+    }
+
+    /** Run a save; a definition that doesn't match the database is a validation error on "definition". */
+    private function save(callable $save): BusinessEntity
     {
         try {
-            return $this->validator->validate((array) json_decode((string) $request->input('definition'), true));
+            return $save();
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['definition' => $e->getMessage()]);
         }
     }
 
-    private function syncSchemas(BusinessEntity $businessEntity, BusinessEntityDefinition $definition): void
-    {
-        // Schemas are stored by iquesters/user-interface; without it there is nothing to generate.
-        if (app()->bound(SchemaModels::class)) {
-            $this->schemas->sync($businessEntity, $definition);
-        }
-    }
-
-    private function uniqueSlug(string $name): string
-    {
-        $base = Str::slug($name) ?: 'business-entity';
-        $slug = $base;
-
-        for ($i = 2; BusinessEntity::where('slug', $slug)->exists(); $i++) {
-            $slug = "{$base}-{$i}";
-        }
-
-        return $slug;
-    }
-
-    /** View data, including the published entities the builder can use. */
+    /** View data: the entities, models and relation types the builder can use. */
     private function formData(?BusinessEntity $businessEntity): array
     {
         $entities = Entity::with('metas')
@@ -175,12 +149,14 @@ class BusinessEntityController extends Controller
             ->get()
             ->map(function (Entity $entity) {
                 $table = BusinessEntityDefinitionValidator::tableOf($entity);
+                $published = $table !== null && Schema::hasTable($table);
 
                 return [
                     'uid' => $entity->uid,
                     'name' => $entity->entity_name,
                     'table' => $table,
-                    'published' => $table !== null && Schema::hasTable($table),
+                    'published' => $published,
+                    'columns' => $published ? Schema::getColumnListing($table) : [],
                     'fields' => array_values(array_map(fn ($f) => [
                         'name' => $f['name'],
                         'label' => $f['label'] ?? Str::headline($f['name']),
@@ -196,12 +172,18 @@ class BusinessEntityController extends Controller
             })
             ->values();
 
+        $models = collect(app(BusinessEntityModels::class)->describe())
+            ->map(fn ($m) => $m + ['columns' => Schema::hasTable($m['table']) ? Schema::getColumnListing($m['table']) : []])
+            ->values();
+
         return [
             'businessEntity' => $businessEntity,
             'isCreating' => $businessEntity === null,
             'modules' => Module::where('status', EntityStatus::ACTIVE)->orderBy('name')->get(),
             'entities' => $entities,
-            'definition' => $businessEntity?->definition ?? ['version' => 1, 'parts' => []],
+            'models' => $models,
+            'relationTypes' => app(RelationTypes::class)->describe(),
+            'definition' => $businessEntity?->definition ?? ['version' => BusinessEntityDefinition::VERSION, 'parts' => []],
         ];
     }
 }

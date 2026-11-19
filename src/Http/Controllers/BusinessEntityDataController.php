@@ -112,6 +112,26 @@ class BusinessEntityDataController extends Controller
         }
     }
 
+    /**
+     * Choices for a reference part ({value, label} list), used by the form's
+     * select / checkbox fields ("optionsFrom": {"url": ...}). Needs
+     * entity.{table}.view on the referenced table.
+     */
+    public function options(Request $request, string $slug, string $alias)
+    {
+        try {
+            [, $definition] = $this->records->resolve($slug);
+            $search = $request->query('search');
+
+            return ApiResponse::success(
+                $this->records->options($definition, $alias, is_string($search) ? $search : null, (int) $request->query('limit', 100)),
+                'Request successful'
+            );
+        } catch (Throwable $e) {
+            return $this->errorResponse($e, $slug);
+        }
+    }
+
     private function payload(Request $request): array
     {
         return $request->except(self::RESERVED_PAYLOAD_KEYS);

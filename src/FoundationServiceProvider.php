@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Route;
 use Iquesters\Foundation\Http\Middleware\EnsureAdmin;
 use Iquesters\Foundation\Services\Entity\EntitySchemaResolver;
 use Iquesters\Foundation\Support\Assets;
+use Iquesters\Foundation\Support\BusinessEntity\BusinessEntityModels;
+use Iquesters\Foundation\Support\BusinessEntity\Relations\RelationTypes;
 use Iquesters\Foundation\System\Providers\BaseServiceProvider;
 
 /**
@@ -25,6 +27,10 @@ class FoundationServiceProvider extends BaseServiceProvider
 
         // Entity API: table introspection is memoized per request.
         $this->app->scoped(EntitySchemaResolver::class);
+
+        // Business entities: link types (modules add more with the tag) and referenceable models.
+        $this->app->singleton(RelationTypes::class, fn ($app) => new RelationTypes($app->tagged(RelationTypes::TAG)));
+        $this->app->singleton(BusinessEntityModels::class);
     }
 
     public function boot(): void

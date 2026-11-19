@@ -4,6 +4,16 @@
     $title = $isCreating ? 'New business entity' : 'Edit '.$businessEntity->name;
     $definitionValue = old('definition', json_encode($definition));
     $tableSchemaUid = $businessEntity?->getMeta('table_schema_uid');
+    $builderData = [
+        'entities' => $entities,
+        'models' => $models,
+        'relationTypes' => $relationTypes,
+        'urls' => [
+            'check' => route('business-entities.check'),
+            'columns' => route('business-entities.columns'),
+            'createEntity' => Route::has('entities.create') ? route('entities.create') : null,
+        ],
+    ];
 
     $tabs = [
         ['route' => 'business-entities.index', 'params' => [], 'icon' => 'fas fa-fw fa-diagram-project', 'label' => 'Business Entities'],
@@ -29,7 +39,8 @@
             <div>
                 <h5 class="fs-6 mb-1">{{ $title }}</h5>
                 <p class="text-muted small mb-0">
-                    One record saved across several entities. The first part is the root; every other part links to an earlier one.
+                    One record saved across several entities. The primary entity comes first; every other entity is linked to an earlier one.
+                    It only describes how existing tables relate: saving never creates or changes tables.
                 </p>
             </div>
             @if ($tableSchemaUid && Route::has('ui.list'))
@@ -83,16 +94,20 @@
 
         <div class="row g-3">
             <div class="col-12 col-xl-8">
+                <div class="d-flex justify-content-start mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-be-add-part>
+                        <i class="fa-regular fa-fw fa-plus"></i><span class="ms-1">Add entity</span>
+                    </button>
+                </div>
                 <div id="businessEntityBuilder" class="be-builder" data-definition-input="#definition"></div>
-                <button type="button" class="btn btn-sm btn-outline-primary mt-2" data-be-add-part>
-                    <i class="fa-regular fa-fw fa-plus"></i><span class="ms-1">Add part</span>
-                </button>
+                {{-- Used when the UI modal (modal.js) is not loaded. --}}
+                <div id="beInlinePanel" class="card card-body mt-2 d-none"></div>
             </div>
             <div class="col-12 col-xl-4">
                 <div class="card be-preview">
                     <div class="card-body">
                         <h6 class="card-title fs-6">Form fields</h6>
-                        <p class="small text-muted">Keys used by the generated form and the API.</p>
+                        <p class="small text-muted">Keys used by the generated form and the API. Lists and references are sent under their alias.</p>
                         <ul class="list-unstyled small mb-0" data-be-preview></ul>
                     </div>
                 </div>
@@ -101,11 +116,18 @@
 
         <div class="d-flex justify-content-end gap-2 mt-3">
             <a href="{{ route('business-entities.index') }}" class="btn btn-sm btn-outline-dark">Cancel</a>
-            <button type="submit" class="btn btn-sm btn-primary">{{ $isCreating ? 'Create' : 'Save' }}</button>
+            <button type="submit" class="btn btn-sm btn-primary" data-be-review>
+                <i class="fas fa-fw fa-list-check"></i><span class="ms-1">Review &amp; {{ $isCreating ? 'create' : 'save' }}</span>
+            </button>
         </div>
     </form>
 
-    <script type="application/json" id="businessEntityEntities">@json($entities)</script>
+    <script type="application/json" id="businessEntityData">@json($builderData)</script>
+    <datalist id="beKnownTables">
+        @foreach (collect($entities)->pluck('table')->merge(collect($models)->pluck('table'))->filter()->unique() as $knownTable)
+            <option value="{{ $knownTable }}"></option>
+        @endforeach
+    </datalist>
 @endsection
 
 @push('scripts')
