@@ -1,0 +1,34 @@
+/* Business entity builder (business_entity/create-edit). */
+
+.be-builder .be-part {
+    border-left: 3px solid var(--bs-secondary-border-subtle, #dee2e6);
+}
+
+.be-builder .be-part:first-child {
+    border-left-color: var(--bs-primary, #0d6efd);
+}
+
+.be-builder .be-link {
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--bs-border-color, #dee2e6);
+}
+
+.be-builder .be-fields .btn {
+    --bs-btn-padding-y: 0.125rem;
+    --bs-btn-padding-x: 0.5rem;
+}
+
+.be-preview {
+    position: sticky;
+    top: 1rem;
+}
+
+.be-preview code {
+    word-break: break-all;
+}
+
+@media (max-width: 1199.98px) {
+    .be-preview {
+        position: static;
+    }
+}

@@ -32,6 +32,11 @@ class FoundationSeeder extends BaseSeeder
                 'route' => 'entities.index',
             ],
             [
+                'icon' => 'fas fa-diagram-project',
+                'label' => 'Business Entities',
+                'route' => 'business-entities.index',
+            ],
+            [
                 'icon' => 'fas fa-layer-group',
                 'label' => 'Queue OLD',
                 'route' => 'smart-messenger.queue-management',

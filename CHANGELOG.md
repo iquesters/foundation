@@ -3,6 +3,39 @@
 All notable changes to this package are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Business entities:** one record made of several entity tables, e.g. a customer with its address (`has_one`) and its company (`belongs_to`).
+  - **Admin builder** at Admin → Business Entities (`/business-entity`, admins only):
+    - choose the root entity and linked parts;
+    - pick their fields and meta fields;
+    - save to generate a form schema (`business-{slug}-form`) and a table schema (`business-{slug}-table`) that use the business entity API in iquesters/user-interface.
+  - **Storage:** `business_entities` and `business_entity_metas` tables (migration `2026_11_18_000001`), with the `BusinessEntity` and `BusinessEntityMeta` models.
+  - **Definition checks:**
+    - `BusinessEntityDefinition` checks the structure, the write order, the link columns and the flat field keys (`{alias}__{field}`);
+    - `BusinessEntityDefinitionValidator` checks the definition against the registered entities and their tables. Each part's table always comes from its entity.
+  - **Docs:** `docs/developer/business-entities.md`.
+- `FormSchemaGenerator::build()` and `TableSchemaGenerator::build()`: generate a schema for any resource (display name, schema entity key, endpoints). `generate(Entity)` output is unchanged.
+- **Entity data API, moved here from iquesters/user-interface:** foundation is now the core data module and user-interface keeps presentation.
+  - **API:** `/api/foundation/v1/entity/{list|show|store|update|delete}/...` (`DynamicEntityController`) and the new `/api/foundation/v1/business-entity/...` (`BusinessEntityDataController`).
+  - **Services:**
+    - `Services\Entity\*`: repository, schema resolver, validator, normalizer, scope, presenter, error mapper;
+    - `Services\BusinessEntity\BusinessEntityRecords`;
+    - `Http\Query\DynamicEntityListQuery` and `ParsesListQuery`;
+    - `Constants\EntityListParams` and `Contracts\EntityScopeResolver`.
+  - **Business entity records:**
+    - one transaction per save, in link order, with link columns filled in automatically;
+    - each part is validated with its entity's rules, and all errors are reported together;
+    - `entity.{table}.{action}` permission is needed on every part's table;
+    - delete soft-deletes the parts the record owns and keeps shared ones.
+  - **Docs:** `docs/developer/entity-api.md` and `docs/developer/business-entity-api.md`.
+- **Foundation's own `public/` files:** served at `/module-assets/foundation/...` and published to `public/vendor/foundation` with the `laravel-assets` tag (`Support\Assets`).
+
+### Changed
+- Requires `laravel/sanctum` `^4.0` (the entity API uses `auth:sanctum`).
+- Generated entity form schemas use `/api/foundation/v1/entity/...`. Schemas generated before still work through user-interface's deprecated aliases.
+
 ## [2.0.2] – 2026-11-17
 
 ### Fixed
