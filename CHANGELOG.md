@@ -58,6 +58,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follo
   - `FormSchemaGenerator::formFields()`, and `build()` takes extra ready-made fields.
 
 ### Changed
+- **Module APIs accept the web login from the app's own pages.** Sanctum's `EnsureFrontendRequestsAreStateful` is added to every `/api/{module}/{version}` route, so apps no longer need `$middleware->statefulApi()`.
+  - Before this, in an app without it, module tables showed "Unauthenticated." and option lists (e.g. Roles) stayed empty.
+  - This only applies to requests from Sanctum's stateful domains (with CSRF on writes); token callers are unchanged.
 - Requires `laravel/sanctum` `^4.0` (the entity API uses `auth:sanctum`).
 - Generated entity form schemas use `/api/foundation/v1/entity/...`. Schemas generated before still work through user-interface's deprecated aliases.
 - `EntityController` only handles requests; schema work goes through `EntitySchemaService`.

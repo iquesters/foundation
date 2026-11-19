@@ -5,6 +5,7 @@ namespace Iquesters\Foundation\Routing;
 use Illuminate\Support\Facades\Route;
 use Iquesters\Foundation\System\Http\Middleware\RequestMiddleware;
 use Iquesters\Foundation\System\Http\Middleware\ResponseMiddleware;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
 /**
  * Versioned module APIs: /api/{module}/{version}/...
@@ -54,10 +55,22 @@ final class ModuleApi
      * Base stack + per-module extras from config/foundation.php:
      *   api.middleware.{module}           => [...]   (all versions)
      *   api.rate_limits.{module}.{version} => 'requests,minutes'
+     *
+     * With Sanctum installed, module APIs also accept the web login for
+     * requests from the app's own pages (Sanctum's stateful domains, with
+     * CSRF), as the modules' JS calls them with the session cookie. Apps
+     * don't need $middleware->statefulApi() for that; token callers are
+     * unaffected.
      */
     private static function middleware(string $prefix, string $version): array
     {
-        $middleware = ['api', RequestMiddleware::class, ResponseMiddleware::class];
+        $middleware = ['api'];
+
+        if (class_exists(EnsureFrontendRequestsAreStateful::class)) {
+            $middleware[] = EnsureFrontendRequestsAreStateful::class;
+        }
+
+        array_push($middleware, RequestMiddleware::class, ResponseMiddleware::class);
 
         foreach ((array) config("foundation.api.middleware.{$prefix}", []) as $extra) {
             $middleware[] = $extra;
