@@ -2,12 +2,15 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Iquesters\Foundation\Http\Controllers\BusinessEntityController;
 use Iquesters\Foundation\Http\Controllers\ConfigController;
 use Iquesters\Foundation\Http\Controllers\EntityController;
 use Iquesters\Foundation\Http\Controllers\JobController;
 use Iquesters\Foundation\Http\Controllers\MasterDataController;
 use Iquesters\Foundation\Http\Controllers\ModuleController;
+use Iquesters\Foundation\Http\Controllers\ModuleDashboardController;
 use Iquesters\Foundation\Http\Controllers\NavigationController;
+use Iquesters\Foundation\Http\Controllers\NavigationItemController;
 use Iquesters\Foundation\Http\Controllers\QueueManagementController;
 
 Route::middleware('web')->group(function () {
@@ -21,6 +24,10 @@ Route::middleware('web')->group(function () {
 
         return response()->noContent();
     })->name('timezone.store');
+
+    // A module's dashboard: the fixed first item of its sidebar (users with access to the module).
+    Route::middleware('auth')->get('/dashboard/{module}', [ModuleDashboardController::class, 'show'])
+        ->where('module', '[A-Za-z0-9_-]+')->name('module.dashboard');
 
     Route::middleware(['auth', 'ensure.admin'])->group(function () {
 
@@ -37,6 +44,19 @@ Route::middleware('web')->group(function () {
             Route::get('/{entityUid}', [EntityController::class, 'show'])->name('show');
         });
 
+        // Business entities: one record over several entity tables (records via the user-interface API).
+        Route::prefix('business-entity')->name('business-entities.')->group(function () {
+            Route::get('/', [BusinessEntityController::class, 'index'])->name('index');
+            Route::get('/create', [BusinessEntityController::class, 'create'])->name('create');
+            Route::post('/', [BusinessEntityController::class, 'store'])->name('store');
+            // Builder helpers: validate without saving (review step), and a table's columns.
+            Route::post('/check', [BusinessEntityController::class, 'check'])->name('check');
+            Route::get('/columns', [BusinessEntityController::class, 'columns'])->name('columns');
+            Route::get('/{uid}/edit', [BusinessEntityController::class, 'edit'])->name('edit');
+            Route::put('/{uid}', [BusinessEntityController::class, 'update'])->name('update');
+            Route::delete('/{uid}', [BusinessEntityController::class, 'destroy'])->name('destroy');
+        });
+
         // Module-Role assignment routes
         Route::get('/modules/assign-to-role', [ModuleController::class, 'assignToRole'])->name('modules.assign-to-role');
         Route::put('/modules/{role}/assign', [ModuleController::class, 'updateRoleModules'])->name('modules.update-role-modules');
@@ -51,6 +71,18 @@ Route::middleware('web')->group(function () {
         Route::resource('master-data', MasterDataController::class)->parameters([
             'master-data' => 'master_datum',
         ]);
+
+        // Navigation editor: sidebar items and their tabs (navigation_items).
+        Route::prefix('navigation-items')->name('navigation-items.')->group(function () {
+            Route::get('/', [NavigationItemController::class, 'index'])->name('index');
+            Route::get('/create', [NavigationItemController::class, 'create'])->name('create');
+            Route::post('/', [NavigationItemController::class, 'store'])->name('store');
+            Route::post('/reorder', [NavigationItemController::class, 'reorder'])->name('reorder');
+            Route::get('/{uid}/edit', [NavigationItemController::class, 'edit'])->name('edit');
+            Route::put('/{uid}', [NavigationItemController::class, 'update'])->name('update');
+            Route::delete('/{uid}', [NavigationItemController::class, 'destroy'])->name('destroy');
+            Route::post('/{uid}/restore', [NavigationItemController::class, 'restore'])->name('restore');
+        });
 
         Route::prefix('navigations')->group(function () {
             Route::get('/', [NavigationController::class, 'index'])->name('navigations.index');

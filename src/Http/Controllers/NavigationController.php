@@ -7,6 +7,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\Models\Module;
 use Iquesters\Foundation\Models\Navigation;
+use Iquesters\Foundation\Services\Navigation\NavigationSync;
 use Iquesters\Foundation\System\Traits\Loggable;
 
 class NavigationController extends Controller
@@ -339,6 +340,9 @@ class NavigationController extends Controller
                                 'updated_by' => $userId,
                             ]
                         );
+
+                        // The sidebar reads navigation_items: apply the new order there.
+                        app(NavigationSync::class)->syncModule($module);
                     }
                 }
             }

@@ -32,6 +32,16 @@ class FoundationSeeder extends BaseSeeder
                 'route' => 'entities.index',
             ],
             [
+                'icon' => 'fas fa-diagram-project',
+                'label' => 'Business Entities',
+                'route' => 'business-entities.index',
+            ],
+            [
+                'icon' => 'fas fa-sitemap',
+                'label' => 'Navigation',
+                'route' => 'navigation-items.index',
+            ],
+            [
                 'icon' => 'fas fa-layer-group',
                 'label' => 'Queue OLD',
                 'route' => 'smart-messenger.queue-management',
@@ -106,6 +116,12 @@ class FoundationSeeder extends BaseSeeder
                 'icon' => 'fas fa-sync-alt',
                 'label' => 'Job OLD',
                 'route' => 'jobs.index',
+                // Tabs of the page (navigation_items children).
+                'children' => [
+                    ['icon' => 'fas fa-fw fa-spinner', 'label' => 'Current', 'route' => 'jobs.index'],
+                    ['icon' => 'fas fa-fw fa-check-circle', 'label' => 'Completed', 'route' => 'jobs.completed'],
+                    ['icon' => 'fas fa-fw fa-times-circle', 'label' => 'Failed', 'route' => 'jobs.failed'],
+                ],
             ],
             [
                 'icon' => 'fas fa-tasks',

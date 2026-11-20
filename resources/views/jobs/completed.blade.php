@@ -1,23 +1,6 @@
 @extends('userinterface::layouts.app')
 
 @php
-    $tabs = [
-        [
-            'route' => 'jobs.index',
-            'icon' => 'fas fa-fw fa-stream',
-            'label' => 'Current',
-        ],
-        [
-            'route' => 'jobs.completed',
-            'icon' => 'fas fa-fw fa-check-circle',
-            'label' => 'Completed',
-        ],
-        [
-            'route' => 'jobs.failed',
-            'icon' => 'fas fa-fw fa-times-circle',
-            'label' => 'Failed',
-        ],
-    ];
 @endphp
 
 @section(

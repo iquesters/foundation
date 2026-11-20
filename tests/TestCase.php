@@ -6,6 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\FoundationServiceProvider;
 use Iquesters\Foundation\Tests\Fixtures\User;
+use Laravel\Sanctum\SanctumServiceProvider;
 use Orchestra\Testbench\Attributes\WithMigration;
 use Orchestra\Testbench\TestCase as Orchestra;
 use Spatie\Permission\Models\Role;
@@ -20,6 +21,7 @@ abstract class TestCase extends Orchestra
     {
         return [
             PermissionServiceProvider::class,
+            SanctumServiceProvider::class,
             FoundationServiceProvider::class,
         ];
     }
@@ -33,6 +35,10 @@ abstract class TestCase extends Orchestra
     protected function defineDatabaseMigrations(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/database/migrations');
+
+        // Sanctum ships its migration unregistered (entity API tokens).
+        $sanctum = dirname((new \ReflectionClass(SanctumServiceProvider::class))->getFileName(), 2);
+        $this->loadMigrationsFrom($sanctum.'/database/migrations');
     }
 
     protected function makeUser(?string $role = null): User

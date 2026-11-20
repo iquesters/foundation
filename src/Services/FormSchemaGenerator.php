@@ -14,18 +14,58 @@ class FormSchemaGenerator
 
     public function generate(Entity $entity, array $customFields, array $metaFields = []): array
     {
+        $entityTable = $this->generateTableName($entity->entity_name);
+
+        return $this->build(Str::headline($entity->entity_name), $entityTable, [
+            FormSchemaConstant::MODE_CREATE => url('/api/foundation/v1/entity/store/'.$entityTable),
+            FormSchemaConstant::MODE_VIEW => url('/api/foundation/v1/entity/show/'.$entityTable.'/{uid}'),
+            FormSchemaConstant::MODE_EDIT => url('/api/foundation/v1/entity/update/'.$entityTable.'/{uid}'),
+            FormSchemaConstant::MODE_DELETE => url('/api/foundation/v1/entity/delete/'.$entityTable.'/{uid}'),
+        ], $customFields, $metaFields);
+    }
+
+    /**
+     * A form schema for any resource: generate() uses it for an entity table,
+     * BusinessEntitySchemaGenerator for a business entity's combined record.
+     *
+     * @param  string  $entityName  display name, e.g. "Customer"
+     * @param  string  $entityKey  the schema's "entity" value
+     * @param  array<string, string>  $endpoints  mode (create/view/edit/delete) => URL, with a {uid} placeholder
+     * @param  array  $extraFields  ready-made form fields appended after the generated ones
+     */
+    public function build(string $entityName, string $entityKey, array $endpoints, array $customFields, array $metaFields = [], array $extraFields = []): array
+    {
         $this->logMethodStart('Generating form schema');
 
         try {
-            $entityName = Str::headline($entity->entity_name);
-            $entityTable = $this->generateTableName($entity->entity_name);
             $fields = array_merge(
                 $this->buildFormSchemaFields($customFields, false),
-                $this->buildFormSchemaFields($this->filterDisplayableMetaFields($metaFields), true)
+                $this->buildFormSchemaFields($this->filterDisplayableMetaFields($metaFields), true),
+                $extraFields,
             );
 
+            $modes = [
+                FormSchemaConstant::MODE_CREATE => [FormSchemaConstant::METHOD_POST, FormSchemaConstant::HEADER_ICON_CREATE, 'Create', 'creating a new'],
+                FormSchemaConstant::MODE_VIEW => [FormSchemaConstant::METHOD_GET, FormSchemaConstant::HEADER_ICON_VIEW, 'View', 'viewing this'],
+                FormSchemaConstant::MODE_EDIT => [FormSchemaConstant::METHOD_PUT, FormSchemaConstant::HEADER_ICON_EDIT, 'Edit', 'editing this'],
+                FormSchemaConstant::MODE_DELETE => [FormSchemaConstant::METHOD_DELETE, FormSchemaConstant::HEADER_ICON_DELETE, 'Delete', 'deleting this'],
+            ];
+
+            $schemaModes = [];
+            foreach ($modes as $mode => [$method, $icon, $verb, $phrase]) {
+                $schemaModes[$mode] = [
+                    'method' => $method,
+                    'endpoint' => $endpoints[$mode] ?? '',
+                    'header' => [
+                        'icon' => $icon,
+                        'title' => $verb.' '.$entityName,
+                        'description' => 'You are '.$phrase.' '.Str::lower($entityName).'.',
+                    ],
+                ];
+            }
+
             $schema = [
-                'entity' => $entityTable,
+                'entity' => $entityKey,
                 'floatinglabel' => false,
                 'enctype' => FormSchemaConstant::ENCTYPE,
                 'allowView' => true,
@@ -33,44 +73,7 @@ class FormSchemaGenerator
                 'allowDelete' => true,
                 'allowSubmit' => true,
                 'allowCancel' => true,
-                'modes' => [
-                    FormSchemaConstant::MODE_CREATE => [
-                        'method' => FormSchemaConstant::METHOD_POST,
-                        'endpoint' => url('/api/entity/store/'.$entityTable),
-                        'header' => [
-                            'icon' => FormSchemaConstant::HEADER_ICON_CREATE,
-                            'title' => 'Create '.$entityName,
-                            'description' => 'You are creating a new '.Str::lower($entityName).'.',
-                        ],
-                    ],
-                    FormSchemaConstant::MODE_VIEW => [
-                        'method' => FormSchemaConstant::METHOD_GET,
-                        'endpoint' => url('/api/entity/show/'.$entityTable.'/{uid}'),
-                        'header' => [
-                            'icon' => FormSchemaConstant::HEADER_ICON_VIEW,
-                            'title' => 'View '.$entityName,
-                            'description' => 'You are viewing this '.Str::lower($entityName).'.',
-                        ],
-                    ],
-                    FormSchemaConstant::MODE_EDIT => [
-                        'method' => FormSchemaConstant::METHOD_PUT,
-                        'endpoint' => url('/api/entity/update/'.$entityTable.'/{uid}'),
-                        'header' => [
-                            'icon' => FormSchemaConstant::HEADER_ICON_EDIT,
-                            'title' => 'Edit '.$entityName,
-                            'description' => 'You are editing this '.Str::lower($entityName).'.',
-                        ],
-                    ],
-                    FormSchemaConstant::MODE_DELETE => [
-                        'method' => FormSchemaConstant::METHOD_DELETE,
-                        'endpoint' => url('/api/entity/delete/'.$entityTable.'/{uid}'),
-                        'header' => [
-                            'icon' => FormSchemaConstant::HEADER_ICON_DELETE,
-                            'title' => 'Delete '.$entityName,
-                            'description' => 'You are deleting this '.Str::lower($entityName).'.',
-                        ],
-                    ],
-                ],
+                'modes' => $schemaModes,
                 'fields' => $fields,
                 'actions' => [
                     [
@@ -104,6 +107,15 @@ class FormSchemaGenerator
         }
     }
 
+    /**
+     * Form fields for entity field definitions (main fields by "name", meta
+     * fields by "meta_key"), e.g. the columns of a repeatable group.
+     */
+    public function formFields(array $fields, bool $isMetaField): array
+    {
+        return $this->buildFormSchemaFields($isMetaField ? $this->filterDisplayableMetaFields($fields) : $fields, $isMetaField);
+    }
+
     private function buildFormSchemaFields(array $fields, bool $isMetaField): array
     {
         $this->logMethodStart('Building form schema fields');
@@ -121,6 +133,8 @@ class FormSchemaGenerator
                 'time' => 'time',
                 'checkbox' => 'checkbox',
                 'select' => 'select',
+                'password' => 'password',
+                'tel' => 'tel',
             ];
 
             foreach ($fields as $field) {
@@ -153,6 +167,15 @@ class FormSchemaGenerator
                     $formField['messages'] = [
                         'required' => $fieldLabel.' is required',
                     ];
+                }
+
+                // A password is set on create; on edit, blank means "keep the current one".
+                if ($formField['type'] === 'password') {
+                    $formField['required'] = false;
+                    $formField['requiredIn'] = ['create'];
+                    $formField['omitIfEmpty'] = true;
+                    $formField['showIn'] = ['create', 'edit'];
+                    $formField['helpertext'] = 'Leave blank to keep the current password.';
                 }
 
                 if ($isMetaField) {

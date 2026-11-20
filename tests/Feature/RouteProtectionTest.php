@@ -16,6 +16,16 @@ class RouteProtectionTest extends TestCase
         'timezone',
     ];
 
+    /**
+     * Data APIs open to non-admins: each action checks the per-entity
+     * entity.{table}.{action} permission instead (see EntityPermissionTest),
+     * so they only need a Sanctum-authenticated user.
+     */
+    private const PERMISSION_CHECKED_PREFIXES = [
+        'api/foundation/v1/entity/',
+        'api/foundation/v1/business-entity/',
+    ];
+
     public function test_foundation_routes_require_auth_and_admin(): void
     {
         $routes = collect(app('router')->getRoutes()->getRoutes())
@@ -23,6 +33,14 @@ class RouteProtectionTest extends TestCase
             ->reject(fn (Route $route) => in_array($route->uri(), self::PUBLIC_URIS, true));
 
         $this->assertNotEmpty($routes, 'No foundation routes were registered.');
+
+        [$dataApi, $routes] = $routes->partition(fn (Route $route) => str($route->uri())->startsWith(self::PERMISSION_CHECKED_PREFIXES));
+
+        $this->assertNotEmpty($dataApi, 'The entity data API routes were not registered.');
+
+        foreach ($dataApi as $route) {
+            $this->assertContains('auth:sanctum', $route->gatherMiddleware(), "Route [{$route->uri()}] is missing auth:sanctum.");
+        }
 
         foreach ($routes as $route) {
             $middleware = $route->gatherMiddleware();
