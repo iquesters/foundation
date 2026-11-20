@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Route;
 use Iquesters\Foundation\Enums\Module;
 use Iquesters\Foundation\Http\Middleware\EnsureAdmin;
 use Iquesters\Foundation\Support\ConfProvider;
+use Iquesters\Foundation\Support\EntityPermission;
 use Iquesters\Foundation\Tests\TestCase;
 
 class EnsureAdminTest extends TestCase
@@ -27,17 +28,17 @@ class EnsureAdminTest extends TestCase
         $this->actingAs($this->makeUser())->get('/_admin-only')->assertForbidden();
     }
 
-    public function test_default_admin_roles_are_allowed(): void
+    public function test_only_platform_admin_is_allowed(): void
     {
         $this->actingAs($this->makeUser('super-admin'))->get('/_admin-only')->assertOk();
-        $this->actingAs($this->makeUser('admin'))->get('/_admin-only')->assertOk();
+        $this->actingAs($this->makeUser('admin'))->get('/_admin-only')->assertForbidden();
     }
 
-    public function test_admin_roles_come_from_the_foundation_conf(): void
+    public function test_configuration_cannot_promote_platform_administrators(): void
     {
         $this->setAdminRoles('owner');
 
-        $this->actingAs($this->makeUser('owner'))->get('/_admin-only')->assertOk();
+        $this->actingAs($this->makeUser('owner'))->get('/_admin-only')->assertForbidden();
         $this->actingAs($this->makeUser('admin'))->get('/_admin-only')->assertForbidden();
     }
 
@@ -47,7 +48,7 @@ class EnsureAdminTest extends TestCase
         $this->actingAs($this->makeUser('super-admin'))->get('/_admin-only')->assertOk();
 
         $this->setAdminRoles(' , ');
-        $this->assertSame(['super-admin', 'admin'], EnsureAdmin::roles());
+        $this->assertSame(['super-admin'], EnsureAdmin::roles());
     }
 
     /** Set the DB-backed conf value for this request (ConfProvider reuses the instance). */
@@ -64,8 +65,34 @@ class EnsureAdminTest extends TestCase
 
             protected $guarded = [];
         };
-        $user = $user->newQuery()->create(['name' => 'x', 'email' => 'noroles@example.test', 'password' => 'x']);
+        $user = $user->newQuery()->create(['name' => 'x', 'email' => 'noroles@example.test', 'password' => 'x', 'status' => 'active']);
 
         $this->actingAs($user)->get('/_admin-only')->assertForbidden();
+    }
+
+    public function test_entity_grant_cannot_bypass_platform_or_tenant_policy(): void
+    {
+        $user = $this->makeUser('admin');
+        foreach (['users', 'roles', 'integrations', 'channels', 'organisation_role_assignments', 'account_refresh_tokens', 'customer_records'] as $table) {
+            EntityPermission::ensureFor($table);
+            $user->givePermissionTo("entity.{$table}.update");
+            $this->assertFalse(EntityPermission::allows($user, $table, 'update'));
+        }
+    }
+
+    public function test_even_platform_password_writes_use_dedicated_user_routes(): void
+    {
+        $user = $this->makeUser('super-admin');
+        foreach (['create', 'update', 'delete'] as $action) {
+            $this->assertFalse(EntityPermission::allows($user, 'users', $action));
+        }
+        $this->assertTrue(EntityPermission::allows($user, 'users', 'view'));
+    }
+
+    public function test_inactive_super_admin_cannot_use_legacy_admin_routes(): void
+    {
+        $user = $this->makeUser('super-admin');
+        $user->update(['status' => 'inactive']);
+        $this->actingAs($user)->get('/_admin-only')->assertUnauthorized();
     }
 }

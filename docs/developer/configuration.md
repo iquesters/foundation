@@ -48,9 +48,9 @@ written to `master_data` / `master_data_metas` by `php artisan foundation:seed`.
 
 | Key | DB meta key | Default | Purpose |
 |---|---|---|---|
-| `admin_roles` | `ADMIN_ROLES` | `super-admin,admin` | Comma-separated roles allowed through `ensure.admin` (admin, entity, config, form/table builder, queue routes) and treated as admins by per-entity permissions |
+| `admin_roles` | `ADMIN_ROLES` | `super-admin` | Deprecated compatibility setting. It cannot grant platform authority; `ensure.admin` and the transitional generic entity API accept only the web-guard `super-admin`. Tenant administration uses explicit scoped assignments. |
 
-`super-admin` is always allowed, whatever `admin_roles` says, so a wrong value can't lock every admin
+`admin_roles` no longer changes authorization. Existing stored values are retained without granting platform access; see `docs/track-b-security.md`. The web-guard `super-admin` role is the sole platform authority
 out. An empty value falls back to the default. Use `EnsureAdmin::roles()` to get the effective list.
 
 ## `config/foundation.php` (deploy-time)
