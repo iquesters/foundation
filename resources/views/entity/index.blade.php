@@ -4,14 +4,6 @@
 @section('meta-description', \Iquesters\Foundation\Helpers\MetaHelper::description('List of Entities'))
 
 @php
-    $tabs = [
-        [
-            'route' => 'entities.index',
-            'params' => [],
-            'icon' => 'fas fa-fw fa-cube',
-            'label' => 'Entity',
-        ],
-    ];
 @endphp
 
 @section('content')

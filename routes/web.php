@@ -8,7 +8,9 @@ use Iquesters\Foundation\Http\Controllers\EntityController;
 use Iquesters\Foundation\Http\Controllers\JobController;
 use Iquesters\Foundation\Http\Controllers\MasterDataController;
 use Iquesters\Foundation\Http\Controllers\ModuleController;
+use Iquesters\Foundation\Http\Controllers\ModuleDashboardController;
 use Iquesters\Foundation\Http\Controllers\NavigationController;
+use Iquesters\Foundation\Http\Controllers\NavigationItemController;
 use Iquesters\Foundation\Http\Controllers\QueueManagementController;
 
 Route::middleware('web')->group(function () {
@@ -22,6 +24,10 @@ Route::middleware('web')->group(function () {
 
         return response()->noContent();
     })->name('timezone.store');
+
+    // A module's dashboard: the fixed first item of its sidebar (users with access to the module).
+    Route::middleware('auth')->get('/dashboard/{module}', [ModuleDashboardController::class, 'show'])
+        ->where('module', '[A-Za-z0-9_-]+')->name('module.dashboard');
 
     Route::middleware(['auth', 'ensure.admin'])->group(function () {
 
@@ -65,6 +71,18 @@ Route::middleware('web')->group(function () {
         Route::resource('master-data', MasterDataController::class)->parameters([
             'master-data' => 'master_datum',
         ]);
+
+        // Navigation editor: sidebar items and their tabs (navigation_items).
+        Route::prefix('navigation-items')->name('navigation-items.')->group(function () {
+            Route::get('/', [NavigationItemController::class, 'index'])->name('index');
+            Route::get('/create', [NavigationItemController::class, 'create'])->name('create');
+            Route::post('/', [NavigationItemController::class, 'store'])->name('store');
+            Route::post('/reorder', [NavigationItemController::class, 'reorder'])->name('reorder');
+            Route::get('/{uid}/edit', [NavigationItemController::class, 'edit'])->name('edit');
+            Route::put('/{uid}', [NavigationItemController::class, 'update'])->name('update');
+            Route::delete('/{uid}', [NavigationItemController::class, 'destroy'])->name('destroy');
+            Route::post('/{uid}/restore', [NavigationItemController::class, 'restore'])->name('restore');
+        });
 
         Route::prefix('navigations')->group(function () {
             Route::get('/', [NavigationController::class, 'index'])->name('navigations.index');

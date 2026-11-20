@@ -21,12 +21,10 @@
         'api' => ['API only', 'No screens. For developers: a module\'s own form saves through the business entity API.'],
     ];
 
-    $tabs = [
-        ['route' => 'business-entities.index', 'params' => [], 'icon' => 'fas fa-fw fa-diagram-project', 'label' => 'Business Entities'],
-    ];
 @endphp
 
 @section('page-title', \Iquesters\Foundation\Helpers\MetaHelper::make([$title]))
+@section('breadcrumb', $title)
 @section('meta-description', \Iquesters\Foundation\Helpers\MetaHelper::description('Build a business entity from registered entities'))
 
 @push('styles')

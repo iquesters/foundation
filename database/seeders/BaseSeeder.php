@@ -82,6 +82,9 @@ abstract class BaseSeeder extends Seeder
         // 4️⃣ Insert module metadata
         $this->seedModuleMetadata($moduleId);
         $this->seedTableSchemasFromSidebar($moduleId);
+        // Sidebar items and their tabs → navigation_items (admin edits are kept).
+        app(\Iquesters\Foundation\Services\Navigation\NavigationSync::class)
+            ->syncModule(\Iquesters\Foundation\Models\Module::findOrFail($moduleId));
         // 5️⃣ Create module-specific permissions
         $this->seedPermissions();
 

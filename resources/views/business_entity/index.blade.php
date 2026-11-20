@@ -6,9 +6,6 @@
 @php
     use Iquesters\Foundation\Services\BusinessEntitySchemaGenerator as Screens;
 
-    $tabs = [
-        ['route' => 'business-entities.index', 'params' => [], 'icon' => 'fas fa-fw fa-diagram-project', 'label' => 'Business Entities'],
-    ];
 @endphp
 
 @section('content')

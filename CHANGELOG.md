@@ -6,6 +6,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follo
 ## [Unreleased]
 
 ### Added
+- **Navigation as data** (`docs/developer/navigation.md`):
+  - `navigation_items` and `navigation_item_metas` hold each module's sidebar items and, as children, their page tabs;
+  - modules declare them (`module_sidebar_menu`, with `children` and `meta`), and seeding or `php artisan navigation:sync` copies them in, keeping admin changes;
+  - **Admin → Navigation** (`/navigation-items`): add, edit, reorder (drag), hide and restore items and tabs, with a permission per item;
+  - the old sub-menu order screen keeps working.
+- **Module dashboards:** every module gets a fixed "Dashboard" item at the top of its sidebar (`/dashboard/{module}`), listing its pages. A module can show its own view (module meta `module_dashboard_view`). Admins can move it, not edit or hide it.
+- **Own-page tab:** a sidebar item with tabs gets a fixed tab for its own page. Admins can move it among the tabs; the sidebar item always opens its own page.
+- The Job OLD page's tabs (Current, Completed, Failed) are navigation children; the hardcoded `$tabs` arrays of the foundation pages are removed.
 - **Business entities:** one record made of several entity tables, e.g. a customer with its address (`has_one`) and its company (`belongs_to`).
   - **Admin builder** at Admin → Business Entities (`/business-entity`, admins only):
     - choose the root entity and linked parts;
