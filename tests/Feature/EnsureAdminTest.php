@@ -7,10 +7,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Iquesters\Foundation\Enums\Module;
 use Iquesters\Foundation\Http\Middleware\EnsureAdmin;
+use Iquesters\Foundation\Security\TenantAuthorization;
 use Iquesters\Foundation\Support\ConfProvider;
 use Iquesters\Foundation\Support\EntityPermission;
 use Iquesters\Foundation\Tests\TestCase;
-use Iquesters\Foundation\Security\TenantAuthorization;
 use Spatie\Permission\Models\Role;
 
 class EnsureAdminTest extends TestCase
