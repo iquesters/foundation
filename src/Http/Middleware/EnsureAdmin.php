@@ -36,8 +36,8 @@ class EnsureAdmin
 
         $allowed = $user
             && strtolower((string) $user->getAttribute('status')) === 'active'
-            && method_exists($user, 'hasAnyRole')
-            && $user->hasAnyRole($roles, 'web');
+            && method_exists($user, 'hasRole')
+            && $user->hasRole($roles, 'web');
 
         if (! $allowed) {
             static::logWarning('Admin access denied', [
