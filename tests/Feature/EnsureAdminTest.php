@@ -3,12 +3,14 @@
 namespace Iquesters\Foundation\Tests\Feature;
 
 use Illuminate\Foundation\Auth\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Iquesters\Foundation\Enums\Module;
 use Iquesters\Foundation\Http\Middleware\EnsureAdmin;
 use Iquesters\Foundation\Support\ConfProvider;
 use Iquesters\Foundation\Support\EntityPermission;
 use Iquesters\Foundation\Tests\TestCase;
+use Spatie\Permission\Models\Role;
 
 class EnsureAdminTest extends TestCase
 {
@@ -32,6 +34,25 @@ class EnsureAdminTest extends TestCase
     {
         $this->actingAs($this->makeUser('super-admin'))->get('/_admin-only')->assertOk();
         $this->actingAs($this->makeUser('admin'))->get('/_admin-only')->assertForbidden();
+    }
+
+    public function test_role_named_web_and_non_web_guard_super_admin_are_not_platform(): void
+    {
+        // Spatie v8 hasAnyRole() has no guard parameter; 'web' as its
+        // second argument would be interpreted as another allowed role.
+        $namedWeb = $this->makeUser('web');
+        $this->actingAs($namedWeb)->get('/_admin-only')->assertForbidden();
+        $this->assertFalse(EntityPermission::allows($namedWeb, 'notices', 'view'));
+
+        $apiOnly = $this->makeUser();
+        $apiRole = Role::findOrCreate('super-admin', 'api');
+        DB::table('model_has_roles')->insert([
+            'role_id' => $apiRole->id,
+            'model_type' => $apiOnly->getMorphClass(),
+            'model_id' => $apiOnly->getKey(),
+        ]);
+        $this->actingAs($apiOnly)->get('/_admin-only')->assertForbidden();
+        $this->assertFalse(EntityPermission::allows($apiOnly, 'notices', 'view'));
     }
 
     public function test_configuration_cannot_promote_platform_administrators(): void
