@@ -110,8 +110,24 @@ class EnsureAdminTest extends TestCase
         $this->assertTrue(EntityPermission::allows($user, 'users', 'view'));
     }
 
+    public function test_account_state_gate_preserves_legacy_sessions_until_approved_migration(): void
+    {
+        $user = $this->makeUser('super-admin');
+        $user->update(['status' => 'inactive']);
+        // Without verified users.status/backfill, new lifecycle enforcement
+        // must not unexpectedly log out existing administrators.
+        config()->set('foundation.account_state_enforcement_enabled', false);
+        $this->actingAs($user)->get('/_admin-only')->assertOk();
+        $this->assertTrue(app(\Iquesters\Foundation\Security\TenantAuthorization::class)->isPlatformAdmin($user));
+
+        config()->set('foundation.account_state_enforcement_enabled', true);
+        $this->get('/_admin-only')->assertUnauthorized();
+        $this->assertFalse(app(\Iquesters\Foundation\Security\TenantAuthorization::class)->isPlatformAdmin($user));
+    }
+
     public function test_inactive_super_admin_cannot_use_legacy_admin_routes(): void
     {
+        config()->set('foundation.account_state_enforcement_enabled', true);
         $user = $this->makeUser('super-admin');
         $user->update(['status' => 'inactive']);
         $this->actingAs($user)->get('/_admin-only')->assertUnauthorized();
