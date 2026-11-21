@@ -11,14 +11,20 @@ use Illuminate\Support\Facades\Log;
  */
 class TenantAuthorization
 {
+    private function accountMayProceed($user): bool
+    {
+        return $user && (! config('foundation.account_state_enforcement_enabled', false)
+            || strtolower((string) $user->getAttribute('status')) === 'active');
+    }
+
     public function isPlatformAdmin($user): bool
     {
-        return $user && strtolower((string) $user->getAttribute('status')) === 'active' && method_exists($user, 'hasRole') && $user->hasRole('super-admin', 'web');
+        return $this->accountMayProceed($user) && method_exists($user, 'hasRole') && $user->hasRole('super-admin', 'web');
     }
 
     public function adminOrganisationIds($user): array
     {
-        abort_unless($user && strtolower((string) $user->getAttribute('status')) === 'active', 401);
+        abort_unless($this->accountMayProceed($user), 401);
         if ($this->isPlatformAdmin($user)) {
             return DB::table('organisations')->where('status', 'active')->pluck('id')->all();
         }
