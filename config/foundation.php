@@ -15,7 +15,6 @@ return [
     // Parsed into Laravel's config cache, never read from env() per request.
     'account_state_enforcement_enabled' => (bool) env('KNORAI_FOUNDATION_ACCOUNT_STATE_ENABLED', false),
 
-
     /*
     |--------------------------------------------------------------------------
     | Module APIs  (/api/{module}/{version}/...)
