@@ -54,12 +54,13 @@ class TenantAuthorizationTest extends TenantAuthorizationFixture
     public function test_list_scope_excludes_shared_foreign_resources_even_for_the_creator(): void
     {
         $user = $this->admin();
-        DB::table('integrations')->insert(['id' => 3, 'uid' => 'shared', 'user_id'=>$user->id]);
+        DB::table('integrations')->insert(['id' => 3, 'uid' => 'shared', 'user_id' => $user->id]);
         foreach ([1, 2] as $org) {
             DB::table('model_has_organisations')->insert(['organisation_id' => $org,
                 'model_id' => 3, 'model_type' => 'Iquesters\\Integration\\Models\\Integration']);
         }
-        $model = new class extends Model {
+        $model = new class extends Model
+        {
             protected $table = 'integrations';
         };
         $policy = app(TenantAuthorization::class);
