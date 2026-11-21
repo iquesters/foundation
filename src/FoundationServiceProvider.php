@@ -2,9 +2,11 @@
 
 namespace Iquesters\Foundation;
 
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Support\Facades\Route;
+use Iquesters\Foundation\Http\Middleware\EnsureActiveAccount;
 use Iquesters\Foundation\Http\Middleware\EnsureAdmin;
 use Iquesters\Foundation\System\Providers\BaseServiceProvider;
 
@@ -45,6 +47,14 @@ class FoundationServiceProvider extends BaseServiceProvider
         // Run the admin check before route-model binding, so non-admins get
         // 403 rather than learning whether a record exists (404).
         $kernel = $this->app->make(HttpKernel::class);
+        // Covers existing browser and Sanctum paths without duplicating domain
+        // auth services. Guest callbacks and internal service calls have no user.
+        $kernel->appendMiddlewareToGroup('web', EnsureActiveAccount::class);
+        $kernel->appendMiddlewareToGroup('api', EnsureActiveAccount::class);
+        $kernel->addToMiddlewarePriorityAfter(
+            AuthenticatesRequests::class,
+            EnsureActiveAccount::class
+        );
         if (method_exists($kernel, 'addToMiddlewarePriorityBefore')) {
             $kernel->addToMiddlewarePriorityBefore(SubstituteBindings::class, EnsureAdmin::class);
         }

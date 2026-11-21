@@ -4,14 +4,12 @@ namespace Iquesters\Foundation\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Iquesters\Foundation\Enums\Module;
-use Iquesters\Foundation\Support\ConfProvider;
 use Iquesters\Foundation\System\Traits\Loggable;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Restricts a route to users holding one of the admin roles from the
- * foundation conf (DB setting `admin_roles`). Auto-registered as `ensure.admin`.
+ * Restricts global administration to the web-guard super-admin role.
+ * Auto-registered as `ensure.admin`; tenant admin is a separate scoped policy.
  *
  * Fails closed: a guest, or a user model without role support, is denied.
  */
@@ -19,26 +17,16 @@ class EnsureAdmin
 {
     use Loggable;
 
-    public const DEFAULT_ROLES = ['super-admin', 'admin'];
+    public const DEFAULT_ROLES = ['super-admin'];
 
     /** Always allowed, so a bad admin_roles value can't lock every admin out. */
     public const ALWAYS_ALLOWED = 'super-admin';
 
     public static function roles(): array
     {
-        try {
-            $configured = (string) ConfProvider::from(Module::FOUNDATION)->admin_roles;
-        } catch (\Throwable) {
-            $configured = '';
-        }
-
-        $roles = array_values(array_filter(array_map('trim', explode(',', $configured))));
-
-        if ($roles === []) {
-            $roles = self::DEFAULT_ROLES;
-        }
-
-        return array_values(array_unique([self::ALWAYS_ALLOWED, ...$roles]));
+        // Global settings cannot promote a tenant admin to platform authority.
+        // Tenant administration uses TenantAuthorization and explicit membership.
+        return self::DEFAULT_ROLES;
     }
 
     public function handle(Request $request, Closure $next): Response
@@ -47,8 +35,10 @@ class EnsureAdmin
         $roles = self::roles();
 
         $allowed = $user
-            && method_exists($user, 'hasAnyRole')
-            && $user->hasAnyRole($roles);
+            && (! config('foundation.account_state_enforcement_enabled', false)
+                || strtolower((string) $user->getAttribute('status')) === 'active')
+            && method_exists($user, 'hasRole')
+            && $user->hasRole($roles, 'web');
 
         if (! $allowed) {
             static::logWarning('Admin access denied', [
