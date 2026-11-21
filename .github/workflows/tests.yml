@@ -80,4 +80,9 @@ jobs:
           php-version: '8.3'
           coverage: none
       - run: composer global require laravel/pint --no-interaction
-      - run: ~/.composer/vendor/bin/pint --test
+      - run: |
+          if ! ~/.composer/vendor/bin/pint --test; then
+            ~/.composer/vendor/bin/pint tests/Feature/TenantAuthorizationTest.php
+            git diff -- tests/Feature/TenantAuthorizationTest.php
+            exit 1
+          fi
