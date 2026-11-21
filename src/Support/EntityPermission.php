@@ -50,7 +50,7 @@ final class EntityPermission
             return false;
         }
 
-        if (method_exists($user, 'hasAnyRole') && $user->hasAnyRole(EnsureAdmin::roles(), 'web')) {
+        if (method_exists($user, 'hasRole') && $user->hasRole(EnsureAdmin::roles(), 'web')) {
             return true;
         }
 
