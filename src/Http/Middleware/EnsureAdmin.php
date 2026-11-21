@@ -35,7 +35,8 @@ class EnsureAdmin
         $roles = self::roles();
 
         $allowed = $user
-            && strtolower((string) $user->getAttribute('status')) === 'active'
+            && (! config('foundation.account_state_enforcement_enabled', false)
+                || strtolower((string) $user->getAttribute('status')) === 'active')
             && method_exists($user, 'hasRole')
             && $user->hasRole($roles, 'web');
 
