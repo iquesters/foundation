@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\Jobs\BaseJob;
+use Iquesters\Foundation\Models\Module;
+use Iquesters\Foundation\Services\Navigation\NavigationSync;
 use Iquesters\Foundation\System\Traits\Loggable;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -83,8 +85,8 @@ abstract class BaseSeeder extends Seeder
         $this->seedModuleMetadata($moduleId);
         $this->seedTableSchemasFromSidebar($moduleId);
         // Sidebar items and their tabs → navigation_items (admin edits are kept).
-        app(\Iquesters\Foundation\Services\Navigation\NavigationSync::class)
-            ->syncModule(\Iquesters\Foundation\Models\Module::findOrFail($moduleId));
+        app(NavigationSync::class)
+            ->syncModule(Module::findOrFail($moduleId));
         // 5️⃣ Create module-specific permissions
         $this->seedPermissions();
 
