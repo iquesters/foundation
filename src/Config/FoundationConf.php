@@ -15,15 +15,14 @@ class FoundationConf extends BaseConf
     protected ?string $identifier = Module::FOUNDATION;
 
     /**
-     * Comma-separated roles allowed through `ensure.admin` (admin, entity,
-     * config, form/table builder and queue routes). super-admin is always
-     * allowed, whatever this says (see EnsureAdmin::roles()).
+     * Deprecated compatibility setting; cannot grant platform authority.
+     * EnsureAdmin admits only super-admin. Tenant admin uses explicit roles.
      */
     protected string $admin_roles;
 
     protected function prepareDefault(BaseConf $default_values)
     {
-        $default_values->admin_roles = 'super-admin,admin';
+        $default_values->admin_roles = 'super-admin';
     }
 
     protected function rules(): array

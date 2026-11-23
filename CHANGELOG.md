@@ -92,6 +92,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follo
   - Creating an entity now reuses a generated schema with the same slug (or the same table as its `entity`) instead of creating a duplicate.
   - "Generate table schema" no longer fails when the form schema uid was cached on the entity.
 
+### Fixed
+- **Entity fields from the table** (`BaseSeeder` with empty `fields`): a NOT NULL column with a default (e.g. `status`, `source`) or an auto-increment id is no longer marked required, so the entity API doesn't refuse a form that leaves it out ("Source is required"). Re-run the module's seeder to update existing entity definitions.
+
+### Changed (merged Track B security, foundation#38)
+- `ensure.admin` and the entity APIs admit only `super-admin`; per-entity permissions grant nothing for now; the generic entity API refuses `users` writes. See `docs/track-b-security.md`.
+- **Business entities can save users again** (Admin → Users): `EntityRepository` writes the `users` table through the user model, so its password unit of work runs, and `EntityPermission::allowsThroughModel()` lets platform admins write users that way. The generic entity API still refuses `users` writes.
+- Tests moved to the new rules (entity grants, `users` writes, business entities for non-admins).
+
 ## [2.0.2] – 2026-11-17
 
 ### Fixed

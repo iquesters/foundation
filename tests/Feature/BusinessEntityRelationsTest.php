@@ -253,11 +253,12 @@ class BusinessEntityRelationsTest extends TestCase
         $this->getJson(self::BASE.'/options/customer-account/notes')->assertStatus(400);
     }
 
-    public function test_references_need_view_permission_on_the_referenced_table(): void
+    public function test_entity_grants_do_not_let_non_admins_write_or_read_references(): void
     {
+        // Track B: per-entity permissions grant nothing until scoped rules ("Phase B2") exist.
         [, $tags] = $this->seedTargets();
         $user = $this->makeUser('user');
-        foreach (['customers', 'notes', 'comments'] as $table) {
+        foreach (['customers', 'notes', 'comments', 'tags'] as $table) {
             EntityPermission::ensureFor($table);
             $user->givePermissionTo(EntityPermission::names($table));
         }
@@ -265,13 +266,50 @@ class BusinessEntityRelationsTest extends TestCase
 
         $this->getJson(self::BASE.'/options/customer-account/tags')->assertForbidden();
         $this->store(['customer__name' => 'Asha', 'tags' => [$tags['Gold']]])->assertForbidden();
+        $this->store(['customer__name' => 'Asha', 'notes' => [['body' => 'hi']]])->assertForbidden();
+    }
 
-        // Without references the record can be written.
-        $this->store(['customer__name' => 'Asha', 'notes' => [['body' => 'hi']]])->assertCreated();
+    public function test_a_user_entity_saves_users_through_the_user_model(): void
+    {
+        // Business entities write users through the model, so its save logic
+        // (in apps: the password lock and credential revocation) runs.
+        Sanctum::actingAs($this->makeUser('super-admin'));
+        $this->registerEntity('users', 'users', [
+            'name' => ['name' => 'name', 'type' => 'string', 'required' => true],
+            'email' => ['name' => 'email', 'type' => 'string', 'input_type' => 'email', 'required' => true],
+            'password' => ['name' => 'password', 'type' => 'string', 'required' => true],
+        ]);
+        app(BusinessEntityService::class)->create(['name' => 'User Account'], ['parts' => [
+            ['alias' => 'user', 'entity' => 'users', 'fields' => ['name', 'email', 'password']],
+        ]]);
 
-        EntityPermission::ensureFor('tags');
-        $user->givePermissionTo(EntityPermission::name('tags', 'view'));
-        $this->store(['customer__name' => 'Ravi', 'tags' => [$tags['Gold']]])->assertCreated();
+        $userClass = config('auth.providers.users.model');
+        $saved = [];
+        $userClass::saved(function ($user) use (&$saved) {
+            $saved[] = $user->email;
+        });
+
+        $this->postJson(self::BASE.'/store/user-account', [
+            'user__name' => 'Ravi', 'user__email' => 'ravi@example.test', 'user__password' => 'secret-123',
+        ])->assertCreated();
+        // The test users table has no uid column: records are addressed by id.
+        $id = $userClass::where('email', 'ravi@example.test')->value('id');
+        $this->putJson(self::BASE."/update/user-account/{$id}", ['user__name' => 'Ravi Sen'])->assertOk();
+
+        $this->assertSame(['ravi@example.test', 'ravi@example.test'], $saved);
+        $this->assertSame('Ravi Sen', $userClass::where('email', 'ravi@example.test')->value('name'));
+    }
+
+    public function test_only_platform_admins_write_users_through_a_business_entity(): void
+    {
+        $user = $this->makeUser('user');
+        EntityPermission::ensureFor('users');
+        $user->givePermissionTo(EntityPermission::names('users'));
+
+        $this->assertFalse(EntityPermission::allowsThroughModel($user, 'users', 'update'));
+        $this->assertTrue(EntityPermission::allowsThroughModel($this->makeUser('super-admin'), 'users', 'update'));
+        // The generic entity API still refuses users writes, even for super-admin.
+        $this->assertFalse(EntityPermission::allows($this->makeUser('super-admin'), 'users', 'update'));
     }
 
     public function test_delete_removes_owned_rows_and_keeps_shared_links(): void

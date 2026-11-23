@@ -19,10 +19,10 @@ The business entity API reads and writes **one record across several tables**, a
 
 ## Permissions
 
-Each action needs `entity.{table}.{view|create|update|delete}` on **every table the record writes**: the root, composed parts and lists of rows. Admin roles always pass.
+**For now only platform admins (`super-admin`) can use business entities.** Since the Track B security changes (see `docs/track-b-security.md`), per-entity permissions (`entity.{table}.*`) grant nothing, until per-organisation rules replace them.
 
-- When an update creates a part that didn't exist yet, it also needs `create` on that part's table.
-- **References** are only read: sending one, or listing its options, needs `entity.{table}.view` on the referenced table (e.g. `entity.roles.view`).
+- The check still runs on **every table the record writes** (root, composed parts, lists of rows) and on referenced tables, so the rules can be widened again without changing callers.
+- **The `users` table** is written through the user model (`EntityRepository`), so the model's password rules (row lock, revoking old sessions and tokens, audit) always run. That is why business entities may write users (`EntityPermission::allowsThroughModel`), while the generic entity API refuses `users` writes even for super-admin.
 
 ## Payload
 

@@ -319,7 +319,8 @@ abstract class BaseSeeder extends Seeder
                 'name' => $column['name'],
                 'type' => $column['type_name'],
                 'label' => ucwords(str_replace('_', ' ', $column['name'])),
-                'required' => ! $column['nullable'],
+                // A NOT NULL column with a default (e.g. status, source) can be left out.
+                'required' => ! $column['nullable'] && $column['default'] === null && ! $column['auto_increment'],
                 'nullable' => $column['nullable'],
                 'input_type' => $this->getInputType($column['name'], $column['type_name']),
                 'maxlength' => $column['length'] ?? null,

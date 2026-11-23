@@ -68,12 +68,13 @@ class EntityPermissionTest extends TestCase
         }
     }
 
-    public function test_view_permission_allows_reading_only(): void
+    public function test_global_view_permission_cannot_bypass_tenant_policy(): void
     {
         Sanctum::actingAs($this->userWith(['view']));
 
-        $this->getJson('/api/foundation/v1/entity/list/notices')->assertOk();
-        $this->getJson("/api/foundation/v1/entity/show/notices/{$this->uid}")->assertOk();
+        // Track B: entity grants don't open the generic entity API (until scoped "Phase B2" rules exist).
+        $this->getJson('/api/foundation/v1/entity/list/notices')->assertForbidden();
+        $this->getJson("/api/foundation/v1/entity/show/notices/{$this->uid}")->assertForbidden();
 
         $this->postJson('/api/foundation/v1/entity/store/notices', ['title' => 'New'])->assertForbidden();
         $this->putJson("/api/foundation/v1/entity/update/notices/{$this->uid}", ['title' => 'Changed'])->assertForbidden();
@@ -82,13 +83,13 @@ class EntityPermissionTest extends TestCase
         $this->assertDatabaseHas('notices', ['uid' => $this->uid, 'title' => 'Hello', 'status' => 'active']);
     }
 
-    public function test_each_action_needs_its_own_permission(): void
+    public function test_global_entity_grants_do_not_delegate_administration(): void
     {
         Sanctum::actingAs($this->userWith(['view', 'create', 'update', 'delete']));
 
-        $this->postJson('/api/foundation/v1/entity/store/notices', ['title' => 'New'])->assertCreated();
-        $this->putJson("/api/foundation/v1/entity/update/notices/{$this->uid}", ['title' => 'Changed'])->assertOk();
-        $this->deleteJson("/api/foundation/v1/entity/delete/notices/{$this->uid}")->assertOk();
+        $this->postJson('/api/foundation/v1/entity/store/notices', ['title' => 'New'])->assertForbidden();
+        $this->putJson("/api/foundation/v1/entity/update/notices/{$this->uid}", ['title' => 'Changed'])->assertForbidden();
+        $this->deleteJson("/api/foundation/v1/entity/delete/notices/{$this->uid}")->assertForbidden();
     }
 
     public function test_permission_on_one_entity_does_not_open_others(): void

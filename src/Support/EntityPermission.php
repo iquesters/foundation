@@ -4,7 +4,6 @@ namespace Iquesters\Foundation\Support;
 
 use Illuminate\Contracts\Auth\Authenticatable;
 use Iquesters\Foundation\Http\Middleware\EnsureAdmin;
-use Spatie\Permission\Exceptions\PermissionDoesNotExist;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -12,7 +11,7 @@ use Spatie\Permission\PermissionRegistrar;
  * Per-entity permissions for the generic entity API:
  *   entity.{table}.view | create | update | delete
  *
- * Admin roles (foundation conf admin_roles, see EnsureAdmin::roles()) are always allowed.
+ * Transitional generic entity operations are platform-only: their polymorphic ownership is not covered by the generic column scope. Dedicated domain routes use scoped policy.
  */
 final class EntityPermission
 {
@@ -45,18 +44,36 @@ final class EntityPermission
             return false;
         }
 
-        if (method_exists($user, 'hasAnyRole') && $user->hasAnyRole(EnsureAdmin::roles())) {
+        // Generic repository writes bypass Eloquent's shared password/revocation
+        // unit of work. User mutations must use the dedicated account/admin routes.
+        if (strtolower($table) === 'users' && $action !== 'view') {
+            return false;
+        }
+
+        if (method_exists($user, 'hasRole') && $user->hasRole(EnsureAdmin::roles(), 'web')) {
             return true;
         }
 
-        if (! method_exists($user, 'hasPermissionTo')) {
-            return false;
+        // The legacy generic entity router accepts table and record IDs but
+        // has no tenant ownership contract. Global entity permissions cannot
+        // substitute for that contract. Restrict until Phase B2 supplies a
+        // scoped resource policy; dedicated Inbox/account/admin routes remain.
+        return false;
+    }
+
+    /**
+     * For writers that save the users table through the user model, like
+     * business entity records (EntityRepository saves users with Eloquent):
+     * the model's password unit of work (row lock, credential revocation,
+     * audit) then runs, so platform admins may change users that way. The
+     * generic entity API keeps using allows(), which refuses users writes.
+     */
+    public static function allowsThroughModel(?Authenticatable $user, string $table, string $action): bool
+    {
+        if (strtolower($table) === 'users' && in_array($action, ['create', 'update', 'delete'], true)) {
+            return $user !== null && method_exists($user, 'hasRole') && $user->hasRole(EnsureAdmin::roles(), 'web');
         }
 
-        try {
-            return $user->hasPermissionTo(self::name($table, $action));
-        } catch (PermissionDoesNotExist) {
-            return false;
-        }
+        return self::allows($user, $table, $action);
     }
 }

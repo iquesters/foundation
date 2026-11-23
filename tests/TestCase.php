@@ -28,6 +28,7 @@ abstract class TestCase extends Orchestra
 
     protected function defineEnvironment($app): void
     {
+        $app['config']->set('app.key', 'base64:2fl+Ktvkfl+Fuz4Qp/A75G2RTiWVA/ZoKZvp6fiiM10=');
         $app['config']->set('auth.providers.users.model', User::class);
         $app['config']->set('permission.cache.store', 'array');
     }
@@ -45,6 +46,7 @@ abstract class TestCase extends Orchestra
     {
         $user = User::create([
             'name' => 'Test '.Str::random(6),
+            'status' => 'active',
             'email' => Str::random(10).'@example.test',
             'password' => bcrypt(Str::random(20)),
         ]);

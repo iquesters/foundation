@@ -90,11 +90,15 @@ class BusinessEntityRecords
         return [$businessEntity, $definition];
     }
 
-    /** Requires entity.{table}.{action} on every table the record writes. */
+    /**
+     * Requires entity.{table}.{action} on every table the record writes. The users
+     * table is saved through the user model, so platform admins may write it
+     * (EntityPermission::allowsThroughModel).
+     */
     public function authorize(BusinessEntityDefinition $definition, string $action): void
     {
         foreach ($definition->tables() as $table) {
-            if (! EntityPermission::allows(auth()->user(), $table, $action)) {
+            if (! EntityPermission::allowsThroughModel(auth()->user(), $table, $action)) {
                 throw new AuthorizationException("You do not have permission to {$action} this record.");
             }
         }
@@ -172,7 +176,7 @@ class BusinessEntityRecords
         [$data, $leaves] = $this->validated($definition, $writes, $input, $existing, $loaded->__leaves);
 
         foreach (array_keys($data) as $alias) {
-            if (! isset($existing[$alias]) && ! EntityPermission::allows(auth()->user(), $definition->part($alias)['table'], 'create')) {
+            if (! isset($existing[$alias]) && ! EntityPermission::allowsThroughModel(auth()->user(), $definition->part($alias)['table'], 'create')) {
                 throw new AuthorizationException('You do not have permission to create this record.');
             }
         }
@@ -941,7 +945,7 @@ class BusinessEntityRecords
 
     private function authorizeTable(string $table, string $action): void
     {
-        if (! EntityPermission::allows(auth()->user(), $table, $action)) {
+        if (! EntityPermission::allowsThroughModel(auth()->user(), $table, $action)) {
             throw new AuthorizationException("You do not have permission to {$action} {$table}.");
         }
     }

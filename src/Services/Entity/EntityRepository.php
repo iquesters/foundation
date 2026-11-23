@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\Constants\EntityStatus;
 use Iquesters\Foundation\Http\Query\DynamicEntityListQuery;
+use Iquesters\Foundation\Support\UserModel;
 use Iquesters\Foundation\System\Traits\Loggable;
 
 /**
@@ -70,7 +71,15 @@ class EntityRepository
         $mainData = $this->withSystemDefaults($table, $mainData, false);
 
         $record = DB::transaction(function () use ($table, $mainData, $metaData) {
-            $id = DB::table($table)->insertGetId($mainData);
+            $model = $this->modelFor($table);
+            if ($model) {
+                // Through the model, so its save logic (e.g. password rules) runs.
+                $instance = new $model;
+                $instance->forceFill($mainData)->save();
+                $id = (int) $instance->getKey();
+            } else {
+                $id = DB::table($table)->insertGetId($mainData);
+            }
             // Meta rows are written in the same transaction so partial writes don't survive failures.
             $this->insertMeta($table, $id, $metaData);
 
@@ -90,7 +99,13 @@ class EntityRepository
             $mainData = $this->withMissingCreateAudit($mainData, $existing);
 
             if (! empty($mainData)) {
-                DB::table($table)->where('id', $existing->id)->update($mainData);
+                $model = $this->modelFor($table);
+                if ($model) {
+                    // Through the model: a password change runs its revocation and audit.
+                    $model::query()->findOrFail($existing->id)->forceFill($mainData)->save();
+                } else {
+                    DB::table($table)->where('id', $existing->id)->update($mainData);
+                }
             }
 
             $this->upsertMeta($table, (int) $existing->id, $metaData);
@@ -175,6 +190,18 @@ class EntityRepository
         $this->scope->assertRecordInScope($table, $existing);
 
         return $existing;
+    }
+
+    /**
+     * The Eloquent model that must write this table, or null for plain queries.
+     * The users table: the user model owns password writes (locking, revoking
+     * old credentials), which raw query-builder writes would skip.
+     */
+    private function modelFor(string $table): ?string
+    {
+        $model = UserModel::name();
+
+        return class_exists($model) && (new $model)->getTable() === $table ? $model : null;
     }
 
     private function withSystemDefaults(string $table, array $data, bool $isUpdate): array

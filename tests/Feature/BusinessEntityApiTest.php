@@ -110,20 +110,17 @@ class BusinessEntityApiTest extends TestCase
         $this->assertDatabaseCount('customers', 0);
     }
 
-    public function test_permission_is_needed_on_every_part_table(): void
+    public function test_entity_grants_do_not_open_business_entities_to_non_admins(): void
     {
+        // Track B: per-entity permissions grant nothing until scoped rules ("Phase B2") exist.
         $user = $this->makeUser('user');
-        foreach (['customers', 'addresses'] as $table) {
+        foreach (['customers', 'addresses', 'companies'] as $table) {
             EntityPermission::ensureFor($table);
             $user->givePermissionTo(EntityPermission::name($table, 'view'));
         }
         Sanctum::actingAs($user);
 
         $this->getJson(self::BASE.'/list/customer-profile')->assertForbidden();
-
-        EntityPermission::ensureFor('companies');
-        $user->givePermissionTo(EntityPermission::name('companies', 'view'));
-        $this->getJson(self::BASE.'/list/customer-profile')->assertOk();
     }
 
     public function test_store_writes_every_part_in_one_record(): void
