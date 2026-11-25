@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Iquesters\Foundation\Jobs\BaseJob;
+use Iquesters\Foundation\Models\Module;
+use Iquesters\Foundation\Services\Navigation\NavigationSync;
 use Iquesters\Foundation\System\Traits\Loggable;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -82,6 +84,9 @@ abstract class BaseSeeder extends Seeder
         // 4️⃣ Insert module metadata
         $this->seedModuleMetadata($moduleId);
         $this->seedTableSchemasFromSidebar($moduleId);
+        // Sidebar items and their tabs → navigation_items (admin edits are kept).
+        app(NavigationSync::class)
+            ->syncModule(Module::findOrFail($moduleId));
         // 5️⃣ Create module-specific permissions
         $this->seedPermissions();
 
@@ -316,7 +321,8 @@ abstract class BaseSeeder extends Seeder
                 'name' => $column['name'],
                 'type' => $column['type_name'],
                 'label' => ucwords(str_replace('_', ' ', $column['name'])),
-                'required' => ! $column['nullable'],
+                // A NOT NULL column with a default (e.g. status, source) can be left out.
+                'required' => ! $column['nullable'] && $column['default'] === null && ! $column['auto_increment'],
                 'nullable' => $column['nullable'],
                 'input_type' => $this->getInputType($column['name'], $column['type_name']),
                 'maxlength' => $column['length'] ?? null,

@@ -13,6 +13,18 @@ class TableSchemaGenerator
 
     public function generate(Entity $entity, array $customFields, string $formSchemaUid): array
     {
+        $baseTableName = $entity->getMeta('table_name') ?: $this->generateTableName($entity->entity_name);
+
+        return $this->build($this->pluralizeTableName($baseTableName), $customFields, $formSchemaUid);
+    }
+
+    /**
+     * A table schema for any resource: generate() uses it for an entity table,
+     * BusinessEntitySchemaGenerator for a business entity ("business-entity/{slug}").
+     * Columns: id, the first two fields (linking to the form), status.
+     */
+    public function build(string $entityKey, array $customFields, string $formSchemaUid): array
+    {
         $this->logMethodStart('Generating table schema');
 
         try {
@@ -40,10 +52,8 @@ class TableSchemaGenerator
                 'visible' => true,
             ];
 
-            $baseTableName = $entity->getMeta('table_name') ?: $this->generateTableName($entity->entity_name);
-
             $schema = [
-                'entity' => $this->pluralizeTableName($baseTableName),
+                'entity' => $entityKey,
                 'dt-options' => [
                     'columns' => $columns,
                     'options' => [

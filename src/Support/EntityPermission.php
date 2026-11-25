@@ -60,4 +60,20 @@ final class EntityPermission
         // scoped resource policy; dedicated Inbox/account/admin routes remain.
         return false;
     }
+
+    /**
+     * For writers that save the users table through the user model, like
+     * business entity records (EntityRepository saves users with Eloquent):
+     * the model's password unit of work (row lock, credential revocation,
+     * audit) then runs, so platform admins may change users that way. The
+     * generic entity API keeps using allows(), which refuses users writes.
+     */
+    public static function allowsThroughModel(?Authenticatable $user, string $table, string $action): bool
+    {
+        if (strtolower($table) === 'users' && in_array($action, ['create', 'update', 'delete'], true)) {
+            return $user !== null && method_exists($user, 'hasRole') && $user->hasRole(EnsureAdmin::roles(), 'web');
+        }
+
+        return self::allows($user, $table, $action);
+    }
 }

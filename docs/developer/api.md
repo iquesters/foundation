@@ -3,7 +3,7 @@
 Every module's JSON API is served under one scheme:
 
 ```
-/api/{module}/{version}/...        e.g. /api/user-interface/v1/entity/list/users
+/api/{module}/{version}/...        e.g. /api/foundation/v1/entity/list/users
 ```
 
 One version per module. A breaking change ships as a new version (`v2`) next to the old one, so

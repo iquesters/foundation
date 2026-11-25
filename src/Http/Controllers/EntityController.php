@@ -3,19 +3,16 @@
 namespace Iquesters\Foundation\Http\Controllers;
 
 use Exception;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use Iquesters\Foundation\Constants\EntityStatus;
-use Iquesters\Foundation\Contracts\SchemaModels;
 use Iquesters\Foundation\Models\Entity;
 use Iquesters\Foundation\Models\Module;
-use Iquesters\Foundation\Services\FormSchemaGenerator;
-use Iquesters\Foundation\Services\TableSchemaGenerator;
+use Iquesters\Foundation\Services\Schema\EntitySchemaService;
 use Iquesters\Foundation\Support\EntityPermission;
+use Iquesters\Foundation\Support\EntityTableName;
 use Iquesters\Foundation\System\Traits\Loggable;
 
 class EntityController extends Controller
@@ -23,8 +20,7 @@ class EntityController extends Controller
     use Loggable;
 
     public function __construct(
-        private readonly FormSchemaGenerator $formSchemaGenerator,
-        private readonly TableSchemaGenerator $tableSchemaGenerator
+        private readonly EntitySchemaService $schemas
     ) {}
 
     private const SUPPORTED_PRIMARY_FIELD_TYPES = [
@@ -148,7 +144,7 @@ class EntityController extends Controller
                 'meta_fields' => 'nullable|json',
             ]);
 
-            $tableName = $this->generateTableName($validated['entity_name']);
+            $tableName = EntityTableName::fromEntityName($validated['entity_name']);
             $slug = $this->generateUniqueSlug($validated['entity_name']);
             $processedCustomFields = $this->processCustomFields($validated['fields']);
             $allFields = $this->mergeSystemAndCustomFields($processedCustomFields);
@@ -168,11 +164,8 @@ class EntityController extends Controller
             $entity->save();
 
             // Save metadata and generate schemas
-            $this->saveEntityMeta($entity, 'table_name', $tableName);
-            $formSchemaUid = $this->createFormSchema($entity, $slug, $processedCustomFields, $metaFieldsData);
-            $this->saveEntityMeta($entity, 'form_schema_uid', $formSchemaUid);
-            $tableSchemaUid = $this->createTableSchema($entity, $slug, $processedCustomFields, $formSchemaUid);
-            $this->saveEntityMeta($entity, 'table_schema_uid', $tableSchemaUid);
+            $this->schemas->setMeta($entity, 'table_name', $tableName);
+            ['form_schema_uid' => $formSchemaUid, 'table_schema_uid' => $tableSchemaUid] = $this->schemas->sync($entity, $processedCustomFields, $metaFieldsData);
 
             static::logInfo('Entity created with schemas', [
                 'entity' => $entity->toArray(),
@@ -226,8 +219,8 @@ class EntityController extends Controller
 
             // ❗ Table name MUST NOT change after publish
             if (! $isPublished) {
-                $tableName = $this->generateTableName($validated['entity_name']);
-                $this->saveEntityMeta($entity, 'table_name', $tableName, false);
+                $tableName = EntityTableName::fromEntityName($validated['entity_name']);
+                $this->schemas->setMeta($entity, 'table_name', $tableName);
             }
 
             // Update entity
@@ -244,7 +237,7 @@ class EntityController extends Controller
                 ? $this->extractCustomFieldsFromEntityFields($allFields)
                 : ($processedCustomFields ?? []);
 
-            $this->ensureGeneratedFormSchema($entity, $customFieldsForSchema, $metaFieldsData);
+            $this->schemas->syncFormSchema($entity, $customFieldsForSchema, $metaFieldsData);
 
             static::logInfo('Entity updated', [
                 'entity_uid' => $entity->uid,
@@ -290,54 +283,6 @@ class EntityController extends Controller
         }
 
         return $slug;
-    }
-
-    /**
-     * Generate table name from entity name
-     */
-    private function generateTableName($entityName)
-    {
-        $tableName = strtolower($entityName);
-        $tableName = preg_replace('/[^a-z0-9]+/', '_', $tableName);
-
-        return trim($tableName, '_');
-    }
-
-    /**
-     * Pluralize a base table name for published entity tables.
-     */
-    private function pluralizeTableName(string $tableName): string
-    {
-        try {
-            $pluralEndings = ['s', 'es', 'ies'];
-
-            foreach ($pluralEndings as $ending) {
-                if (substr($tableName, -strlen($ending)) === $ending) {
-                    return $tableName;
-                }
-            }
-
-            if (substr($tableName, -1) === 'y') {
-                return substr($tableName, 0, -1).'ies';
-            }
-
-            if (
-                in_array(substr($tableName, -1), ['s', 'x', 'z'], true) ||
-                in_array(substr($tableName, -2), ['sh', 'ch'], true)
-            ) {
-                return $tableName.'es';
-            }
-
-            return $tableName.'s';
-        } catch (\Throwable $th) {
-            static::logError('Error pluralizing table name', [
-                'table_name' => $tableName,
-                'error' => $th->getMessage(),
-                'trace' => $th->getTraceAsString(),
-            ]);
-
-            throw $th;
-        }
     }
 
     /**
@@ -559,270 +504,6 @@ class EntityController extends Controller
         return $metaFields;
     }
 
-    /**
-     * Save or update entity meta
-     */
-    private function saveEntityMeta($entity, $metaKey, $metaValue, $isCreate = true)
-    {
-        $metaData = [
-            'meta_value' => $metaValue,
-            'status' => 'active',
-            'updated_by' => auth()->id(),
-        ];
-
-        if ($isCreate) {
-            $metaData['created_by'] = auth()->id();
-        }
-
-        $entity->metas()->updateOrCreate(
-            ['meta_key' => $metaKey],
-            $metaData
-        );
-    }
-
-    /** @return class-string<Model> */
-    private function formSchemaModel(): string
-    {
-        return app(SchemaModels::class)->formSchemaModel();
-    }
-
-    /** @return class-string<Model> */
-    private function tableSchemaModel(): string
-    {
-        return app(SchemaModels::class)->tableSchemaModel();
-    }
-
-    /**
-     * Create form schema and return its UID
-     */
-    private function createFormSchema($entity, $slug, $customFields, $metaFields = [])
-    {
-        $formSchema = $this->formSchemaGenerator->generate($entity, $customFields, $metaFields);
-        $formSchemaRecord = $this->formSchemaModel()::create([
-            'uid' => Str::ulid(),
-            'slug' => $slug.'-form',
-            'name' => $entity->entity_name.' Form',
-            'description' => 'Auto-generated form for '.$entity->entity_name,
-            'schema' => $formSchema,
-            'extra_info' => [],
-            'status' => EntityStatus::ACTIVE,
-            'created_by' => auth()->id(),
-            'updated_by' => auth()->id(),
-        ]);
-
-        return $formSchemaRecord->uid;
-    }
-
-    private function ensureGeneratedFormSchema($entity, $customFields, $metaFields): void
-    {
-        $formSchemaUid = $entity->getMeta('form_schema_uid');
-        $entitySlug = $this->resolveEntitySlug($entity);
-        $formSchemaRecord = $this->findExistingFormSchemaRecord($entity, $formSchemaUid, $entitySlug);
-
-        if (! $formSchemaRecord) {
-            $newFormSchemaUid = $this->createFormSchema($entity, $entitySlug, $customFields, $metaFields);
-            $this->saveEntityMeta($entity, 'form_schema_uid', $newFormSchemaUid, false);
-
-            static::logInfo('Generated form schema created because no existing schema record could be resolved', [
-                'entity_uid' => $entity->uid,
-                'missing_form_schema_uid' => $formSchemaUid,
-                'form_schema_uid' => $newFormSchemaUid,
-            ]);
-
-            return;
-        }
-
-        $formSchemaRecord->update([
-            'name' => $entity->entity_name.' Form',
-            'description' => 'Auto-generated form for '.$entity->entity_name,
-            'schema' => $this->formSchemaGenerator->generate($entity, $customFields, $metaFields),
-            'updated_by' => auth()->id(),
-        ]);
-
-        if ($formSchemaRecord->uid !== $formSchemaUid) {
-            $this->saveEntityMeta($entity, 'form_schema_uid', $formSchemaRecord->uid, false);
-        }
-    }
-
-    /**
-     * Create table schema and return its UID
-     */
-    private function createTableSchema($entity, $slug, $customFields, $formSchemaUid)
-    {
-        $tableSchema = $this->tableSchemaGenerator->generate($entity, $customFields, $formSchemaUid);
-        $tableSchemaRecord = $this->tableSchemaModel()::create([
-            'uid' => Str::ulid(),
-            'slug' => $slug.'-table',
-            'name' => $entity->entity_name.' Table',
-            'description' => 'Auto-generated table for '.$entity->entity_name,
-            'schema' => $tableSchema,
-            'extra_info' => [],
-            'status' => EntityStatus::ACTIVE,
-            'created_by' => auth()->id(),
-            'updated_by' => auth()->id(),
-        ]);
-
-        return $tableSchemaRecord->uid;
-    }
-
-    private function ensureGeneratedTableSchema($entity, $customFields, $formSchemaUid): void
-    {
-        $tableSchemaUid = $entity->getMeta('table_schema_uid');
-        $entitySlug = $this->resolveEntitySlug($entity);
-        $tableSchemaRecord = $this->findExistingTableSchemaRecord($entity, $tableSchemaUid, $entitySlug);
-
-        if (! $tableSchemaRecord) {
-            $newTableSchemaUid = $this->createTableSchema($entity, $entitySlug, $customFields, $formSchemaUid);
-            $this->saveEntityMeta($entity, 'table_schema_uid', $newTableSchemaUid, false);
-
-            static::logInfo('Generated table schema created because no existing schema record could be resolved', [
-                'entity_uid' => $entity->uid,
-                'missing_table_schema_uid' => $tableSchemaUid,
-                'table_schema_uid' => $newTableSchemaUid,
-            ]);
-
-            return;
-        }
-
-        $tableSchemaRecord->update([
-            'name' => $entity->entity_name.' Table',
-            'description' => 'Auto-generated table for '.$entity->entity_name,
-            'schema' => $this->tableSchemaGenerator->generate($entity, $customFields, $formSchemaUid),
-            'updated_by' => auth()->id(),
-        ]);
-
-        if ($tableSchemaRecord->uid !== $tableSchemaUid) {
-            $this->saveEntityMeta($entity, 'table_schema_uid', $tableSchemaRecord->uid, false);
-        }
-    }
-
-    private function findExistingFormSchemaRecord(Entity $entity, ?string $formSchemaUid, string $entitySlug): ?Model
-    {
-        if ($formSchemaUid) {
-            $formSchemaRecord = $this->formSchemaModel()::where('uid', $formSchemaUid)->first();
-
-            if ($formSchemaRecord) {
-                return $formSchemaRecord;
-            }
-        }
-
-        foreach ($this->buildSchemaSlugCandidates($entitySlug, 'form') as $candidateSlug) {
-            $formSchemaRecord = $this->formSchemaModel()::where('slug', $candidateSlug)->first();
-
-            if ($formSchemaRecord) {
-                return $formSchemaRecord;
-            }
-        }
-
-        $entityTableNames = $this->buildEntityTableNameCandidates($entity);
-
-        foreach ($entityTableNames as $entityTableName) {
-            $formSchemaRecord = $this->formSchemaModel()::where('schema->entity', $entityTableName)->first();
-
-            if ($formSchemaRecord) {
-                return $formSchemaRecord;
-            }
-        }
-
-        return null;
-    }
-
-    private function findExistingTableSchemaRecord(Entity $entity, ?string $tableSchemaUid, string $entitySlug): ?Model
-    {
-        if ($tableSchemaUid) {
-            $tableSchemaRecord = $this->tableSchemaModel()::where('uid', $tableSchemaUid)->first();
-
-            if ($tableSchemaRecord) {
-                return $tableSchemaRecord;
-            }
-        }
-
-        foreach ($this->buildSchemaSlugCandidates($entitySlug, 'table') as $candidateSlug) {
-            $tableSchemaRecord = $this->tableSchemaModel()::where('slug', $candidateSlug)->first();
-
-            if ($tableSchemaRecord) {
-                return $tableSchemaRecord;
-            }
-        }
-
-        $entityTableNames = $this->buildEntityTableNameCandidates($entity);
-
-        foreach ($entityTableNames as $entityTableName) {
-            $tableSchemaRecord = $this->tableSchemaModel()::where('schema->entity', $entityTableName)->first();
-
-            if ($tableSchemaRecord) {
-                return $tableSchemaRecord;
-            }
-        }
-
-        return null;
-    }
-
-    private function resolveEntitySlug(Entity $entity): string
-    {
-        $slug = trim((string) ($entity->slug ?? ''));
-
-        if ($slug !== '') {
-            return $slug;
-        }
-
-        $slug = $this->buildSlugFromEntityName($entity->entity_name);
-
-        if ($slug === '') {
-            $slug = 'entity-'.$entity->uid;
-        }
-
-        $entity->slug = $slug;
-        $entity->save();
-
-        return $slug;
-    }
-
-    private function buildSlugFromEntityName(string $entityName): string
-    {
-        $slug = strtolower($entityName);
-        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
-
-        return trim((string) $slug, '-');
-    }
-
-    private function buildSchemaSlugCandidates(string $entitySlug, string $suffix): array
-    {
-        $candidates = [];
-
-        foreach ([$entitySlug, Str::singular($entitySlug), Str::plural($entitySlug)] as $candidateBase) {
-            $candidateBase = trim((string) $candidateBase, '-');
-
-            if ($candidateBase === '') {
-                continue;
-            }
-
-            $candidates[] = $candidateBase.'-'.$suffix;
-        }
-
-        return array_values(array_unique($candidates));
-    }
-
-    private function buildEntityTableNameCandidates(Entity $entity): array
-    {
-        $metaTableName = trim((string) ($entity->getMeta('table_name') ?? ''));
-        $generatedTableName = trim((string) $this->generateTableName($entity->entity_name));
-
-        $candidates = [];
-
-        foreach ([$metaTableName, $generatedTableName] as $baseTableName) {
-            if ($baseTableName === '') {
-                continue;
-            }
-
-            $candidates[] = $baseTableName;
-            $candidates[] = $this->pluralizeTableName($baseTableName);
-            $candidates[] = Str::singular($baseTableName);
-        }
-
-        return array_values(array_unique($candidates));
-    }
-
     private function extractCustomFieldsFromEntityFields(array $fields): array
     {
         $systemFieldNames = array_keys($this->getSystemFields());
@@ -869,7 +550,7 @@ class EntityController extends Controller
             $customFields = $this->extractCustomFieldsFromEntityFields($entity->fields ?? []);
             $metaFields = is_array($entity->meta_fields) ? $entity->meta_fields : [];
 
-            $this->ensureGeneratedFormSchema($entity, $customFields, $metaFields);
+            $this->schemas->syncFormSchema($entity, $customFields, $metaFields);
 
             return redirect()
                 ->route('entities.show', $entity->uid)
@@ -894,14 +575,7 @@ class EntityController extends Controller
             $customFields = $this->extractCustomFieldsFromEntityFields($entity->fields ?? []);
             $metaFields = is_array($entity->meta_fields) ? $entity->meta_fields : [];
 
-            $this->ensureGeneratedFormSchema($entity, $customFields, $metaFields);
-            $formSchemaUid = $entity->getMeta('form_schema_uid');
-
-            if (! $formSchemaUid) {
-                throw new Exception('Unable to generate table schema without a form schema.');
-            }
-
-            $this->ensureGeneratedTableSchema($entity, $customFields, $formSchemaUid);
+            $this->schemas->sync($entity, $customFields, $metaFields);
 
             return redirect()
                 ->route('entities.show', $entity->uid)
@@ -977,7 +651,7 @@ class EntityController extends Controller
             $baseTableName = $tableMeta->meta_value;
 
             // Pluralize table name if not already plural
-            $tableName = $this->pluralizeTableName($baseTableName);
+            $tableName = EntityTableName::plural($baseTableName);
             $metaTableName = $this->getMetaTableName($baseTableName);
 
             // Check if tables already exist

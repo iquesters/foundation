@@ -4,14 +4,6 @@
 @section('meta-description', \Iquesters\Foundation\Helpers\MetaHelper::description('List of Master Data'))
 
 @php
-    $tabs = [
-        [
-            'route' => 'master-data.index',
-            'params' => [],
-            'icon' => 'fas fa-fw fa-database',
-            'label' => 'Master Data',
-        ],
-    ];
 @endphp
 
 @section('content')
