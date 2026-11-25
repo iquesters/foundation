@@ -1,9 +1,13 @@
 name: tests
 
+# Paused: tests run locally (vendor/bin/pint --test, vendor/bin/phpunit) while the
+# organisation's free Actions allowance is used up. Run by hand from the Actions tab
+# ("Run workflow"); to turn automatic runs back on, restore:
+#   push:
+#     branches: [main]
+#   pull_request:
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
