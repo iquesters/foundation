@@ -5,6 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follo
 
 ## [Unreleased]
 
+### Fixed
+- **No "Module constant not found" warning on every request**: the module's conf identifier is guessed from its package name with hyphens as underscores (`user-interface` → `USER_INTERFACE`), and a miss is no longer logged: a module's conf class names its own identifier (e.g. user-interface: `USER_INFE`), so the guess is only a fallback (it logged twice on every request).
+
 ### Added
 - **Navigation as data** (`docs/developer/navigation.md`):
   - `navigation_items` and `navigation_item_metas` hold each module's sidebar items and, as children, their page tabs;
