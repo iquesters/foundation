@@ -290,8 +290,9 @@ abstract class PackageInfo
         }
 
         if (class_exists($moduleEnumClass)) {
-            // Try uppercase snake case: foundation -> FOUNDATION
-            $moduleName = strtoupper(Str::snake($this->module_name));
+            // Try uppercase snake case: foundation -> FOUNDATION, user-interface -> USER_INTERFACE
+            // (a hyphen can't be in a constant name).
+            $moduleName = strtoupper(str_replace('-', '_', Str::snake($this->module_name)));
 
             if (defined("{$moduleEnumClass}::{$moduleName}")) {
                 $enumValue = constant("{$moduleEnumClass}::{$moduleName}");
@@ -299,18 +300,9 @@ abstract class PackageInfo
                 return $enumValue;
             }
 
-            // If not found, log available constants for debugging
-            try {
-                $reflection = new \ReflectionClass($moduleEnumClass);
-                $constants = $reflection->getConstants();
-                \Log::warning('Module constant not found', [
-                    'expected_constant' => $moduleName,
-                    'available_constants' => array_keys($constants),
-                    'enum_class' => $moduleEnumClass,
-                ]);
-            } catch (\ReflectionException $e) {
-                \Log::warning('Could not reflect Module enum', ['error' => $e->getMessage()]);
-            }
+            // Not found: only a guess. A module's conf class names its own identifier
+            // (e.g. user-interface: USER_INFE), so a miss is normal and not logged
+            // (it was logged on every request).
         }
 
         return null;
