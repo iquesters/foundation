@@ -3,6 +3,7 @@
 namespace Iquesters\Foundation\Support;
 
 use libphonenumber\NumberParseException;
+use libphonenumber\PhoneNumber;
 use libphonenumber\PhoneNumberFormat;
 use libphonenumber\PhoneNumberType;
 use libphonenumber\PhoneNumberUtil;
@@ -97,7 +98,7 @@ class Phone
         return $region && $region !== 'ZZ' ? $region : null;
     }
 
-    private static function parse(?string $code, ?string $number): ?\libphonenumber\PhoneNumber
+    private static function parse(?string $code, ?string $number): ?PhoneNumber
     {
         $number = trim((string) $number);
         $region = self::region($code);

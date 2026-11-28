@@ -34,7 +34,7 @@ class MobileNumberTest extends TestCase
 
     public function test_the_rule_reads_the_code_next_to_the_number(): void
     {
-        $rules = ['phone' => ['nullable', new MobileNumber()], 'guests.*.phone' => ['nullable', new MobileNumber()]];
+        $rules = ['phone' => ['nullable', new MobileNumber], 'guests.*.phone' => ['nullable', new MobileNumber]];
 
         $ok = Validator::make(['phone_code' => '+91', 'phone' => '98000 00001', 'guests' => [['phone_code' => '+44', 'phone' => '07911 123456']]], $rules);
         $this->assertTrue($ok->passes());
