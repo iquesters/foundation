@@ -5,6 +5,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follo
 
 ## [Unreleased]
 
+### Added (mobile numbers of every country)
+- **`Phone`** (`Iquesters\Foundation\Support\Phone`), with Google's libphonenumber (`giggsey/libphonenumber-for-php-lite`, new dependency): `isValid($code, $number)` (a mobile number of that country; spaces, dashes and a leading 0 are fine), `format()` (`+91 98000 00001`), `options()` (every country for a select, the usual ones first: India, UAE, USA, Canada, UK, the Gulf…), `codes()`, `countryName()`, `example()`.
+- **`MobileNumber` validation rule** (`Iquesters\Foundation\Rules\MobileNumber`): the number must be valid for the country code next to it (`phone` → `phone_code`, `guests.2.phone` → `guests.2.phone_code`), e.g. *Enter a valid India mobile number (e.g. 081234 56789), without the country code.*
+
 ### Fixed
 - **No "Module constant not found" warning on every request**: the module's conf identifier is guessed from its package name with hyphens as underscores (`user-interface` → `USER_INTERFACE`), and a miss is no longer logged: a module's conf class names its own identifier (e.g. user-interface: `USER_INFE`), so the guess is only a fallback (it logged twice on every request).
 
